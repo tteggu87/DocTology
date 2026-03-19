@@ -457,53 +457,400 @@ This repository packages two complementary Codex skills:
 - `repo-docs-intelligence-bootstrap`
 - `lightweight-ontology-core`
 
-## What they do
+They look related, but they solve different problems.
 
 - `repo-docs-intelligence-bootstrap`
-  Aligns repository docs, `AGENTS.md`, and a minimal intelligence layer with the live codebase. It is the right first step for an existing project with drifted docs or unclear entrypoints.
+  Re-aligns an existing repository around the live codebase. It establishes a baseline through `AGENTS.md`, `docs/`, and a minimal `intelligence/` layer, and is especially useful for reducing documentation drift.
 - `lightweight-ontology-core`
-  Adds a structured knowledge layer over documents using entities, relations, claims, evidence, and segments. It is useful when you need provenance, contradiction tracking, or retrieval-ready document structure.
+  Turns documents, notes, design memos, and operational knowledge into structured knowledge objects such as `entities`, `relations`, `claims`, `evidence`, and `segments`. It is useful when facts and evidence need to be traceable.
 
-## Visual overview
+In practice, most teams should start with `bootstrap` and add `ontology` only when the repository actually needs evidence-backed knowledge management.
+
+## What this repository is trying to fix
+
+Most existing repositories gradually end up in a state like this:
+
+- the code has changed, but `README` and operating docs still describe an older reality
+- scripts, CLIs, wrappers, and experiment folders are mixed together, so the official entrypoint is unclear
+- different people describe the project differently, and every new agent session has to infer context from scratch
+- the project works, but docs and rules lag behind the implementation and drift accumulates
+
+These two skills approach that problem not as "write prettier docs," but as "make current repository truth explicit."
+
+## Core ideas
+
+### 1. Bootstrap creates the repository baseline
+
+`repo-docs-intelligence-bootstrap` typically aims to produce:
+
+- root `AGENTS.md`
+- `docs/README.md`
+- `docs/CURRENT_STATE.md`
+- `docs/ARCHITECTURE.md`
+- `docs/LAYERS.md`
+- `docs/SKILLS_INTEGRATION.md`
+- `docs/ROADMAP.md`
+- `docs/IMPACT_SUMMARY.md`
+- `docs/archive/`
+- `intelligence/glossary.yaml`
+- `intelligence/manifests/actions.yaml`
+- `intelligence/manifests/entities.yaml`
+- `intelligence/manifests/datasets.yaml`
+- `intelligence/handlers/*.yaml`
+- `intelligence/policies/*.yaml`
+- `intelligence/schemas/*.sql`
+- `intelligence/registry/capabilities.yaml`
+
+The purpose of that structure is to make it obvious, quickly, what is official, what is legacy, and where the source of truth lives.
+
+### 2. Ontology turns documents into a knowledge layer
+
+`lightweight-ontology-core` becomes useful when you need a more structured model of repository knowledge, such as:
+
+- extracting entities from documents
+- connecting decisions to claims and evidence
+- tracking when older and newer documents contradict each other
+- breaking documents into stable segments for retrieval or provenance
+- managing "accepted facts" as data rather than only prose
+
+Its major outputs often include:
+
+- `intelligence/manifests/relations.yaml`
+- `intelligence/manifests/document_types.yaml`
+- `warehouse/jsonl/entities.jsonl`
+- `warehouse/jsonl/documents.jsonl`
+- `warehouse/jsonl/claims.jsonl`
+- `warehouse/jsonl/claim_evidence.jsonl`
+- `warehouse/jsonl/segments.jsonl`
+- `warehouse/jsonl/derived_edges.jsonl`
+- `warehouse/ontology.duckdb`
+- `vector/chroma/`
+
+## Visualizations
+
+### Role split between the two skills
 
 ```mermaid
 flowchart LR
-    A["Existing repository"] --> B["repo-docs-intelligence-bootstrap"]
-    B --> C["AGENTS.md and current-state docs"]
-    B --> D["minimal intelligence layer"]
+    A["Existing project"] --> B["repo-docs-intelligence-bootstrap"]
+    B --> C["AGENTS.md"]
+    B --> D["docs/CURRENT_STATE.md"]
+    B --> E["docs/ARCHITECTURE.md"]
+    B --> F["intelligence/glossary.yaml"]
+    B --> G["actions / entities / datasets / policies"]
 
-    A --> E["lightweight-ontology-core"]
-    E --> F["documents / entities / claims / evidence / segments"]
-    E --> G["derived edges, DuckDB mirror, retrieval support"]
+    A --> H["lightweight-ontology-core"]
+    H --> I["documents.jsonl"]
+    H --> J["entities.jsonl"]
+    H --> K["claims.jsonl"]
+    H --> L["claim_evidence.jsonl"]
+    H --> M["segments.jsonl"]
+    H --> N["derived_edges.jsonl"]
+    H --> O["retrieval / DuckDB mirror"]
 ```
 
-Bootstrap aligns repository truth around code and operations.
-Ontology turns document knowledge into structured, traceable facts.
+The simple reading is:
 
-## Practical adoption flow
+- `bootstrap` creates operational baselines and current-state docs
+- `ontology` turns document content into a structured fact layer
+- they may seem adjacent, but in practice they divide into `operational alignment` and `knowledge structuring`
 
-1. Run `repo-docs-intelligence-bootstrap` first on an existing repository.
-2. Keep building features normally.
-3. Re-run bootstrap when structure, entrypoints, or repository rules change.
-4. Add `lightweight-ontology-core` once project knowledge needs explicit claims, evidence, and segment-level provenance.
+### How the structure actually runs
 
-## What gets easier
+```mermaid
+flowchart TD
+    A["Code changes / structural changes / accumulated documents"] --> B{"What kind of change is this?"}
+    B -->|"Entrypoints, layers, or rules changed"| C["Re-apply repo-docs-intelligence-bootstrap"]
+    B -->|"Meeting notes, design memos, and operating knowledge accumulated"| D["Apply lightweight-ontology-core"]
 
-These skills do not act as a background daemon. Instead, they reduce repeated setup and interpretation work for Codex sessions by making current repository truth explicit.
+    C --> E["Refresh AGENTS.md"]
+    C --> F["Refresh CURRENT_STATE / ARCHITECTURE"]
+    C --> G["Classify legacy / archive"]
+    C --> H["Refresh minimal intelligence contracts"]
 
-They help with:
+    D --> I["Create entity / document registries"]
+    D --> J["Link claims and evidence"]
+    D --> K["Generate segments"]
+    D --> L["Generate derived edges from accepted claims"]
+
+    E --> M["New agent sessions understand context faster"]
+    F --> M
+    G --> M
+    H --> M
+    I --> N["Traceable knowledge layer"]
+    J --> N
+    K --> N
+    L --> N
+```
+
+The key idea is not "always run both." The key idea is to re-apply the right skill based on the kind of change the project has gone through.
+
+### The intent of bootstrap
+
+```mermaid
+flowchart LR
+    A["Confusing repository"] --> B["Discover entrypoints"]
+    A --> C["Audit current docs"]
+    A --> D["Identify legacy paths"]
+    A --> E["Normalize terms and contracts"]
+
+    B --> F["Declare official execution path"]
+    C --> G["Generate current-state docs"]
+    D --> H["Classify archive / legacy"]
+    E --> I["glossary / manifests / policies"]
+
+    F --> J["AGENTS.md"]
+    G --> J
+    H --> J
+    I --> J
+```
+
+The point of this skill is not to produce lots of documents.
+
+- shorten the path to a usable starting point for the next agent
+- make "what is official" explicit inside the repository
+- classify older docs meaningfully instead of deleting them blindly
+- reduce drift between code and docs in a structural way
+
+### The intent of lightweight ontology
+
+```mermaid
+flowchart LR
+    A["Documents / notes / design memos / meeting logs"] --> B["Register document"]
+    B --> C["Split into segments"]
+    C --> D["Extract entities"]
+    C --> E["Extract claims"]
+    E --> F["Link evidence"]
+    E --> G["Manage status: proposed / accepted / disputed / superseded"]
+    G --> H["Generate derived edges only from accepted claims"]
+    C --> I["Candidate retrieval sync"]
+```
+
+The point of this skill is not "cleaner documents." More precisely, it is:
+
+- turning text from human-readable description into machine-usable fact structure
+- making it possible to trace where a claim came from through evidence
+- separating accepted, disputed, and superseded states explicitly
+- allowing retrieval layers without confusing retrieval results with canonical truth
+
+### Internal layers of lightweight ontology
+
+```mermaid
+flowchart TD
+    A["manifests/relations.yaml"] --> B["Extraction rules and relation vocabulary"]
+    C["manifests/document_types.yaml"] --> B
+
+    D["warehouse/jsonl/documents.jsonl"] --> E["Canonical document registry"]
+    F["warehouse/jsonl/entities.jsonl"] --> G["Canonical entity registry"]
+    H["warehouse/jsonl/claims.jsonl"] --> I["Canonical claims"]
+    J["warehouse/jsonl/claim_evidence.jsonl"] --> K["Claim-evidence links"]
+    L["warehouse/jsonl/segments.jsonl"] --> M["Stable text references"]
+
+    I --> N["derived_edges.jsonl"]
+    K --> N
+    M --> O["Chroma retrieval layer"]
+    I --> P["DuckDB mirror"]
+```
+
+The important distinction is:
+
+- `JSONL registries` are canonical
+- `derived_edges` is derived output from accepted claims
+- `DuckDB` is an analytical mirror
+- `Chroma` is a retrieval support layer
+
+That separation is what keeps a search result from silently becoming an approved fact.
+
+### Why agents become more "naturally competent"
+
+```mermaid
+flowchart LR
+    A["No current truth in the repository"] --> B["Re-discovery every session"]
+    B --> C["Large planning overhead"]
+    C --> D["Context loss / repeated questions / drift"]
+
+    E["AGENTS.md + docs + intelligence + ontology"] --> F["Short discovery path"]
+    F --> G["Fast identification of official paths"]
+    F --> H["Fast identification of terms and contracts"]
+    F --> I["Fast trace-back to evidence documents"]
+    G --> J["Faster execution start"]
+    H --> J
+    I --> J
+```
+
+The important point here is that the basis for better behavior is not "model intuition." It is repository-local, structured truth.
+
+### Bootstrap only vs bootstrap plus ontology
+
+```mermaid
+flowchart LR
+    A["bootstrap only"] --> B["AGENTS.md"]
+    A --> C["current-state docs"]
+    A --> D["minimal manifests"]
+    A --> E["less documentation drift"]
+    A --> F["easier agent onboarding"]
+
+    G["bootstrap + ontology"] --> H["claims / evidence / segments"]
+    G --> I["contradiction / supersession handling"]
+    G --> J["retrieval-ready knowledge layer"]
+    G --> K["evidence-backed querying"]
+```
+
+In practice, the decision rule is usually:
+
+- if you mainly need `cleanup and a baseline`, use `bootstrap`
+- if you mainly need `fact and evidence tracking`, use `ontology`
+- if you need both, start with `bootstrap` and then add `ontology`
+
+## The most practical way to apply this to an existing repository
+
+The most stable sequence is usually the following.
+
+### 1. Apply bootstrap first
+
+From the root of an existing repository, you can ask Codex for something like:
+
+```text
+Apply repo-docs-intelligence-bootstrap to this repository.
+Use the live codebase to organize AGENTS.md, docs, and a minimal intelligence layer.
+Do not delete existing docs; classify them into current vs archive.
+```
+
+At this stage, you should expect work such as:
 
 - discovering real entrypoints
-- separating official paths from legacy wrappers
-- generating or refreshing `AGENTS.md`
-- maintaining current-state docs
-- creating lightweight manifest and policy artifacts
-- reducing documentation drift
-- structuring knowledge for provenance-aware retrieval
+- distinguishing official CLIs from unofficial wrappers
+- marking docs that no longer match the code
+- refreshing the docs that should stay current
+- classifying older docs into `docs/archive/`
+- writing repository rules into root `AGENTS.md`
+- creating a minimal contract layer under `intelligence/`
 
-## Why this reduces planning overhead
+### 2. Keep building features normally
 
-The goal is not to eliminate planning entirely. The goal is to keep enough repository truth close to the code that a new agent session can quickly understand:
+After that, you continue with normal feature work, experiments, and refactors.
+
+The important point is that these skills do not replace development workflows. They make structural cleanup and current-truth alignment much easier once the project has changed.
+
+### 3. Re-apply bootstrap when structure changes
+
+Bootstrap is worth re-running when things like these happen:
+
+- the main entrypoint changes
+- module responsibilities move
+- a wrapper becomes the official CLI, or the reverse
+- the folder structure grows significantly
+- operating rules change
+- docs and code begin to drift apart
+
+In practice, you usually do not run it after every feature. You run it when the project structure starts to move.
+
+### 4. Add ontology when document knowledge needs tracking
+
+The value of `lightweight-ontology-core` rises when:
+
+- meeting notes, design docs, and review notes accumulate
+- facts and opinions need to be separated
+- decision rationale needs to be traceable later
+- contradictory or superseded document states need to be managed
+- RAG or a broader knowledge layer is planned
+
+At that point, you can ask Codex for something like:
+
+```text
+Apply lightweight-ontology-core to this repository's docs and operational documents.
+Organize them into entities, claims, evidence, and segments.
+Only derive edges from accepted claims, and do not treat retrieval as source of truth.
+```
+
+## Real operating examples
+
+### Example A. A small Python tools repository
+
+Assume the project looks roughly like this:
+
+- `app/`
+- `scripts/`
+- `README.md`
+- three outdated usage documents
+- the official entrypoint is now `python -m app.cli`, but older docs still explain `scripts/run_local.py`
+
+If you apply bootstrap here, Codex will usually move the repository toward:
+
+- documenting the official entrypoint and work rules in `AGENTS.md`
+- documenting the current execution path in `docs/CURRENT_STATE.md`
+- adding layer descriptions in `docs/ARCHITECTURE.md`
+- classifying `scripts/run_local.py` as a wrapper or legacy path
+- moving older docs to `docs/archive/` or adding archived status banners
+- recording current major actions in `intelligence/manifests/actions.yaml`
+
+The practical effect is that a future agent session can identify the official execution path without needing a long planning pass.
+
+### Example B. An AI repository with many experiments
+
+Assume the project has:
+
+- `experiments/`
+- `pipelines/`
+- `notebooks/`
+- `docs/`
+- inconsistent names for the same ideas across the team
+
+If you apply bootstrap first, you at least get a working glossary and current-state docs. That alone reduces term confusion for later agent sessions.
+
+If you later add ontology, you can do things like:
+
+- extract entities from experiment documents
+- distinguish accepted claims from proposed claims
+- connect a pipeline to the documents that support it
+- track superseded experiment conclusions
+- generate retrieval-ready segments
+
+In short, bootstrap makes the repository easier to read, while ontology makes document facts computationally usable.
+
+## What gets automated
+
+These skills are not a background daemon that keeps syncing forever. But they do reduce a lot of repetitive manual work in a Codex-driven repository workflow.
+
+Main automation points include:
+
+- discovering repository entrypoints
+- comparing current docs to the actual codebase
+- classifying current vs legacy vs archive
+- drafting or refreshing `AGENTS.md`
+- generating a minimal `docs/` portal
+- generating a minimal `intelligence/` contract layer
+- creating ontology registries and segment structures
+- validating claim/evidence integrity
+- generating derived edges from accepted claims
+
+Human judgment is still required, but the repeated work of finding the right files, creating the initial skeleton, and cleaning up drift is reduced significantly.
+
+## How this reduces drift
+
+Drift is usually the state where "the code says A, but the docs still say B." These skills reduce drift through a few strong rules:
+
+- regenerate current-state documentation from code
+- separate official entrypoints from legacy paths
+- update the smallest canonical artifacts first
+- archive older docs instead of silently deleting them
+- maintain small truth artifacts such as glossary, manifests, policies, and schemas
+- in ontology mode, only derive downstream facts from accepted claims
+
+With that structure in place, an agent does not need to invent a large plan every time. The repository already contains a short path to current truth.
+
+## Why this lowers planning-mode dependence
+
+This does not mean planning becomes unnecessary. It means the amount of planning required for everyday work gets smaller when the repository already contains well-maintained truth markers.
+
+That especially helps when:
+
+- a new session enters the repo for the first time
+- there are many docs, but only some are current
+- the files an agent should read first are already obvious
+- terminology, entrypoints, and layer boundaries have already been clarified
+
+For example, if `AGENTS.md`, `docs/CURRENT_STATE.md`, `docs/ARCHITECTURE.md`, and `intelligence/glossary.yaml` are alive and current, an agent can quickly determine:
 
 - where to start
 - what is official
@@ -511,19 +858,48 @@ The goal is not to eliminate planning entirely. The goal is to keep enough repos
 - which terms are canonical
 - which docs should be updated with a code change
 
-That makes many day-to-day tasks more direct, even without a heavy planning step.
+So the real goal of this repository is not "eliminate planning mode." The goal is "shrink the surface area that actually needs heavy planning, so day-to-day work can flow more naturally."
 
-## Recommended use
+## What kinds of projects benefit most
 
-Use bootstrap by default for most existing repositories.
+- Python repositories with ongoing experiments and refactors
+- AI or ML repositories where operational knowledge keeps spreading across docs
+- tool repositories with CLIs, wrappers, and batch scripts living together
+- projects where team members change often or agent sessions restart frequently
+- repositories likely to grow into RAG, GraphRAG, or provenance-aware retrieval
 
-Add ontology when:
+## When to add ontology
 
-- document volume grows
-- decision tracking matters
-- evidence-backed claims become important
-- contradiction or supersession needs to be tracked
-- retrieval or RAG layers are being introduced
+You do not need ontology from day one. It becomes worth adding when signals like these appear:
+
+- "We no longer know which document is current."
+- "What was the evidence for that decision again?"
+- meeting notes and design docs have accumulated
+- documents are starting to contradict each other
+- you want to view only accepted facts
+- you want retrieval or RAG, but do not want search results confused with canonical truth
+
+If those signals are not present yet, bootstrap alone is often enough to create meaningful value.
+
+## Recommended operating rhythm
+
+### Minimal operating mode
+
+- apply `repo-docs-intelligence-bootstrap` once near project setup
+- re-apply bootstrap after major structural changes
+- review current-state docs and `AGENTS.md` before releases
+
+### Expanded operating mode
+
+- do everything in the minimal operating mode
+- add `lightweight-ontology-core` once document knowledge starts accumulating
+- validate claims, evidence, and segments periodically
+- sync retrieval state when it is actually useful
+
+## Repository contents
+
+- [repo-docs-intelligence-bootstrap](C:/python_Github/playground/repo-docs-ontology-skills/repo-docs-intelligence-bootstrap)
+- [lightweight-ontology-core](C:/python_Github/playground/repo-docs-ontology-skills/lightweight-ontology-core)
 
 ## Source
 
