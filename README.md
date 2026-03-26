@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="branding/doctology-logo.svg" alt="DocTology logo" width="820" />
+  <img src="branding/doctology-logo-original.jpeg" alt="DocTology logo" width="820" />
 </p>
 
 # DocTology
