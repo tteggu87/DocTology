@@ -50,31 +50,31 @@
 ### 1. repo 단독으로 구조화
 
 ```text
-[$repo-docs-intelligence-bootstrap](C:\Users\tteggu\.agents\skills\repo-docs-intelligence-bootstrap\SKILL.md) 로 [<대상 프로젝트 또는 PRD 폴더>](<경로>) 구조화해줘.
+[<대상 프로젝트 또는 PRD 폴더>](<경로>) 구조화해줘.
 ```
 
 ### 2. 구조화 후 기본 온톨로지화
 
 ```text
-[$repo-docs-intelligence-bootstrap](C:\Users\tteggu\.agents\skills\repo-docs-intelligence-bootstrap\SKILL.md) 로 구조화 먼저하고 [$lightweight-ontology-core](C:\Users\tteggu\.agents\skills\lightweight-ontology-core\SKILL.md) 로 온톨로지화해줘.
+구조화 먼저하고 온톨로지화해줘.
 ```
 
 ### 3. 구조화 후 그래프형 온톨로지화
 
 ```text
-[$repo-docs-intelligence-bootstrap](C:\Users\tteggu\.agents\skills\repo-docs-intelligence-bootstrap\SKILL.md) 로 구조화 먼저하고 [$lg-ontology](C:\Users\tteggu\.codex\skills\lg-ontology\SKILL.md) 로 온톨로지화와 graph projection까지 해줘.
+구조화 먼저하고 온톨로지화와 graph projection까지 해줘.
 ```
 
 ### 4. core 단독 빠른 온톨로지화
 
 ```text
-[$lightweight-ontology-core](C:\Users\tteggu\.agents\skills\lightweight-ontology-core\SKILL.md) 를 사용하여 [<대상파일또는폴더>](<경로>) 온톨로지화해줘.
+[<대상파일또는폴더>](<경로>) 온톨로지화해줘.
 ```
 
 ### 5. lg 단독 빠른 그래프형 온톨로지화
 
 ```text
-[$lg-ontology](C:\Users\tteggu\.codex\skills\lg-ontology\SKILL.md) 를 사용하여 [<대상파일또는폴더>](<경로>) 온톨로지화와 graph projection까지 해줘.
+[<대상파일또는폴더>](<경로>) 온톨로지화와 graph projection까지 해줘.
 ```
 
 ## 실험에서 확인한 점
