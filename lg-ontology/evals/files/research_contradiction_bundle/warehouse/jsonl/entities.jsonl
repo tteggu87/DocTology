@@ -1,0 +1,5 @@
+{"entity_id":"finding.sample","entity_type":"finding","label":"Observed Sample","aliases":[],"status":"active"}
+{"entity_id":"category.operational","entity_type":"category","label":"Operational","aliases":[],"status":"active"}
+{"entity_id":"category.experimental","entity_type":"category","label":"Experimental","aliases":[],"status":"active"}
+{"entity_id":"hypothesis.alpha","entity_type":"hypothesis","label":"Hypothesis Alpha","aliases":[],"status":"active"}
+{"entity_id":"hypothesis.beta","entity_type":"hypothesis","label":"Hypothesis Beta","aliases":[],"status":"active"}

@@ -1,0 +1,3 @@
+{"entity_id":"svc.search","entity_type":"service","label":"Search Service","aliases":[],"status":"active"}
+{"entity_id":"store.index","entity_type":"dataset","label":"Index Store","aliases":[],"status":"active"}
+{"entity_id":"queue.rebuild","entity_type":"queue","label":"Rebuild Queue","aliases":[],"status":"active"}

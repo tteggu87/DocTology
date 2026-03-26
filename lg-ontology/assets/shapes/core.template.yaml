@@ -1,0 +1,70 @@
+version: lightweight-ontology-core/v1
+
+claim_shape:
+  required_fields:
+    - claim_id
+    - subject_id
+    - predicate
+    - object_id
+    - subject_type
+    - object_type
+    - status
+    - confidence
+    - asserted_by
+    - source_document_id
+    - review_state
+  accepted_required_fields:
+    - reviewed_by
+    - reviewed_at
+    - decision_by
+    - decision_at
+    - decision_note
+
+evidence_shape:
+  required_fields:
+    - evidence_id
+    - claim_id
+    - source_document_id
+    - start_char
+    - end_char
+    - evidence_type
+    - support
+    - confidence
+    - excerpt
+    - captured_by
+
+segment_shape:
+  required_fields:
+    - segment_id
+    - document_id
+    - document_type
+    - text
+    - start_char
+    - end_char
+    - ordinal
+    - status
+    - text_hash
+    - segmenter_version
+
+derived_edge_shape:
+  required_fields:
+    - edge_id
+    - source_claim_id
+    - rule_key
+    - subject_id
+    - predicate
+    - object_id
+    - status
+    - derived_at
+
+allowed_status_review_states:
+  proposed:
+    - needs_review
+  accepted:
+    - approved
+  disputed:
+    - conflict_open
+  rejected:
+    - rejected
+  superseded:
+    - archived

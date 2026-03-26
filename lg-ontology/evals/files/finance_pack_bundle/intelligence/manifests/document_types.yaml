@@ -1,0 +1,13 @@
+document_types:
+  - key: thesis_note
+    label: Thesis Note
+    description: Investment thesis notes, company memos, and analytical argument summaries.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - affects
+      - estimates
+      - revises
+      - exposes_risk
+      - supports_thesis
+    notes: Best for company-level reasoning, thesis support, and risk tracking.

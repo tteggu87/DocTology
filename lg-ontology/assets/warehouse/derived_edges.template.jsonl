@@ -1,0 +1,1 @@
+{"edge_id":"edge.supports.search.api","source_claim_id":"claim.depends_on.api.search","rule_key":"reverse_support_from_depends_on","subject_id":"lib.search","predicate":"supports","object_id":"svc.api","status":"derived","derived_at":"2026-03-19T09:10:00Z","confidence":0.93,"valid_from":"2026-03-01T00:00:00Z","valid_to":null}

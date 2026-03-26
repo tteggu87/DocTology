@@ -1,0 +1,30 @@
+collection:
+  name: ontology_segments
+  persist_directory: vector/chroma
+
+embedding:
+  provider: openai
+  model: text-embedding-3-small
+  api_env: OPENAI_API_KEY
+
+index:
+  distance: cosine
+  batch_size: 64
+  top_k_default: 8
+  segment_source: warehouse/jsonl/segments.jsonl
+  include_statuses:
+    - active
+
+metadata_fields:
+  - segment_id
+  - document_id
+  - document_type
+  - status
+  - entity_ids
+  - claim_ids
+  - tags
+
+segmenter:
+  max_chars: 1200
+  overlap_chars: 150
+  version: segmenter-v1

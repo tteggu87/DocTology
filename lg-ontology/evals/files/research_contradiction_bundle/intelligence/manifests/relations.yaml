@@ -1,0 +1,79 @@
+relations:
+  - key: supports
+    label: Supports
+    aliases:
+      - reinforces
+    status: active
+    description: Subject supports the object.
+    domain:
+      - finding
+      - hypothesis
+    range:
+      - finding
+      - hypothesis
+      - category
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: reasoning
+
+  - key: contradicts
+    label: Contradicts
+    aliases:
+      - conflicts_with
+    status: active
+    description: Subject explicitly contradicts the object.
+    domain:
+      - hypothesis
+      - finding
+    range:
+      - hypothesis
+      - finding
+    inverse_of: contradicts
+    symmetric: true
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+    conflict_rule: explicit
+    materialize_as_edge: true
+    exclusive_object: false
+    group: contradiction
+
+  - key: classifies_as
+    label: Classifies As
+    aliases:
+      - typed_as
+    status: active
+    description: Subject is classified as the object category.
+    domain:
+      - finding
+      - sample
+    range:
+      - category
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: exclusive_object
+    materialize_as_edge: true
+    exclusive_object: true
+    group: taxonomy

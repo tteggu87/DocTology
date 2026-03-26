@@ -1,0 +1,179 @@
+relations:
+  - key: depends_on
+    label: Depends On
+    aliases:
+      - requires
+    status: active
+    description: Subject requires object to function correctly.
+    domain:
+      - service
+      - module
+      - workflow
+      - concept
+    range:
+      - service
+      - module
+      - workflow
+      - concept
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: structural
+
+  - key: supports
+    label: Supports
+    aliases:
+      - enables
+    status: active
+    description: Object enables or supports subject continuity.
+    domain:
+      - service
+      - module
+      - workflow
+      - concept
+    range:
+      - service
+      - module
+      - workflow
+      - concept
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: structural
+
+  - key: documents
+    label: Documents
+    aliases:
+      - describes
+    status: active
+    description: A document entity describes or records another entity.
+    domain:
+      - document
+    range:
+      - service
+      - module
+      - workflow
+      - concept
+      - policy
+      - dataset
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: provenance
+
+  - key: implemented_by
+    label: Implemented By
+    aliases:
+      - realized_by
+    status: active
+    description: Subject is implemented by the object.
+    domain:
+      - capability
+      - workflow
+      - concept
+    range:
+      - module
+      - service
+      - implementation
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: implementation
+
+  - key: contradicts
+    label: Contradicts
+    aliases:
+      - conflicts_with
+    status: active
+    description: Subject explicitly contradicts the object.
+    domain:
+      - concept
+      - claim_target
+      - finding
+    range:
+      - concept
+      - claim_target
+      - finding
+    inverse_of: contradicts
+    symmetric: true
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+    conflict_rule: explicit
+    materialize_as_edge: true
+    exclusive_object: false
+    group: contradiction
+
+  - key: supersedes
+    label: Supersedes
+    aliases:
+      - replaces
+    status: active
+    description: Subject replaces or supersedes the object.
+    domain:
+      - concept
+      - workflow
+      - document
+      - finding
+    range:
+      - concept
+      - workflow
+      - document
+      - finding
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - superseded
+    conflict_rule: supersession
+    materialize_as_edge: true
+    exclusive_object: false
+    group: lifecycle

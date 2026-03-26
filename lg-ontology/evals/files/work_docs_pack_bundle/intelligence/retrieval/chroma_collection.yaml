@@ -1,0 +1,23 @@
+collection:
+  name: ontology_segments
+  persist_directory: vector/chroma
+embedding:
+  provider: hash
+  model: hash-256
+  api_env: OPENAI_API_KEY
+index:
+  distance: cosine
+  batch_size: 64
+  top_k_default: 8
+  segment_source: warehouse/jsonl/segments.jsonl
+  include_statuses:
+    - active
+metadata_fields:
+  - segment_id
+  - document_id
+  - document_type
+  - status
+segmenter:
+  max_chars: 1200
+  overlap_chars: 150
+  version: template-v1

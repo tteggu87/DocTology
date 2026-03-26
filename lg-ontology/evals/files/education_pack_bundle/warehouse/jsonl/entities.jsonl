@@ -1,0 +1,5 @@
+{"entity_id":"concept.embedding","entity_type":"concept","label":"Embedding","status":"active"}
+{"entity_id":"concept.cosine_similarity","entity_type":"concept","label":"Cosine Similarity","status":"active"}
+{"entity_id":"concept.linear_algebra","entity_type":"concept","label":"Linear Algebra","status":"active"}
+{"entity_id":"example.movie_recommendation","entity_type":"example","label":"Movie Recommendation Exercise","status":"active"}
+{"entity_id":"assessment.quiz1","entity_type":"assessment","label":"Quiz 1","status":"active"}

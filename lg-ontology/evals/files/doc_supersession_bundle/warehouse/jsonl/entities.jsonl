@@ -1,0 +1,5 @@
+{"entity_id":"entity.doc.old","entity_type":"document","label":"Old Decision Entity","aliases":[],"status":"active"}
+{"entity_id":"entity.doc.new","entity_type":"document","label":"New Decision Entity","aliases":[],"status":"active"}
+{"entity_id":"workflow.legacy","entity_type":"workflow","label":"Legacy Workflow","aliases":[],"status":"active"}
+{"entity_id":"workflow.current","entity_type":"workflow","label":"Current Workflow","aliases":[],"status":"active"}
+{"entity_id":"impl.legacy.runtime","entity_type":"implementation","label":"Legacy Runtime","aliases":[],"status":"active"}

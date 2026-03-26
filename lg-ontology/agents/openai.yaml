@@ -1,0 +1,4 @@
+interface:
+  display_name: "LG Ontology"
+  short_description: "Light graph ontology workflow"
+  default_prompt: "Use $lg-ontology to extend a lightweight ontology into a graph projection workflow and inspect graph-style queries without replacing canonical JSONL truth."

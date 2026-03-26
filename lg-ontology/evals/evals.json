@@ -1,0 +1,157 @@
+{
+  "skill_name": "lg-ontology",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use the provided fixture repo to build stable segments from the architecture note, keep the accepted dependency claim canonical, and sync only the retrieval layer needed to recall the dependency evidence.",
+      "expected_output": "The result generates `segments.jsonl`, links the accepted dependency claim back to the correct segment, and keeps semantic retrieval separate from canonical truth.",
+      "files": [
+        "evals/files/repo_dependency_claims/FIXTURE.md",
+        "evals/files/repo_dependency_claims/docs/ARCHITECTURE.md",
+        "evals/files/repo_dependency_claims/intelligence/manifests/relations.yaml",
+        "evals/files/repo_dependency_claims/intelligence/rules/inference.yaml",
+        "evals/files/repo_dependency_claims/intelligence/retrieval/chroma_collection.yaml",
+        "evals/files/repo_dependency_claims/warehouse/jsonl/claims.jsonl",
+        "evals/files/repo_dependency_claims/warehouse/jsonl/claim_evidence.jsonl"
+      ],
+      "expectations": [
+        "The result generates or preserves `warehouse/jsonl/segments.jsonl` as a stable text-reference registry.",
+        "The result keeps `warehouse/jsonl/claims.jsonl` and `warehouse/jsonl/claim_evidence.jsonl` canonical while treating Chroma as retrieval only.",
+        "The result links `claim.depends_on.api.search` to `seg:doc.architecture:001` and can retrieve that segment as a candidate."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Use the provided provenance fixture to validate entities, documents, claims, evidence, and segments together. Keep claim-to-document and claim-to-segment linkage explicit instead of flattening everything into free text.",
+      "expected_output": "The result validates that evidence points to real segments within the source note and preserves provenance through documents, claims, and evidence.",
+      "files": [
+        "evals/files/repo_document_provenance/FIXTURE.md",
+        "evals/files/repo_document_provenance/docs/PROVENANCE_NOTE.md",
+        "evals/files/repo_document_provenance/intelligence/retrieval/chroma_collection.yaml",
+        "evals/files/repo_document_provenance/warehouse/jsonl/documents.jsonl",
+        "evals/files/repo_document_provenance/warehouse/jsonl/claims.jsonl",
+        "evals/files/repo_document_provenance/warehouse/jsonl/claim_evidence.jsonl"
+      ],
+      "expectations": [
+        "The result keeps `source_document_id` and `source_segment_id` tied to `doc.provenance.note` and `seg:doc.provenance.note:001`.",
+        "The result validates that segment offsets stay inside the source document text.",
+        "The result treats provenance as first-class data instead of summary prose only."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Use the provided research fixture to keep contradictions narrow and explicit while also maintaining retrieval readiness. Flag only explicit contradiction claims and exclusive-object conflicts, and do not pretend semantic reconciliation was automatic.",
+      "expected_output": "The result reports the explicit contradiction and the exclusive-object conflict, while keeping all conflicting evidence linked to the same source segment for later review.",
+      "files": [
+        "evals/files/research_contradiction_bundle/FIXTURE.md",
+        "evals/files/research_contradiction_bundle/docs/RESEARCH_NOTE.md",
+        "evals/files/research_contradiction_bundle/intelligence/manifests/relations.yaml",
+        "evals/files/research_contradiction_bundle/intelligence/retrieval/chroma_collection.yaml",
+        "evals/files/research_contradiction_bundle/warehouse/jsonl/claims.jsonl",
+        "evals/files/research_contradiction_bundle/warehouse/jsonl/claim_evidence.jsonl"
+      ],
+      "expectations": [
+        "The result flags the accepted `contradicts` claim as an explicit contradiction signal.",
+        "The result flags the overlapping accepted `classifies_as` claims because the relation is exclusive.",
+        "The result does not claim to solve broader semantic contradiction automatically and keeps the conflicting evidence traceable to `seg:doc.research.note:001`."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Use the provided supersession fixture to preserve provenance while promoting the new canonical workflow. Keep the old claim trail visible, validate segment linkage, and reject stale retrieval metadata when strict validation is requested.",
+      "expected_output": "The result keeps both decision documents visible, records the supersession, and treats stale Chroma freshness metadata as a strict-mode failure.",
+      "files": [
+        "evals/files/doc_supersession_bundle/FIXTURE.md",
+        "evals/files/doc_supersession_bundle/docs/OLD_DECISION.md",
+        "evals/files/doc_supersession_bundle/docs/NEW_DECISION.md",
+        "evals/files/doc_supersession_bundle/intelligence/retrieval/chroma_collection.yaml",
+        "evals/files/doc_supersession_bundle/warehouse/jsonl/claims.jsonl",
+        "evals/files/doc_supersession_bundle/warehouse/jsonl/claim_evidence.jsonl"
+      ],
+      "expectations": [
+        "The result records `workflow.current supersedes workflow.legacy` while keeping the old path visible as superseded.",
+        "The result keeps both old and new decision claims linked to stable per-document segment IDs.",
+        "The result treats stale or missing `vector/chroma/index_meta.json` as an error in strict mode."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Use the provided derivation fixture to reject false graph materialization. Build or refresh retrieval state if needed, but only accepted claims may produce derived edges and strict validation must fail if retrieval metadata is stale or a derived edge comes from a proposed claim.",
+      "expected_output": "The result keeps accepted-only derivation strict, preserves retrieval as a separate layer, and treats both invalid derived edges and stale index metadata as non-success states.",
+      "files": [
+        "evals/files/accepted_only_derivation_bundle/FIXTURE.md",
+        "evals/files/accepted_only_derivation_bundle/docs/INDEXER.md",
+        "evals/files/accepted_only_derivation_bundle/intelligence/rules/inference.yaml",
+        "evals/files/accepted_only_derivation_bundle/intelligence/retrieval/chroma_collection.yaml",
+        "evals/files/accepted_only_derivation_bundle/warehouse/jsonl/claims.jsonl",
+        "evals/files/accepted_only_derivation_bundle/warehouse/jsonl/derived_edges.jsonl"
+      ],
+      "expectations": [
+        "The result detects that a derived edge sourced from `claim.depends_on.search.queue` is invalid because the claim is only proposed.",
+        "The result keeps retrieval candidates separate from derived graph truth.",
+        "The result does not claim validator-clean strict success while the invalid derived edge or stale retrieval metadata remains."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Use the provided work-docs fixture and preserve explicit request, owner, due-date, decision, and status structure instead of flattening the note into one generic summary.",
+      "expected_output": "The result keeps work-document ontology shape explicit and prepares the note for later segment building or graph projection without pretending the starter pack is canonical truth by itself.",
+      "files": [
+        "evals/files/work_docs_pack_bundle/FIXTURE.md",
+        "evals/files/work_docs_pack_bundle/docs/TEAM_WEEKLY_REVIEW.md",
+        "evals/files/work_docs_pack_bundle/intelligence/manifests/relations.yaml",
+        "evals/files/work_docs_pack_bundle/intelligence/manifests/document_types.yaml",
+        "evals/files/work_docs_pack_bundle/intelligence/retrieval/chroma_collection.yaml",
+        "evals/files/work_docs_pack_bundle/warehouse/jsonl/documents.jsonl",
+        "evals/files/work_docs_pack_bundle/warehouse/jsonl/entities.jsonl",
+        "evals/files/work_docs_pack_bundle/warehouse/jsonl/claims.jsonl",
+        "evals/files/work_docs_pack_bundle/warehouse/jsonl/claim_evidence.jsonl"
+      ],
+      "expectations": [
+        "The result keeps request, owner, due-date, decision, and status as distinct ontology relations.",
+        "The result preserves explicit document and evidence linkage instead of flattening everything into prose.",
+        "The result remains compatible with later segment building and graph projection."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Use the provided education fixture and keep concept definition, explanation, prerequisite, example, and assessment relations distinct instead of collapsing them into one generic topic summary.",
+      "expected_output": "The result preserves educational structure and keeps the note ready for later segment building and graph projection.",
+      "files": [
+        "evals/files/education_pack_bundle/FIXTURE.md",
+        "evals/files/education_pack_bundle/docs/COURSE_MODULE_NOTE.md",
+        "evals/files/education_pack_bundle/intelligence/manifests/relations.yaml",
+        "evals/files/education_pack_bundle/intelligence/manifests/document_types.yaml",
+        "evals/files/education_pack_bundle/warehouse/jsonl/documents.jsonl",
+        "evals/files/education_pack_bundle/warehouse/jsonl/entities.jsonl",
+        "evals/files/education_pack_bundle/warehouse/jsonl/claims.jsonl",
+        "evals/files/education_pack_bundle/warehouse/jsonl/claim_evidence.jsonl"
+      ],
+      "expectations": [
+        "The result keeps definition, explanation, prerequisite, example, and assessment as separate ontology relations.",
+        "The result preserves explicit document and evidence linkage for the course note.",
+        "The result remains compatible with later segment building and graph projection."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Use the provided finance fixture and keep thesis support, estimate revision, causal effect, and explicit risk tracking distinct instead of collapsing them into one market-summary blob.",
+      "expected_output": "The result preserves finance-note structure while keeping the first pack narrow and compatible with later graph projection.",
+      "files": [
+        "evals/files/finance_pack_bundle/FIXTURE.md",
+        "evals/files/finance_pack_bundle/docs/RESEARCH_MEMO.md",
+        "evals/files/finance_pack_bundle/intelligence/manifests/relations.yaml",
+        "evals/files/finance_pack_bundle/intelligence/manifests/document_types.yaml",
+        "evals/files/finance_pack_bundle/warehouse/jsonl/documents.jsonl",
+        "evals/files/finance_pack_bundle/warehouse/jsonl/entities.jsonl",
+        "evals/files/finance_pack_bundle/warehouse/jsonl/claims.jsonl",
+        "evals/files/finance_pack_bundle/warehouse/jsonl/claim_evidence.jsonl"
+      ],
+      "expectations": [
+        "The result keeps causal effect, estimate, revision, risk, and thesis support as distinct ontology relations.",
+        "The result preserves explicit document and evidence linkage for the memo.",
+        "The result does not pretend the first finance pack is a full valuation or time-series engine."
+      ]
+    }
+  ]
+}

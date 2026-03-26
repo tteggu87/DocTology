@@ -1,0 +1,36 @@
+document_types:
+  - key: email_thread
+    label: Email Thread
+    description: Email text exports, reply chains, and inbox-oriented request or status communication.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - requests
+      - decides
+      - action_for
+      - due_on
+      - reports_status_of
+    notes: Best for request, owner, due-date, and status extraction from business email text.
+
+  - key: report_note
+    label: Report Note
+    description: Report excerpts, briefings, summaries, or operational review documents.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - decides
+      - reports_status_of
+      - due_on
+    notes: Best for status, milestone, and decision extraction from work reporting material.
+
+  - key: meeting_note
+    label: Meeting Note
+    description: Meeting summaries, discussion logs, and action-oriented notes.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - requests
+      - decides
+      - action_for
+      - due_on
+    notes: Best for extracting decisions, owners, and deadlines from meeting-like documents.

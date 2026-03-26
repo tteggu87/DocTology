@@ -1,0 +1,7 @@
+{"entity_id":"person.jordan","entity_type":"person","label":"Jordan","status":"active"}
+{"entity_id":"person.mina","entity_type":"person","label":"Mina","status":"active"}
+{"entity_id":"deliverable.pricing_memo","entity_type":"deliverable","label":"Revised Pricing Memo","status":"active"}
+{"entity_id":"decision.pause_vendor_rollout","entity_type":"decision","label":"Pause Vendor Rollout","status":"active"}
+{"entity_id":"workflow.security_review","entity_type":"workflow","label":"Security Review","status":"active"}
+{"entity_id":"workflow.onboarding_checklist","entity_type":"workflow","label":"Onboarding Checklist","status":"active"}
+{"entity_id":"date.2026-04-02","entity_type":"date","label":"2026-04-02","status":"active"}

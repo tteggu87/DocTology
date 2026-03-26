@@ -1,0 +1,143 @@
+relations:
+  - key: defines
+    label: Defines
+    aliases:
+      - formalizes
+    status: active
+    description: A document, person, or concept provides the formal definition of another concept.
+    domain:
+      - document
+      - person
+      - concept
+    range:
+      - concept
+      - term
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: knowledge
+
+  - key: explains
+    label: Explains
+    aliases:
+      - teaches
+    status: active
+    description: A document, teacher, or concept explains another concept or procedure.
+    domain:
+      - document
+      - person
+      - concept
+    range:
+      - concept
+      - workflow
+      - method
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: learning
+
+  - key: requires
+    label: Requires
+    aliases:
+      - prerequisite_for
+    status: active
+    description: A concept or lesson requires prior knowledge of another concept.
+    domain:
+      - concept
+      - lesson
+      - course_unit
+    range:
+      - concept
+      - lesson
+      - course_unit
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: prerequisite
+
+  - key: illustrates
+    label: Illustrates
+    aliases:
+      - exemplifies
+    status: active
+    description: An example, activity, or note illustrates a concept.
+    domain:
+      - example
+      - activity
+      - document
+    range:
+      - concept
+      - method
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: example
+
+  - key: assesses
+    label: Assesses
+    aliases:
+      - tests
+      - evaluates
+    status: active
+    description: A question, quiz, rubric, or assessment checks understanding of a concept.
+    domain:
+      - assessment
+      - question
+      - rubric
+    range:
+      - concept
+      - skill
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: assessment

@@ -1,0 +1,34 @@
+document_types:
+  - key: lecture_note
+    label: Lecture Note
+    description: Lecture notes, teaching memos, and explanatory learning material.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - defines
+      - explains
+      - requires
+      - illustrates
+    notes: Best for concept and prerequisite extraction from instructional notes.
+
+  - key: lesson_plan
+    label: Lesson Plan
+    description: Structured lesson plans, curriculum sequences, and module outlines.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - explains
+      - requires
+      - illustrates
+      - assesses
+    notes: Best for learning flow, example, and assessment alignment.
+
+  - key: assessment_note
+    label: Assessment Note
+    description: Quiz, rubric, or assessment-oriented documents tied to learning outcomes.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - assesses
+      - requires
+    notes: Best for explicit mapping between evaluation items and concepts.

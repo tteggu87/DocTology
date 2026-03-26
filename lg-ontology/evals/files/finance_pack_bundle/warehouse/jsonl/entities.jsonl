@@ -1,0 +1,6 @@
+{"entity_id":"company.novacore","entity_type":"company","label":"NovaCore","status":"active"}
+{"entity_id":"metric.gross_margin","entity_type":"metric","label":"Gross Margin","status":"active"}
+{"entity_id":"factor.cell_yield","entity_type":"factor","label":"Cell Yield","status":"active"}
+{"entity_id":"metric.capex_fy26","entity_type":"metric","label":"FY26 Capex Guidance","status":"active"}
+{"entity_id":"risk.lithium_volatility","entity_type":"risk","label":"Lithium Price Volatility","status":"active"}
+{"entity_id":"thesis.balance_sheet_stabilization","entity_type":"thesis","label":"Balance-Sheet Stabilization Thesis","status":"active"}

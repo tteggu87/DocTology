@@ -1,0 +1,18 @@
+rules:
+  - key: reverse_support_from_depends_on
+    description: If A depends on B, B supports A.
+    source_predicate: depends_on
+    derive_predicate: supports
+    subject_from: object
+    object_from: subject
+    accepted_only: true
+    materialize: true
+
+  - key: reverse_support_from_implemented_by
+    description: If A is implemented by B, B supports A.
+    source_predicate: implemented_by
+    derive_predicate: supports
+    subject_from: object
+    object_from: subject
+    accepted_only: true
+    materialize: true

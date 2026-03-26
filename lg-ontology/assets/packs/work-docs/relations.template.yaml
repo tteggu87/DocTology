@@ -1,0 +1,148 @@
+relations:
+  - key: requests
+    label: Requests
+    aliases:
+      - asks_for
+    status: active
+    description: A person or document requests an action, response, or deliverable.
+    domain:
+      - person
+      - document
+      - team
+    range:
+      - action_item
+      - deliverable
+      - decision
+      - document
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: workflow
+
+  - key: decides
+    label: Decides
+    aliases:
+      - approves
+      - chooses
+    status: active
+    description: A person or document records a decision outcome.
+    domain:
+      - person
+      - document
+      - meeting
+    range:
+      - decision
+      - workflow
+      - policy
+      - action_item
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: decision
+
+  - key: action_for
+    label: Action For
+    aliases:
+      - assigned_to
+      - owned_by
+    status: active
+    description: An action item is assigned to a person or team.
+    domain:
+      - action_item
+      - deliverable
+    range:
+      - person
+      - team
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: workflow
+
+  - key: due_on
+    label: Due On
+    aliases:
+      - due_by
+      - target_date
+    status: active
+    description: An action item or deliverable has a due date or target milestone.
+    domain:
+      - action_item
+      - deliverable
+      - workflow
+    range:
+      - date
+      - milestone
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: scheduling
+
+  - key: reports_status_of
+    label: Reports Status Of
+    aliases:
+      - updates
+      - tracks
+    status: active
+    description: A document or person reports the current status of an action, workflow, or deliverable.
+    domain:
+      - document
+      - person
+      - meeting
+    range:
+      - action_item
+      - workflow
+      - deliverable
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: status

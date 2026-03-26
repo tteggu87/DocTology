@@ -1,0 +1,2 @@
+{"entity_id":"svc.api","entity_type":"service","label":"Public API Service","aliases":["api-service"],"status":"active"}
+{"entity_id":"lib.search","entity_type":"module","label":"Search Module","aliases":["search-core"],"status":"active"}

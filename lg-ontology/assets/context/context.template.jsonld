@@ -1,0 +1,14 @@
+{
+  "@context": {
+    "entityId": "@id",
+    "entityType": "@type",
+    "label": "http://www.w3.org/2000/01/rdf-schema#label",
+    "predicate": "https://example.org/ontology/predicate",
+    "status": "https://example.org/ontology/status",
+    "reviewState": "https://example.org/ontology/reviewState",
+    "sourceDocumentId": "https://example.org/ontology/sourceDocumentId",
+    "sourceClaimId": "https://example.org/ontology/sourceClaimId",
+    "derivedAt": "https://example.org/ontology/derivedAt",
+    "confidence": "https://example.org/ontology/confidence"
+  }
+}

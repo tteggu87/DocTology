@@ -1,0 +1,13 @@
+document_types:
+  - key: lecture_note
+    label: Lecture Note
+    description: Lecture notes, teaching memos, and explanatory learning material.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - defines
+      - explains
+      - requires
+      - illustrates
+      - assesses
+    notes: Best for concept and prerequisite extraction from instructional notes.

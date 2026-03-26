@@ -1,0 +1,13 @@
+document_types:
+  - key: report_note
+    label: Report Note
+    description: Report excerpts, briefings, summaries, or operational review documents.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - requests
+      - decides
+      - action_for
+      - due_on
+      - reports_status_of
+    notes: Best for status, milestone, and decision extraction from work reporting material.

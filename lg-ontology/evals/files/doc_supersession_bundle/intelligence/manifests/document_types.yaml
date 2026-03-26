@@ -1,0 +1,46 @@
+document_types:
+  - key: repo_guidance
+    label: Repository Guidance
+    description: Repository operating guidance, architecture notes, or current-state docs.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - depends_on
+      - documents
+      - implemented_by
+      - supersedes
+    notes: Use for repo guidance that still requires human acceptance before claims become canonical.
+
+  - key: research_note
+    label: Research Note
+    description: Experimental notes, hypothesis logs, and literature-derived observations.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - supports
+      - contradicts
+      - supersedes
+    notes: Keep extraction cautious and do not auto-accept findings from raw notes.
+
+  - key: story_canon
+    label: Story Canon
+    description: Canon or continuity documentation for narrative settings.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - documents
+      - contradicts
+      - supersedes
+    notes: Domain-specific relations can be added later through an adapter pack.
+
+  - key: design_decision
+    label: Design Decision
+    description: ADRs, decision records, and implementation intent docs.
+    default_claim_status: proposed
+    evidence_required: true
+    recommended_relations:
+      - depends_on
+      - supports
+      - implemented_by
+      - supersedes
+    notes: Design decisions should remain proposed until explicitly reviewed and accepted.

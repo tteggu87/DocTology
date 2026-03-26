@@ -1,0 +1,141 @@
+relations:
+  - key: affects
+    label: Affects
+    status: active
+    description: An event, factor, or metric affects another metric, company, or thesis component.
+    domain:
+      - event
+      - factor
+      - metric
+      - company
+      - thesis
+    range:
+      - metric
+      - company
+      - thesis
+      - risk
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: causal
+
+  - key: estimates
+    label: Estimates
+    status: active
+    description: A note or analyst estimate projects a metric, company state, or thesis outcome.
+    domain:
+      - document
+      - analyst
+      - thesis
+    range:
+      - metric
+      - company
+      - thesis
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: estimate
+
+  - key: revises
+    label: Revises
+    status: active
+    description: A new note revises a prior estimate, metric target, or thesis component.
+    domain:
+      - document
+      - estimate
+      - thesis
+    range:
+      - estimate
+      - metric
+      - thesis
+      - document
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: lifecycle
+
+  - key: exposes_risk
+    label: Exposes Risk
+    status: active
+    description: A note, event, or factor identifies a risk to a company, thesis, or metric.
+    domain:
+      - document
+      - event
+      - factor
+      - company
+    range:
+      - risk
+      - thesis
+      - metric
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: risk
+
+  - key: supports_thesis
+    label: Supports Thesis
+    status: active
+    description: A metric, event, or note supports a thesis or interpretation.
+    domain:
+      - metric
+      - event
+      - document
+      - factor
+    range:
+      - thesis
+      - company
+      - metric
+    inverse_of: null
+    symmetric: false
+    transitive: false
+    temporal: true
+    evidence_required: true
+    allowed_statuses:
+      - proposed
+      - accepted
+      - disputed
+      - superseded
+    conflict_rule: null
+    materialize_as_edge: true
+    exclusive_object: false
+    group: thesis

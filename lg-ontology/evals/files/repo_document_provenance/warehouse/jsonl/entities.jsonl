@@ -1,0 +1,3 @@
+{"entity_id":"entity.doc.provenance","entity_type":"document","label":"Provenance Note Entity","aliases":[],"status":"active"}
+{"entity_id":"svc.api","entity_type":"service","label":"Public API Service","aliases":["api-service"],"status":"active"}
+{"entity_id":"impl.api.worker","entity_type":"implementation","label":"API Worker Module","aliases":["worker-module"],"status":"active"}
