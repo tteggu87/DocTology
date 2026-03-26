@@ -2,42 +2,29 @@
 
 ## 한국어
 
-> **"진행시켜!"만 외쳐도, 문서가 먼저 길을 깔아주는 조합.**
-> 이 조합을 쓰면 플랜 모드에 매번 크게 기대지 않아도, 에이전트가 코드보다 문서와 current truth를 먼저 보고 드리프트를 덜 만들면서 프로젝트를 원하는 방향으로 더 안정적으로 끌고 가기 쉬워집니다.
+> **기존 프로젝트를 먼저 구조화하고, 필요할 때만 경량 온톨로지와 graph projection을 얹는 3-skill starter pack**
+> 이 레포의 핵심은 `repo bootstrap -> canonical ontology -> optional graph projection` 순서를 가볍게 시작할 수 있게 해주는 것입니다.
 >
-> <sub>과장 보정: 완전 자동 방지나 강제 enforcement는 아닙니다. 정확히는 `AGENTS.md`, current-state docs, minimal intelligence, claims/evidence 구조를 앞에 배치해서 문서 우선 탐색과 drift correction을 강하게 유도하는 쪽에 가깝습니다.</sub>
+> <sub>정확히는 `repo-docs-intelligence-bootstrap`로 current truth를 정리하고, `lightweight-ontology-core`로 canonical ontology를 만들고, `lg-ontology`로 graph projection을 추가하는 조합입니다.</sub>
 
 > TL;DR
-> 이 레포는 `풀 온톨로지 플랫폼`이 아닙니다.
-> 기존 프로젝트나 PRD에 `repo-docs-intelligence-bootstrap`를 먼저 적용해 current truth를 정리하고,
-> 필요하면 `lightweight-ontology-core` 또는 `lg-ontology`를 올려 경량 온톨로지와 graph projection까지 실험해보는 starter 패키지입니다.
+> 이 레포는 `풀 온톨로지 플랫폼`도 아니고 `graph DB starter`도 아닙니다.
+> 기존 프로젝트, 레포, PRD를 먼저 구조화하고 current truth를 정리한 뒤,
+> 필요할 때만 canonical ontology와 graph projection을 단계적으로 붙여보는 실무형 starter 패키지입니다.
 
 이 저장소는 Codex에서 함께 쓰기 좋은 세 개의 스킬을 묶어둔 패키지입니다.
 
-먼저 성격을 짧게 말하면, 이 레포는 `풀 온톨로지 플랫폼`이라기보다 `기존 프로젝트에 붙여보는 최소한의 경량 온톨로지 맛보기 + 실무형 문서 bootstrap 조합`에 가깝습니다.
-
-즉 처음부터 거대한 knowledge graph 체계를 도입하려는 저장소가 아니라:
-
-- 기존 레포에 `bootstrap`를 붙여 current truth를 정리해보고
-- 필요하면 `lightweight ontology`를 아주 얇게 얹어보고
-- claim, evidence, segment, retrieval separation 같은 개념을 과하게 무겁지 않게 체험하는
-
-그런 출발점용 레포로 이해하시면 가장 정확합니다.
+가장 정확한 포지셔닝은 이렇습니다.
 
 - `repo-docs-intelligence-bootstrap`
+  - 프로젝트, 기존 레포, PRD를 current truth 기준으로 구조화하는 기본 스킬
 - `lightweight-ontology-core`
+  - 문서와 노트를 canonical ontology로 바꾸는 기본 스킬
 - `lg-ontology`
+  - `lightweight-ontology-core` 위에 graph projection과 graph-style inspection을 얹는 확장 스킬
 
-셋은 비슷해 보이지만 역할이 다릅니다.
-
-- `repo-docs-intelligence-bootstrap`
-  기존 프로젝트를 현재 코드 기준으로 다시 정렬합니다. `AGENTS.md`, `docs/`, `intelligence/`의 최소 기준선을 만들고, 문서 드리프트를 줄이는 쪽에 강합니다.
-- `lightweight-ontology-core`
-  문서, 메모, 설계안, 운영 노트를 `entities`, `relations`, `claims`, `evidence`, `segments` 같은 구조화된 지식으로 바꿉니다. 사실과 근거를 추적해야 할 때 유용합니다.
-- `lg-ontology`
-  `lightweight-ontology-core`를 유지한 채 graph projection, graph-style inspection, pack templates, baseline-vs-graph comparison을 얹습니다. canonical truth를 graph DB로 대체하지 않고 가벼운 그래프 탐색을 붙이고 싶을 때 유용합니다.
-
-실무에서는 대부분 `bootstrap`부터 쓰고, 필요해지면 `ontology`를 추가합니다.
+이 레포의 기본값은 `repo-docs`부터 시작하는 것입니다.
+굳이 처음부터 무거운 knowledge graph나 graph DB로 가지 않고, 필요한 만큼만 단계적으로 올리는 쪽에 초점을 둡니다.
 
 ## 빠른 선택
 
