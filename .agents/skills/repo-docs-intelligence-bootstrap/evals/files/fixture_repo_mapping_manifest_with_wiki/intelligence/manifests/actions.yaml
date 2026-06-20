@@ -1,0 +1,16 @@
+metadata:
+  status: Active
+  source_of_truth: false
+  last_updated: 2026-06-20
+  purpose: "Mapping-shaped action contracts."
+
+actions:
+  repo.run:
+    status: implemented
+    description: "Run the fixture command."
+    capability: repo.run
+    implementation: "app.runner:run"
+    writes_layers:
+      - Serve
+    touches_datasets:
+      - repo.runtime

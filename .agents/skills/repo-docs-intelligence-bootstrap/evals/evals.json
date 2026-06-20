@@ -119,6 +119,26 @@
         "The result either fixes the broken action-capability link or explicitly reports the mismatch.",
         "The result does not claim validator-clean success while the mismatch remains unresolved."
       ]
+    },
+    {
+      "id": 9,
+      "prompt": "Use the provided fixture repo to preserve one unified repo-docs profile: current docs, mapping-shaped intelligence manifests, root guidance, and small wiki memory. Do not split the workflow into a separate wiki entrypoint.",
+      "expected_output": "The output accepts mapping-shaped manifests, keeps wiki pages as derived memory, and preserves docs/intelligence as canonical truth surfaces.",
+      "files": [
+        "evals/files/fixture_repo_mapping_manifest_with_wiki/FIXTURE.md",
+        "evals/files/fixture_repo_mapping_manifest_with_wiki/docs/CURRENT_STATE.md",
+        "evals/files/fixture_repo_mapping_manifest_with_wiki/intelligence/manifests/actions.yaml",
+        "evals/files/fixture_repo_mapping_manifest_with_wiki/intelligence/registry/capabilities.yaml",
+        "evals/files/fixture_repo_mapping_manifest_with_wiki/wiki/_meta/index.md",
+        "evals/files/fixture_repo_mapping_manifest_with_wiki/wiki/_meta/log.md",
+        "evals/files/fixture_repo_mapping_manifest_with_wiki/wiki/analyses/analysis-2026-06-20-runtime-entrypoint.md"
+      ],
+      "expectations": [
+        "The result treats `docs/` and `intelligence/` as current truth surfaces.",
+        "The result treats `wiki/` as derived memory for analyses, logs, source notes, and cross-session context.",
+        "The result accepts mapping-shaped `actions`, `datasets`, `entities`, `terms`, and `capabilities` sections without recreating them as lists.",
+        "The result does not create a separate wiki-only workflow or promote wiki pages as canonical runtime truth."
+      ]
     }
   ]
 }

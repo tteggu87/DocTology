@@ -1,0 +1,14 @@
+metadata:
+  status: Active
+  source_of_truth: false
+  last_updated: 2026-06-20
+  purpose: "Mapping-shaped entity contracts."
+
+entities:
+  repo.runtime:
+    description: "Runtime entity for the fixture."
+    canonical_terms:
+      - repo.run
+    owned_by: repo
+    used_by_actions:
+      - repo.run

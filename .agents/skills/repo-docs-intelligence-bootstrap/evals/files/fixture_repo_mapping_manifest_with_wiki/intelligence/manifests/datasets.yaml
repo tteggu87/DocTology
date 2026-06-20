@@ -1,0 +1,14 @@
+metadata:
+  status: Active
+  source_of_truth: false
+  last_updated: 2026-06-20
+  purpose: "Mapping-shaped dataset contracts."
+
+datasets:
+  repo.runtime:
+    source: "app runner"
+    owner: repo
+    canonical_shape: intelligence/schemas/runtime.sql
+    freshness: on_run
+    used_by_actions:
+      - repo.run

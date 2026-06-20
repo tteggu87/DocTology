@@ -6,6 +6,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Final
 
 try:
     import yaml
@@ -13,7 +14,7 @@ except Exception:  # pragma: no cover
     yaml = None
 
 
-CURRENT_DOCS = [
+CURRENT_DOCS: Final = [
     "README.md",
     "CURRENT_STATE.md",
     "ARCHITECTURE.md",
@@ -21,6 +22,15 @@ CURRENT_DOCS = [
     "SKILLS_INTEGRATION.md",
     "ROADMAP.md",
     "IMPACT_SUMMARY.md",
+]
+
+WIKI_MEMORY_PATHS: Final = [
+    "wiki/_meta/index.md",
+    "wiki/_meta/log.md",
+    "wiki/analyses",
+    "wiki/sources",
+    "wiki/concepts",
+    "wiki/projects",
 ]
 
 PATHLIKE_EXTENSIONS = (".md", ".yaml", ".yml", ".sql", ".py")
@@ -161,6 +171,14 @@ def load_yaml(path: Path, report: ValidationReport) -> object | None:
         return None
 
 
+def section_key_field(key: str) -> str:
+    key_fields = {
+        "terms": "term",
+        "datasets": "dataset_key",
+    }
+    return key_fields.get(key, "key")
+
+
 def load_list_section(path: Path, key: str, report: ValidationReport) -> list[dict[str, object]] | None:
     data = load_yaml(path, report)
     if data is None:
@@ -172,16 +190,37 @@ def load_list_section(path: Path, key: str, report: ValidationReport) -> list[di
     if section is None:
         report.add_error("yaml.missing_section", f"Missing top-level `{key}` section.", path)
         return None
-    if not isinstance(section, list):
-        report.add_error("yaml.invalid_section", f"`{key}` must be a list.", path)
-        return None
     items: list[dict[str, object]] = []
-    for item in section:
-        if not isinstance(item, dict):
-            report.add_error("yaml.invalid_item", f"Each item in `{key}` must be a mapping.", path)
-            continue
-        items.append(item)
-    return items
+    if isinstance(section, list):
+        for item in section:
+            if not isinstance(item, dict):
+                report.add_error("yaml.invalid_item", f"Each item in `{key}` must be a mapping.", path)
+                continue
+            items.append(item)
+        return items
+    if isinstance(section, dict):
+        for item_key, raw_item in section.items():
+            if raw_item is None:
+                raw_item = {}
+            if not isinstance(raw_item, dict):
+                report.add_error(
+                    "yaml.invalid_item",
+                    f"Each mapping value in `{key}` must be a mapping.",
+                    path,
+                )
+                continue
+            item = dict(raw_item)
+            key_field = section_key_field(key)
+            if not item.get(key_field):
+                item[key_field] = str(item_key)
+            items.append(item)
+        return items
+    report.add_error(
+        "yaml.invalid_section",
+        f"`{key}` must be either a list of mappings or a mapping of keys to mappings.",
+        path,
+    )
+    return None
 
 
 def keyed_items(
@@ -616,6 +655,45 @@ def validate_intelligence(repo_root: Path, report: ValidationReport) -> None:
                     )
 
 
+def validate_wiki_memory(repo_root: Path, report: ValidationReport) -> None:
+    wiki_dir = repo_root / "wiki"
+    if not wiki_dir.exists():
+        report.add_warning(
+            "wiki.memory_missing",
+            "No `wiki/` memory layer found; repo-docs bootstrap should create a small derived memory scaffold.",
+            wiki_dir,
+        )
+        return
+
+    for relative in WIKI_MEMORY_PATHS:
+        path = repo_root / relative
+        if not path.exists():
+            report.add_warning(
+                "wiki.memory_path_missing",
+                f"Expected small wiki memory path `{relative}` is missing.",
+                path,
+            )
+
+    for path in wiki_dir.rglob("*.md"):
+        text = path.read_text(encoding="utf-8")
+        metadata = parse_doc_metadata(text)
+        source_value = normalize_truth_value(metadata.get("source_of_truth", "false"))
+        if source_value in {"yes", "true"}:
+            report.add_error(
+                "wiki.claims_canonical_truth",
+                "Wiki memory pages must not mark themselves as source-of-truth; cite docs, intelligence, or code instead.",
+                path,
+            )
+        if "canonical runtime truth" in text.lower() and not (
+            "docs/" in text or "intelligence/" in text or "AGENTS.md" in text
+        ):
+            report.add_error(
+                "wiki.runtime_claim_without_canonical_source",
+                "Wiki runtime claims must cite canonical docs, intelligence, AGENTS.md, or code paths.",
+                path,
+            )
+
+
 def validate_changed_files(repo_root: Path, changed_files_path: Path | None, report: ValidationReport) -> None:
     if changed_files_path is None:
         report.add_warning(
@@ -644,17 +722,18 @@ def validate_changed_files(repo_root: Path, changed_files_path: Path | None, rep
         )
         return
 
-    docs_or_intel_changed = any(
+    canonical_repo_memory_changed = any(
         path.startswith(("docs/", "intelligence/")) or path == "AGENTS.md" for path in changed
     )
     code_changed = any(
-        path.endswith((".py", ".sql", ".yaml", ".yml")) and not path.startswith(("docs/", "intelligence/"))
+        path.endswith((".py", ".sql", ".yaml", ".yml"))
+        and not path.startswith(("docs/", "intelligence/", "wiki/"))
         for path in changed
     )
-    if code_changed and not docs_or_intel_changed:
+    if code_changed and not canonical_repo_memory_changed:
         report.add_warning(
             "drift.docs_sync_missing",
-            "Implementation changed without any docs, intelligence, or AGENTS updates in the changed file list.",
+            "Implementation changed without any canonical docs, intelligence, or AGENTS updates in the changed file list.",
             repo_root,
         )
 
@@ -681,6 +760,13 @@ def validate_changed_files(repo_root: Path, changed_files_path: Path | None, rep
             repo_root / "intelligence" / "manifests" / "actions.yaml",
         )
 
+    if canonical_repo_memory_changed and not any(path.startswith("wiki/") for path in changed):
+        report.add_warning(
+            "drift.wiki_memory_sync_missing",
+            "Docs, intelligence, or AGENTS changed without a wiki memory update in the changed file list.",
+            repo_root / "wiki",
+        )
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate docs/intelligence alignment in a repository.")
@@ -702,6 +788,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         validate_docs(repo_root, report)
         validate_intelligence(repo_root, report)
+        validate_wiki_memory(repo_root, report)
         changed_files = Path(args.changed_files).resolve() if args.changed_files else None
         validate_changed_files(repo_root, changed_files, report)
 

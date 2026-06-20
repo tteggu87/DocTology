@@ -1,12 +1,12 @@
 ---
 name: repo-docs-intelligence-bootstrap
-description: Use when a repository needs a lightweight ontology and documentation layer that evolves with the codebase to reduce drift, prevent structural mistakes, and keep current repository truth explicit. Trigger for requests to refresh current-state or architecture docs from live code, classify or archive older docs, create or update a root AGENTS.md, or introduce or maintain minimal glossary/manifests/handlers/policies/schemas/capabilities without rewriting the runtime.
+description: Use when a repository needs one lightweight repository memory profile that evolves with the codebase to reduce drift, prevent structural mistakes, and keep current repository truth plus durable working context explicit. Trigger for requests to refresh current-state or architecture docs from live code, classify or archive older docs, create or update a root AGENTS.md, introduce or maintain minimal glossary/manifests/handlers/policies/schemas/capabilities, or preserve analysis/plans/reviews in a small wiki memory layer without rewriting the runtime.
 ---
 
 # Repo Docs + Intelligence Bootstrap
 
-Use this skill when a repository has grown through experiments and now needs a lightweight ontology layer to grow alongside the implementation.
-Bootstrap is only the starting point; the real goal is ongoing alignment that keeps repository truth explicit, reduces drift, and prevents repeated structural mistakes.
+Use this skill when a repository has grown through experiments and now needs one lightweight docs, intelligence, agent-guidance, and wiki-memory profile to grow alongside the implementation.
+Bootstrap is only the starting point; the real goal is ongoing alignment that keeps repository truth explicit, preserves why decisions were made, reduces drift, and prevents repeated structural mistakes.
 
 ## Use This Skill For
 
@@ -16,6 +16,7 @@ Bootstrap is only the starting point; the real goal is ongoing alignment that ke
 - creating or updating a root `AGENTS.md` aligned with current repository rules
 - introducing or maintaining a minimal schema-first intelligence layer
 - keeping glossary/manifests/handlers/policies/schemas/capabilities synchronized as the project evolves
+- creating or maintaining a small `wiki/` memory layer for durable analyses, source notes, plans, reviews, and cross-session context
 
 ## Do Not Use This Skill For
 
@@ -30,6 +31,7 @@ Bootstrap is only the starting point; the real goal is ongoing alignment that ke
 - current documentation that matches real code
 - archived or classified older docs instead of silent deletion
 - a small schema-first intelligence layer that stays lightweight and useful
+- a small wiki memory layer that preserves reasoning, decisions, open questions, and source context across sessions
 - thin-wrapper / thick-core guidance
 - an `AGENTS.md` file that captures repository working rules
 - a repeatable validator-backed self-check loop instead of documentation by hope
@@ -45,10 +47,32 @@ The usual target output is:
 - `docs/archive/` for superseded material with a status banner
 - optional `docs/reviews/` and `docs/experiments/`
 - a minimal `intelligence/` directory with glossary, manifests, handlers, policies, schemas, and capabilities
+- a small `wiki/` memory layer with `_meta/index.md`, `_meta/log.md`, `analyses/`, `sources/`, `concepts/`, and `projects/`
 - optional `scripts/pipeline_refresh.py` and `scripts/sync_current_state.py` when the repo needs a single entry and doc-sync path
 - a root `AGENTS.md`
 - an impact summary describing what changed, what stayed legacy, and what drift still remains
 - a validator result summary when `scripts/validate_repo_docs_intelligence.py` is available
+
+## Unified Profile Contract
+
+This skill has one default profile, not separate entrypoints.
+When bootstrapping or refreshing a repository, keep these layers together:
+
+- `AGENTS.md` is the repository operating contract for future agents.
+- `docs/` is the current human-readable repository truth.
+- `intelligence/` is the machine-readable contract layer when stable actions, datasets, policies, schemas, or capability bindings exist.
+- `wiki/` is the durable memory layer for analyses, source notes, plans, reviews, decisions, open questions, and cross-session context.
+
+The layers are intentionally asymmetric:
+
+- code registration points are canonical for what exists and what runs
+- `docs/` and active ADRs are canonical for current human-readable repository state
+- `intelligence/` is canonical for reusable machine contracts
+- `AGENTS.md` is canonical for agent workflow rules
+- `wiki/` is derived memory and synthesis; it must cite code, docs, intelligence, or sources for runtime claims and must never override current truth
+
+Do not offer a separate wiki-only mode from this skill.
+Create the small wiki memory layer as part of the normal repo-docs profile, but keep it lightweight and subordinate to current docs and intelligence.
 
 ## Core Rules
 
@@ -62,6 +86,7 @@ Before writing anything new, search for:
 - existing wrappers
 - existing docs that can be reused or moved
 - existing glossary or policy files
+- existing `wiki/_meta/index.md`, `wiki/_meta/log.md`, analyses, plans, reviews, or source pages that explain prior decisions
 
 Prefer reuse and relabeling over inventing a parallel structure.
 When entrypoints disagree, verify the canonical surface from live registration points first, such as:
@@ -135,6 +160,50 @@ Make small, explicit updates that keep current truth aligned with real implement
 
 Do not make YAML into a second programming language.
 
+### Preserve Durable Working Context
+
+For substantial repo-docs work, do not leave the reasoning only in chat.
+Use the small wiki memory layer to preserve durable context:
+
+- `wiki/_meta/index.md` lists high-signal pages and current reading routes.
+- `wiki/_meta/log.md` records meaningful maintenance events, decisions, and follow-ups.
+- `wiki/analyses/` stores reusable design reviews, drift analyses, plan reviews, and decision memos.
+- `wiki/sources/` stores source notes for important external or internal material.
+- `wiki/concepts/` and `wiki/projects/` store stable concepts and workstreams only when they will be reused.
+
+Every claim-heavy wiki page should include enough provenance for the next agent to verify it.
+Recommended frontmatter for analysis pages:
+
+```yaml
+---
+title: Example Analysis
+type: analysis
+status: active
+as_of_commit: SHORT_SHA
+evidence_confidence: medium
+canonical_sources:
+  - docs/CURRENT_STATE.md
+  - intelligence/manifests/actions.yaml
+assumptions: []
+unresolved_conflicts: []
+---
+```
+
+Keep evidence confidence distinct from implementation readiness.
+If context is thin, write the source register, assumption register, open questions, and recommended next checks instead of inventing certainty.
+
+### Discover Before Generating Guidance
+
+Before adding `AGENTS.md`, docs, repo maps, or wiki memory pages, discover real structure first:
+
+- inspect package metadata, entrypoints, scripts, tests, CI, docs, intelligence, and existing wiki pages
+- use LSP, codegraph, `rg`, or language-aware search when available to find symbols, references, central files, and non-obvious boundaries
+- treat directory size as a hint, not proof of a separate operating contract
+- create nested `AGENTS.md` only when a subdirectory is a distinct operational root with its own build/test/deploy rules or safety constraints
+
+Do not generate many per-directory `AGENTS.md` files just because a tree is large.
+If a directory is important but not a separate operating root, document it in `docs/`, `docs/repo-map/`, or `wiki/analyses/` instead.
+
 ## Workflow
 
 ### 1. Detect The Live Change Surface
@@ -149,6 +218,8 @@ Figure out:
 - whether a declarative layer already exists in any form
 - which current concepts, datasets, handlers, policies, or schemas are affected
 - which legacy paths still matter and why
+- which wiki analyses, logs, plans, or review pages already explain related decisions
+- whether the repo has complexity that deserves `docs/repo-map/` or whether the small wiki index is enough
 
 ### 2. Analyze Impact Before Editing
 
@@ -202,7 +273,27 @@ Always verify:
 If the repo is transitional, say so directly.
 Do not archive, downplay, or relabel a still-imported path as historical just because it is no longer preferred.
 
-### 4. Maintain Minimal Intelligence Artifacts
+### 4. Maintain Small Wiki Memory
+
+Create or refresh the small wiki memory scaffold:
+
+- `wiki/_meta/index.md`
+- `wiki/_meta/log.md`
+- `wiki/analyses/`
+- `wiki/sources/`
+- `wiki/concepts/`
+- `wiki/projects/`
+
+Use `wiki/_meta/index.md` as the durable reading map for future sessions.
+Use `wiki/_meta/log.md` for chronological maintenance notes.
+Use `wiki/analyses/` whenever the task produced reusable reasoning: plan review, architecture decision, drift analysis, refactor rationale, source comparison, or unresolved tradeoff.
+
+Do not write every passing thought into the wiki.
+Create a standalone concept, project, or source page when it is stable enough to be useful in a future session, appears across multiple canonical surfaces, or the user explicitly wants it preserved.
+If a wiki page discusses current runtime behavior, cite the relevant code, docs, intelligence, or source page.
+If a wiki claim conflicts with current docs or intelligence, mark the wiki page stale or open-question and update the canonical surface first.
+
+### 5. Maintain Minimal Intelligence Artifacts
 
 Keep the intelligence layer minimal, current, and useful.
 Update or extend only the artifacts needed to express the change clearly and reduce repeated confusion.
@@ -234,7 +325,7 @@ Do not expand the ontology for completeness alone.
 Only add artifacts that reduce ambiguity, drift, or implementation mistakes.
 When an action already has Python implementation but lacks schema-first context, prefer filling the missing glossary, dataset, policy, or schema contracts around that action instead of inventing a new runtime abstraction.
 
-### 5. Keep Python Linking Minimal
+### 6. Keep Python Linking Minimal
 
 If you add Python support, keep it small.
 
@@ -255,7 +346,7 @@ Good repo-level maintenance additions:
 - a thin `pipeline_refresh.py` that calls existing focused scripts in the canonical order
 - a thin `sync_current_state.py` that regenerates current-state and impact docs from live artifacts
 
-### 6. Synchronize Code, Docs, And Guidance In The Same Task
+### 7. Synchronize Code, Docs, Guidance, And Memory In The Same Task
 
 When code changes, update the corresponding docs and intelligence artifacts in the same task.
 
@@ -277,11 +368,14 @@ You must always check whether these files need updates:
 - `intelligence/registry/capabilities.yaml` when Python capability bindings change
 - `intelligence/schemas/*.sql` when canonical schema, views, or materialization logic changes
 - `AGENTS.md` when working style, repository rules, or documentation expectations drift from current practice
+- `wiki/_meta/index.md` when page inventory or durable reading routes change
+- `wiki/_meta/log.md` when meaningful repo-docs maintenance, drift resolution, or plan/review work occurs
+- `wiki/analyses/*.md` when the work produced reusable reasoning, decisions, rejected alternatives, unresolved conflicts, or source-backed findings
 
 Do not finish a refactor after updating code only.
 If a repo already has current docs or intelligence artifacts, explicitly note which files were checked and intentionally left unchanged so the reader can distinguish stable truth from missed work.
 
-### 7. Add Or Refresh AGENTS.md
+### 8. Add Or Refresh AGENTS.md
 
 Create a root `AGENTS.md` if missing, or update it if drifted.
 
@@ -294,7 +388,7 @@ Include:
 
 Keep it aligned with the actual architecture and docs structure.
 
-### 8. Run The Validator As A Self-Check
+### 9. Run The Validator As A Self-Check
 
 If `scripts/validate_repo_docs_intelligence.py` is available, run it against the repository root after structural changes:
 
@@ -307,7 +401,7 @@ Do not claim success if the validator reports hard failures.
 If the validator reports warnings, surface them under remaining drift or cautions.
 If the validator cannot be run, say why and fall back to a manual drift check rather than implying validator-clean alignment.
 
-### 9. Report Drift Status
+### 10. Report Drift Status
 
 ## Reporting Format
 
@@ -316,24 +410,27 @@ When you finish, report in this order:
 1. repository analysis summary
 2. docs structure changes
 3. intelligence layer changes
-4. legacy vs current split
-5. validator summary
-6. drift resolved vs remaining
-7. cautions
-8. next steps
+4. wiki memory changes
+5. legacy vs current split
+6. validator summary
+7. drift resolved vs remaining
+8. cautions
+9. next steps
 
 Before ending the task, explicitly report:
 
 1. which docs/intelligence files were updated
 2. which were checked but did not need changes
-3. any remaining drift or legacy exceptions
-4. validator errors or warnings, or why the validator was not run
+3. which wiki memory files were updated or intentionally left unchanged
+4. any remaining drift or legacy exceptions
+5. validator errors or warnings, or why the validator was not run
 
 Minimum impact summary content:
 
 - changed files or newly created artifacts
 - checked-but-unchanged files
 - current vs intentional legacy split
+- wiki memory pages created or refreshed
 - remaining drift, warnings, or follow-up work
 - validator status, including unresolved warnings
 
@@ -351,6 +448,9 @@ Do not:
 - overdesign the intelligence layer
 - expand the ontology without a concrete ambiguity, drift, or reuse problem to solve
 - ignore validator warnings and still report the repository as fully aligned
+- treat `wiki/` as canonical runtime truth
+- put a runtime, schema, or entrypoint claim only in `wiki/` without updating or citing the corresponding code, docs, or intelligence surface
+- create nested `AGENTS.md` files from directory size alone
 
 ## Bundled Templates
 
@@ -364,6 +464,9 @@ Use these bundled files when useful:
 - `assets/docs/SKILLS_INTEGRATION.template.md`
 - `assets/docs/ROADMAP.template.md`
 - `assets/docs/IMPACT_SUMMARY.template.md`
+- `assets/wiki/_meta/index.template.md`
+- `assets/wiki/_meta/log.template.md`
+- `assets/wiki/analyses/analysis.template.md`
 - `assets/intelligence/glossary.template.yaml`
 - `assets/intelligence/actions.template.yaml`
 - `assets/intelligence/entities.template.yaml`

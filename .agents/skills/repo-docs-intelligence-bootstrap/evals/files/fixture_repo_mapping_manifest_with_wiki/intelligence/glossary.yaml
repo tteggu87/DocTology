@@ -1,0 +1,15 @@
+metadata:
+  status: Active
+  source_of_truth: true
+  last_updated: 2026-06-20
+  purpose: "Mapping-shaped glossary fixture."
+
+terms:
+  repo.run:
+    aliases:
+      - run_action
+    status: active
+    definition: "The canonical run action."
+    owned_by: repo
+    related_terms: []
+    replaced_by: null
