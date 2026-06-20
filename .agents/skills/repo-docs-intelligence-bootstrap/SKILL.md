@@ -46,6 +46,7 @@ The usual target output is:
 - current-state architecture docs that reflect actual code
 - `docs/archive/` for superseded material with a status banner
 - optional `docs/reviews/` and `docs/experiments/`
+- optional `docs/repo-map/` for entrypoint, module, data-flow, and high-impact symbol reading maps
 - a minimal `intelligence/` directory with glossary, manifests, handlers, policies, schemas, and capabilities
 - a small `wiki/` memory layer with `_meta/index.md`, `_meta/log.md`, `analyses/`, `sources/`, `concepts/`, and `projects/`
 - optional `scripts/pipeline_refresh.py` and `scripts/sync_current_state.py` when the repo needs a single entry and doc-sync path
@@ -204,6 +205,30 @@ Before adding `AGENTS.md`, docs, repo maps, or wiki memory pages, discover real 
 Do not generate many per-directory `AGENTS.md` files just because a tree is large.
 If a directory is important but not a separate operating root, document it in `docs/`, `docs/repo-map/`, or `wiki/analyses/` instead.
 
+### Keep Repo Maps Lightweight
+
+Use `docs/repo-map/` when a repository is large enough that future agents need a stable reading route through code.
+Repo maps are derived orientation docs, not an automatic source of runtime truth.
+
+Good repo-map inputs:
+
+- package metadata and registered entrypoints
+- route, CLI, script, and wrapper registrations
+- codegraph, LSP, AST-aware search, or targeted `rg` output
+- current docs, intelligence manifests, tests, and live imports
+
+The standard repo-map surface is:
+
+- `docs/repo-map/README.md`
+- `docs/repo-map/ENTRYPOINTS.md`
+- `docs/repo-map/MODULES.md`
+- `docs/repo-map/DATA_FLOW.md`
+- `docs/repo-map/SYMBOL_GRAPH.md`
+
+Keep `SYMBOL_GRAPH.md` as a high-impact symbol summary.
+Do not claim it is a complete call graph unless the repository has a real generated graph artifact and validator for that artifact.
+Do not add a repo-map generator, AST database, or language plugin unless the repo already has that machinery or the user explicitly asks for it.
+
 ## Workflow
 
 ### 1. Detect The Live Change Surface
@@ -273,7 +298,28 @@ Always verify:
 If the repo is transitional, say so directly.
 Do not archive, downplay, or relabel a still-imported path as historical just because it is no longer preferred.
 
-### 4. Maintain Small Wiki Memory
+### 4. Maintain Repo Map When It Reduces Drift
+
+Create or refresh `docs/repo-map/` when entrypoints, module boundaries, data flow, or high-impact symbols are hard to reconstruct from the main docs.
+
+Use the bundled repo-map templates:
+
+- `assets/docs/repo-map/README.template.md`
+- `assets/docs/repo-map/ENTRYPOINTS.template.md`
+- `assets/docs/repo-map/MODULES.template.md`
+- `assets/docs/repo-map/DATA_FLOW.template.md`
+- `assets/docs/repo-map/SYMBOL_GRAPH.template.md`
+
+Minimum repo-map expectations:
+
+- `README.md` links the four focused map files
+- `ENTRYPOINTS.md` names canonical entrypoints and secondary wrappers
+- `MODULES.md` maps major module responsibilities and still-live legacy modules
+- `DATA_FLOW.md` summarizes primary flow, side effects, and gates
+- `SYMBOL_GRAPH.md` lists only high-impact symbols with caller/callee/risk notes
+- `wiki/_meta/index.md` links `docs/repo-map/README.md` when a repo-map exists
+
+### 5. Maintain Small Wiki Memory
 
 Create or refresh the small wiki memory scaffold:
 
@@ -293,7 +339,7 @@ Create a standalone concept, project, or source page when it is stable enough to
 If a wiki page discusses current runtime behavior, cite the relevant code, docs, intelligence, or source page.
 If a wiki claim conflicts with current docs or intelligence, mark the wiki page stale or open-question and update the canonical surface first.
 
-### 5. Maintain Minimal Intelligence Artifacts
+### 6. Maintain Minimal Intelligence Artifacts
 
 Keep the intelligence layer minimal, current, and useful.
 Update or extend only the artifacts needed to express the change clearly and reduce repeated confusion.
@@ -325,7 +371,7 @@ Do not expand the ontology for completeness alone.
 Only add artifacts that reduce ambiguity, drift, or implementation mistakes.
 When an action already has Python implementation but lacks schema-first context, prefer filling the missing glossary, dataset, policy, or schema contracts around that action instead of inventing a new runtime abstraction.
 
-### 6. Keep Python Linking Minimal
+### 7. Keep Python Linking Minimal
 
 If you add Python support, keep it small.
 
@@ -346,7 +392,7 @@ Good repo-level maintenance additions:
 - a thin `pipeline_refresh.py` that calls existing focused scripts in the canonical order
 - a thin `sync_current_state.py` that regenerates current-state and impact docs from live artifacts
 
-### 7. Synchronize Code, Docs, Guidance, And Memory In The Same Task
+### 8. Synchronize Code, Docs, Guidance, And Memory In The Same Task
 
 When code changes, update the corresponding docs and intelligence artifacts in the same task.
 
@@ -355,6 +401,8 @@ You must always check whether these files need updates:
 - `docs/CURRENT_STATE.md` when behavior, entrypoints, providers, defaults, or runtime flow changes
 - `docs/ARCHITECTURE.md` when component roles, data flow, or storage responsibilities change
 - `docs/LAYERS.md` when boundaries between Raw/Core/Derived/Search/Graph/Serve change
+- `docs/repo-map/ENTRYPOINTS.md` when entrypoints, scripts, routes, or wrappers change and a repo-map exists
+- `docs/repo-map/MODULES.md` and `docs/repo-map/SYMBOL_GRAPH.md` when broad module ownership or high-impact symbols change and a repo-map exists
 - `docs/SKILLS_INTEGRATION.md` when CLI, skill wrappers, or external entrypoints change
 - `docs/IMPACT_SUMMARY.md` and `docs/CURRENT_STATE.md` when ontology/report/graph counts or canonical execution paths change
 - `docs/ROADMAP.md` when phased cleanup or deferred drift changes materially
@@ -375,7 +423,7 @@ You must always check whether these files need updates:
 Do not finish a refactor after updating code only.
 If a repo already has current docs or intelligence artifacts, explicitly note which files were checked and intentionally left unchanged so the reader can distinguish stable truth from missed work.
 
-### 8. Add Or Refresh AGENTS.md
+### 9. Add Or Refresh AGENTS.md
 
 Create a root `AGENTS.md` if missing, or update it if drifted.
 
@@ -388,7 +436,7 @@ Include:
 
 Keep it aligned with the actual architecture and docs structure.
 
-### 9. Run The Validator As A Self-Check
+### 10. Run The Validator As A Self-Check
 
 If `scripts/validate_repo_docs_intelligence.py` is available, run it against the repository root after structural changes:
 
@@ -401,7 +449,7 @@ Do not claim success if the validator reports hard failures.
 If the validator reports warnings, surface them under remaining drift or cautions.
 If the validator cannot be run, say why and fall back to a manual drift check rather than implying validator-clean alignment.
 
-### 10. Report Drift Status
+### 11. Report Drift Status
 
 ## Reporting Format
 
@@ -464,6 +512,11 @@ Use these bundled files when useful:
 - `assets/docs/SKILLS_INTEGRATION.template.md`
 - `assets/docs/ROADMAP.template.md`
 - `assets/docs/IMPACT_SUMMARY.template.md`
+- `assets/docs/repo-map/README.template.md`
+- `assets/docs/repo-map/ENTRYPOINTS.template.md`
+- `assets/docs/repo-map/MODULES.template.md`
+- `assets/docs/repo-map/DATA_FLOW.template.md`
+- `assets/docs/repo-map/SYMBOL_GRAPH.template.md`
 - `assets/wiki/_meta/index.template.md`
 - `assets/wiki/_meta/log.template.md`
 - `assets/wiki/analyses/analysis.template.md`

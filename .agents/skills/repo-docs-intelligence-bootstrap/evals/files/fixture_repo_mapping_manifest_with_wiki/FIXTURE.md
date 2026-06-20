@@ -10,6 +10,11 @@ Key paths:
 - `docs/CURRENT_STATE.md`
 - `docs/ARCHITECTURE.md`
 - `docs/LAYERS.md`
+- `docs/repo-map/README.md`
+- `docs/repo-map/ENTRYPOINTS.md`
+- `docs/repo-map/MODULES.md`
+- `docs/repo-map/DATA_FLOW.md`
+- `docs/repo-map/SYMBOL_GRAPH.md`
 - `docs/SKILLS_INTEGRATION.md`
 - `docs/ROADMAP.md`
 - `docs/IMPACT_SUMMARY.md`

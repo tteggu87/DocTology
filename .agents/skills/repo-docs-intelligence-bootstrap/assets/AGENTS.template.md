@@ -38,6 +38,8 @@ You must check whether these files need updates:
 - `docs/CURRENT_STATE.md` when behavior, entrypoints, providers, defaults, or runtime flow changes
 - `docs/ARCHITECTURE.md` when component roles, data flow, or storage responsibilities change
 - `docs/LAYERS.md` when boundaries between Raw/Core/Derived/Search/Graph/Serve change
+- `docs/repo-map/ENTRYPOINTS.md` when entrypoints, scripts, routes, or wrappers change and a repo-map exists
+- `docs/repo-map/MODULES.md` and `docs/repo-map/SYMBOL_GRAPH.md` when broad module ownership or high-impact symbols change and a repo-map exists
 - `docs/SKILLS_INTEGRATION.md` when CLI, skill wrappers, or external entrypoints change
 - `docs/ROADMAP.md` when deferred cleanup or staged alignment changes
 - `docs/IMPACT_SUMMARY.md` when structural changes or validator findings need explicit reporting

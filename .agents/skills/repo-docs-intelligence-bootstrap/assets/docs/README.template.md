@@ -20,6 +20,7 @@ Start here.
 - `docs/CURRENT_STATE.md`
 - `docs/ARCHITECTURE.md`
 - `docs/LAYERS.md`
+- `docs/repo-map/README.md` when present
 - `docs/SKILLS_INTEGRATION.md`
 - `docs/ROADMAP.md`
 - `docs/IMPACT_SUMMARY.md`

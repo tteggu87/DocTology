@@ -129,6 +129,11 @@
         "evals/files/fixture_repo_mapping_manifest_with_wiki/docs/CURRENT_STATE.md",
         "evals/files/fixture_repo_mapping_manifest_with_wiki/intelligence/manifests/actions.yaml",
         "evals/files/fixture_repo_mapping_manifest_with_wiki/intelligence/registry/capabilities.yaml",
+        "evals/files/fixture_repo_mapping_manifest_with_wiki/docs/repo-map/README.md",
+        "evals/files/fixture_repo_mapping_manifest_with_wiki/docs/repo-map/ENTRYPOINTS.md",
+        "evals/files/fixture_repo_mapping_manifest_with_wiki/docs/repo-map/MODULES.md",
+        "evals/files/fixture_repo_mapping_manifest_with_wiki/docs/repo-map/DATA_FLOW.md",
+        "evals/files/fixture_repo_mapping_manifest_with_wiki/docs/repo-map/SYMBOL_GRAPH.md",
         "evals/files/fixture_repo_mapping_manifest_with_wiki/wiki/_meta/index.md",
         "evals/files/fixture_repo_mapping_manifest_with_wiki/wiki/_meta/log.md",
         "evals/files/fixture_repo_mapping_manifest_with_wiki/wiki/analyses/analysis-2026-06-20-runtime-entrypoint.md"
@@ -137,6 +142,8 @@
         "The result treats `docs/` and `intelligence/` as current truth surfaces.",
         "The result treats `wiki/` as derived memory for analyses, logs, source notes, and cross-session context.",
         "The result accepts mapping-shaped `actions`, `datasets`, `entities`, `terms`, and `capabilities` sections without recreating them as lists.",
+        "The result keeps `docs/repo-map/` as a derived code-reading map with entrypoints, modules, data flow, and high-impact symbol summary pages.",
+        "The result links `docs/repo-map/README.md` from `wiki/_meta/index.md` when a repo-map exists.",
         "The result does not create a separate wiki-only workflow or promote wiki pages as canonical runtime truth."
       ]
     }

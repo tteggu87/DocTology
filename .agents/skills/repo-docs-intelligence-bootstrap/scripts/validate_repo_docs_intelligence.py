@@ -24,6 +24,14 @@ CURRENT_DOCS: Final = [
     "IMPACT_SUMMARY.md",
 ]
 
+REPO_MAP_DOCS: Final = [
+    "README.md",
+    "ENTRYPOINTS.md",
+    "MODULES.md",
+    "DATA_FLOW.md",
+    "SYMBOL_GRAPH.md",
+]
+
 WIKI_MEMORY_PATHS: Final = [
     "wiki/_meta/index.md",
     "wiki/_meta/log.md",
@@ -283,6 +291,47 @@ def validate_archive_banners(archive_dir: Path, report: ValidationReport) -> Non
             )
 
 
+def validate_repo_map(repo_root: Path, report: ValidationReport) -> None:
+    repo_map_dir = repo_root / "docs" / "repo-map"
+    if not repo_map_dir.exists():
+        return
+    if not repo_map_dir.is_dir():
+        report.add_error("repo_map.invalid_path", "`docs/repo-map` must be a directory.", repo_map_dir)
+        return
+
+    for name in REPO_MAP_DOCS:
+        path = repo_map_dir / name
+        if not path.exists():
+            report.add_error("repo_map.missing_doc", f"Missing repo-map doc `docs/repo-map/{name}`.", path)
+            continue
+        validate_doc_metadata(path, report)
+        validate_markdown_refs(path, repo_root, report)
+
+    readme_path = repo_map_dir / "README.md"
+    if readme_path.exists():
+        readme_text = readme_path.read_text(encoding="utf-8")
+        for name in REPO_MAP_DOCS:
+            if name == "README.md":
+                continue
+            expected = f"docs/repo-map/{name}"
+            if expected not in readme_text:
+                report.add_error(
+                    "repo_map.readme_missing_link",
+                    f"Repo-map README must link `{expected}`.",
+                    readme_path,
+                )
+
+    wiki_index_path = repo_root / "wiki" / "_meta" / "index.md"
+    if wiki_index_path.exists():
+        wiki_index_text = wiki_index_path.read_text(encoding="utf-8")
+        if "docs/repo-map/README.md" not in wiki_index_text:
+            report.add_error(
+                "repo_map.wiki_index_missing",
+                "Wiki index must link `docs/repo-map/README.md` when a repo-map exists.",
+                wiki_index_path,
+            )
+
+
 def resolve_module_file(repo_root: Path, module_path: str) -> Path | None:
     module_parts = module_path.split(".")
     candidates = [
@@ -472,6 +521,7 @@ def validate_docs(repo_root: Path, report: ValidationReport) -> None:
     archive_dir = docs_dir / "archive"
     if archive_dir.exists():
         validate_archive_banners(archive_dir, report)
+    validate_repo_map(repo_root, report)
 
 
 def validate_glossary(glossary_path: Path, report: ValidationReport) -> set[str]:
@@ -744,6 +794,33 @@ def validate_changed_files(repo_root: Path, changed_files_path: Path | None, rep
             "drift.current_state_missing",
             "Entrypoint-related files changed but `docs/CURRENT_STATE.md` was not part of the changed file list.",
             repo_root / "docs" / "CURRENT_STATE.md",
+        )
+    repo_map_dir_exists = (repo_root / "docs" / "repo-map").exists()
+    if (
+        repo_map_dir_exists
+        and entrypoint_changed
+        and "docs/repo-map/ENTRYPOINTS.md" not in changed
+    ):
+        report.add_warning(
+            "drift.repo_map_entrypoints_missing",
+            "Entrypoint-related files changed but `docs/repo-map/ENTRYPOINTS.md` was not part of the changed file list.",
+            repo_root / "docs" / "repo-map" / "ENTRYPOINTS.md",
+        )
+
+    code_map_changed = any(
+        path in {"docs/repo-map/MODULES.md", "docs/repo-map/SYMBOL_GRAPH.md"} for path in changed
+    )
+    broad_code_changes = [
+        path
+        for path in changed
+        if path.endswith((".py", ".ts", ".tsx", ".rs", ".go"))
+        and not path.startswith(("docs/", "intelligence/", "wiki/", "tests/"))
+    ]
+    if repo_map_dir_exists and len(broad_code_changes) >= 3 and not code_map_changed:
+        report.add_warning(
+            "drift.repo_map_code_map_missing",
+            "Broad code changes occurred without `docs/repo-map/MODULES.md` or `docs/repo-map/SYMBOL_GRAPH.md` in the changed file list.",
+            repo_root / "docs" / "repo-map",
         )
 
     if "intelligence/manifests/actions.yaml" in changed and "intelligence/registry/capabilities.yaml" not in changed:

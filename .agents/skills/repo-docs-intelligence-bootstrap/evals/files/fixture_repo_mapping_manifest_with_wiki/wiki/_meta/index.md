@@ -12,5 +12,10 @@ This is a derived reading map. It does not replace `docs/CURRENT_STATE.md` or `i
 ## Start Here
 
 - `docs/CURRENT_STATE.md`
+- `docs/repo-map/README.md`
 - `wiki/_meta/log.md`
 - `wiki/analyses/analysis-2026-06-20-runtime-entrypoint.md`
+
+## Code Reading Routes
+
+- `docs/repo-map/README.md`

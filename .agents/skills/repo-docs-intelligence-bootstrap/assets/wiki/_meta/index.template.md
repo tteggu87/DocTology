@@ -17,8 +17,13 @@ It does not replace `AGENTS.md`, current docs, intelligence manifests, or live c
 - `docs/CURRENT_STATE.md`
 - `docs/ARCHITECTURE.md`
 - `docs/LAYERS.md`
+- `docs/repo-map/README.md` when present
 - `intelligence/`
 - `wiki/_meta/log.md`
+
+## Code Reading Routes
+
+- Link `docs/repo-map/README.md` here when the repository has a repo-map.
 
 ## High-Signal Analyses
 

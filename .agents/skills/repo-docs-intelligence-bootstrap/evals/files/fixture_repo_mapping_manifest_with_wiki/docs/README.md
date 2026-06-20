@@ -12,6 +12,7 @@ superseded_by: N/A
 - `docs/CURRENT_STATE.md`
 - `docs/ARCHITECTURE.md`
 - `docs/LAYERS.md`
+- `docs/repo-map/README.md`
 - `docs/IMPACT_SUMMARY.md`
 
 ## Memory References
