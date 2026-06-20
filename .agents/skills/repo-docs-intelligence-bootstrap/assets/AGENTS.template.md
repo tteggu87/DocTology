@@ -12,11 +12,12 @@
 - Keep YAML for meaning/contracts, SQL for schema/materialization, policy files for gates/rules, and Python for execution only.
 
 ## Repository rules
-- Treat the layered ontology store as canonical truth.
-- Treat graph traversal as sidecar behavior, not source of truth.
-- Do not mix search signal with ontology truth.
+- Treat live code and registered entrypoints as truth for what runs.
+- Treat current docs as human-readable truth only when they match live code and registered contracts.
+- Treat intelligence manifests as reusable machine-readable contracts when present.
+- Treat generated indexes, search outputs, graph projections, and wiki memory as derived aids unless this repository explicitly defines them as canonical.
 - Prefer thin wrappers and a thick core package.
-- Keep the ontology lightweight; add artifacts only when they reduce ambiguity, drift, or repeated mistakes.
+- Keep repository memory lightweight; add docs, contracts, or wiki pages only when they reduce ambiguity, drift, or repeated mistakes.
 - Keep `wiki/` as derived memory for analyses, source notes, plans, reviews, and cross-session context; do not treat wiki pages as runtime truth.
 - Create nested `AGENTS.md` only for a distinct operational root with its own build, test, deploy, or safety rules.
 
