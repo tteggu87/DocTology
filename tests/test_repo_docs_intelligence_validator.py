@@ -120,6 +120,30 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
 
         self.assertEqual(report.errors, [])
 
+    def test_skill_guidance_describes_bundled_validator_fallback(self) -> None:
+        skill_path = (
+            ROOT
+            / ".agents"
+            / "skills"
+            / "repo-docs-intelligence-bootstrap"
+            / "SKILL.md"
+        )
+        agents_template_path = (
+            ROOT
+            / ".agents"
+            / "skills"
+            / "repo-docs-intelligence-bootstrap"
+            / "assets"
+            / "AGENTS.template.md"
+        )
+
+        skill_text = skill_path.read_text(encoding="utf-8")
+        agents_template_text = agents_template_path.read_text(encoding="utf-8")
+
+        self.assertIn("repository-local validator", skill_text)
+        self.assertIn("bundled skill validator", skill_text)
+        self.assertIn("bundled skill validator", agents_template_text)
+
 
 if __name__ == "__main__":
     unittest.main()

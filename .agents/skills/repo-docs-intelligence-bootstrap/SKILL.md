@@ -52,7 +52,7 @@ The usual target output is:
 - optional `scripts/pipeline_refresh.py` and `scripts/sync_current_state.py` when the repo needs a single entry and doc-sync path
 - a root `AGENTS.md`
 - an impact summary describing what changed, what stayed legacy, and what drift still remains
-- a validator result summary when `scripts/validate_repo_docs_intelligence.py` is available
+- a validator result summary from the repository-local validator when present, otherwise from this skill's bundled validator
 
 ## Unified Profile Contract
 
@@ -438,16 +438,23 @@ Keep it aligned with the actual architecture and docs structure.
 
 ### 10. Run The Validator As A Self-Check
 
-If `scripts/validate_repo_docs_intelligence.py` is available, run it against the repository root after structural changes:
+Run the validator against the repository root after structural changes.
+Prefer the repository-local validator when the target repository carries one:
 
 ```bash
 python scripts/validate_repo_docs_intelligence.py --repo-root <path>
 ```
 
+If the target repository does not have `scripts/validate_repo_docs_intelligence.py`, use this skill's bundled skill validator from the installed or source skill directory:
+
+```bash
+python <repo-docs-intelligence-bootstrap-skill-dir>/scripts/validate_repo_docs_intelligence.py --repo-root <path>
+```
+
 If you can derive a changed-file list from the environment, pass it with `--changed-files <path>`.
 Do not claim success if the validator reports hard failures.
 If the validator reports warnings, surface them under remaining drift or cautions.
-If the validator cannot be run, say why and fall back to a manual drift check rather than implying validator-clean alignment.
+If neither the repository-local validator nor the bundled skill validator can be run, say why and fall back to a manual drift check rather than implying validator-clean alignment.
 
 ### 11. Report Drift Status
 

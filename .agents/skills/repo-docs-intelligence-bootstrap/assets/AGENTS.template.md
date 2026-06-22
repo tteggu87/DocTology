@@ -8,7 +8,7 @@
 - Follow schema-first: define glossary/action/schema before adding implementation.
 - Update the smallest canonical truth first when concepts, actions, or boundaries change.
 - Treat drift between code, docs, contracts, wiki memory, and guidance as a bug to resolve or record in the same task.
-- Run `python scripts/validate_repo_docs_intelligence.py --repo-root .` when the validator is available.
+- Run the repository-local validator with `python scripts/validate_repo_docs_intelligence.py --repo-root .` when it exists; otherwise use the bundled skill validator from the installed `repo-docs-intelligence-bootstrap` skill.
 - Keep YAML for meaning/contracts, SQL for schema/materialization, policy files for gates/rules, and Python for execution only.
 
 ## Repository rules
