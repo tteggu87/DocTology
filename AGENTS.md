@@ -150,11 +150,20 @@ When the user asks a question:
 1. Read `wiki/_meta/index.md` first.
 2. Identify likely relevant pages.
 3. Read the smallest set of pages that can answer well.
-4. Use `warehouse/jsonl/...` for provenance checks, contradiction checks, claim validation, or exact source coverage when the wiki alone is too thin or uncertain.
-5. Synthesize an answer grounded in the wiki, with ontology-backed verification when needed.
-6. If the answer is durable, save it into `wiki/analyses/`.
-7. Cross-link that analysis page from relevant pages if appropriate.
-8. Append a `query` log entry for substantial work.
+4. Follow wikilinks. When a page you read contains `[[link-name]]` wikilinks relevant to the question, resolve and read those linked pages too. Wikilinks are not decoration; they are paths to evidence. For example, `[[concept-name]]` maps to `wiki/concepts/concept-name.md`, and `[[source-example]]` maps to `wiki/sources/source-example.md`.
+5. Traverse recursively. If a linked page contains further relevant wikilinks, follow them to a reasonable depth of 2–3 hops. Stop when the question is answered or no more relevant links exist.
+6. Use `warehouse/jsonl/...` for provenance checks, contradiction checks, claim validation, or exact source coverage when the wiki alone is too thin or uncertain.
+7. Synthesize an answer grounded in the wiki, with ontology-backed verification when needed.
+8. If the answer is durable, save it into `wiki/analyses/`.
+9. Cross-link that analysis page from relevant pages if appropriate.
+10. Append a `query` log entry for substantial work.
+
+## Link Traversal Rules
+
+- **Minimum depth.** For any question involving two or more concepts, follow at least 2 hops of relevant wikilinks before answering. Do not stop at the first page.
+- **Fan-out.** When a page links to multiple concepts relevant to the question, read all of those linked pages, not just the first.
+- **Refuse when evidence is absent.** If, after traversing up to 3 hops, no evidence supports an answer, explicitly state that the evidence is absent. Do not fabricate an answer.
+- **Track the path.** Before answering, list every page read in traversal order.
 
 ## Answer Receipt Workflow
 
