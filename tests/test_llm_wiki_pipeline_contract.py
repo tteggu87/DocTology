@@ -53,6 +53,9 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
         self.assertIn("Accepted claims require explicit review metadata and supporting evidence.", text)
         self.assertIn("Do not use filename, keyword", text)
         self.assertIn("Semantic no-fallback rule", text)
+        self.assertIn("## Link Traversal Rules", text)
+        self.assertIn("follow at least 2 hops", text)
+        self.assertIn("list every page read in traversal order", text)
         self.assertIn("semantic fallback that changes the judgment owner is not", text)
 
     def test_ingest_skill_has_closed_contract_and_report_format(self) -> None:
@@ -83,6 +86,12 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
         self.assertIn("## Closed Wiki Ingest Pipeline", wiki_only_agents)
         self.assertIn("source registration only", wiki_only_agents)
         self.assertIn("Semantic no-fallback rule", wiki_only_agents)
+        self.assertIn("## Link Traversal Rules", ontology_agents)
+        self.assertIn("## Link Traversal Rules", wiki_only_agents)
+        self.assertIn("follow at least 2 hops", ontology_agents)
+        self.assertIn("follow at least 2 hops", wiki_only_agents)
+        self.assertIn("list every page read in traversal order", ontology_agents)
+        self.assertIn("list every page read in traversal order", wiki_only_agents)
         self.assertIn("raw -> register -> warehouse/jsonl when applicable -> wiki projection", ontology_readme)
         self.assertIn("raw -> register -> wiki projection -> meta refresh", wiki_only_readme)
 

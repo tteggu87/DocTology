@@ -45,6 +45,7 @@ Do not use this skill when the user only wants to ingest one source into an exis
 6. Spot-check the generated repo contract:
    - `AGENTS.md` includes a startup ritual for future agents
    - `AGENTS.md` keeps `wiki/_meta/index.md` and `wiki/_meta/log.md` central
+   - `AGENTS.md` requires relevant wikilink traversal, bounded recursive fan-out, and an explicit reading path
    - ontology-ready scaffolds describe `warehouse/jsonl/` as canonical truth
 7. Tell the user what was created and what the next maintenance prompt should look like.
 
@@ -79,6 +80,7 @@ Add `--force` only when the user explicitly wants overwrites.
 ## Generated Contract Expectations
 
 - The scaffold should teach future agents to read `AGENTS.md`, `wiki/_meta/index.md`, and recent `wiki/_meta/log.md` before substantial work.
+- The scaffold should teach future agents to treat relevant wikilinks as evidence paths, follow them recursively for 2–3 hops when needed, and report the pages read in traversal order.
 - The scaffold should teach page-threshold discipline so passing mentions do not immediately become standalone pages.
 - If the scaffold is ontology-ready, it should describe `warehouse/jsonl/` as canonical structured truth and `wiki/` as human-facing synthesis.
 - If a later wiki-local conventions page is ever added, it must remain subordinate to `AGENTS.md`.
