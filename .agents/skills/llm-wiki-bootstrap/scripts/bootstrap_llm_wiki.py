@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import shutil
 import sys
 from pathlib import Path
 
@@ -19,18 +18,184 @@ def write_text(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def source_repo_root() -> Path:
-    return Path(__file__).resolve().parents[4]
+def gitignore_text(profile: str) -> str:
+    base = """.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.omx/
+.gstack/
+"""
+    if profile == "llm-first-ontology":
+        base += """
+# Local helper-model secrets. Keep wikiconfig.example.json in git instead.
+wikiconfig.json
+"""
+    return base
 
 
-def read_source_repo_file(relative_path: str) -> str:
-    path = source_repo_root() / relative_path
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Bootstrap expected DocTology reference file at {relative_path}. "
-            "Run this repo-local bootstrap from a complete DocTology checkout."
-        )
-    return path.read_text(encoding="utf-8")
+def wikiconfig_example_json() -> str:
+    return """{
+  "_meta": {
+    "purpose": "Example helper-model config for a strict LLM-first wiki.",
+    "runtime_filename": "wikiconfig.json",
+    "behavior_summary": [
+      "llmWiki.enabled = false -> disable backend helper-model API calls. Semantic CLI commands emit agent handoff prompts/bundles for the surrounding chat LLM instead of claiming semantic success.",
+      "llmWiki.enabled = true -> use models[0] as the backend helper LLM for strict compile/query workflows.",
+      "This file does not switch the surrounding Codex/ChatGPT conversation to a different model. Agent-mediated chat-LLM processing must be explicit: emit the bundle/prompt, let the chat agent process it, then save a proposal or reviewed page intentionally."
+    ]
+  },
+  "llmWiki": {
+    "enabled": false,
+    "_enabled_meaning": {
+      "false": "No helper-model API calls from local scripts. Scripts emit agent handoff prompts/bundles for the surrounding chat agent.",
+      "true": "Enable backend-only helper-model API calls through models[0]."
+    }
+  },
+  "models": [
+    {
+      "title": "Helper Chat Model",
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "apiKey": "YOUR_API_KEY",
+      "apiBase": "https://api.openai.com/v1",
+      "_note": "Current code uses models[0] only. Provider must currently be 'openai', but apiBase may point to any OpenAI-compatible endpoint."
+    }
+  ],
+  "embeddingsProvider": {
+    "provider": "openai",
+    "model": "text-embedding-3-small",
+    "apiKey": "YOUR_API_KEY",
+    "apiBase": "https://api.openai.com/v1",
+    "_note": "Parsed by the loader but not required by the strict compile/query path."
+  },
+  "rerankerProvider": {
+    "provider": "openai",
+    "model": "your-reranker-model",
+    "apiKey": "YOUR_API_KEY",
+    "apiBase": "https://example.invalid/v1",
+    "_note": "Parsed by the loader but not required by the strict compile/query path."
+  }
+}
+"""
+
+
+def sqlite_operational_schema_sql() -> str:
+    return """-- sqlite_operational.schema.sql
+-- Purpose: operational index schema for a file-canonical LLM Wiki
+
+PRAGMA foreign_keys = ON;
+
+CREATE TABLE IF NOT EXISTS pages (
+  id TEXT PRIMARY KEY,
+  path TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  page_type TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  checksum TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS page_links (
+  from_page_id TEXT NOT NULL,
+  to_page_id TEXT,
+  to_link_text TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('resolved', 'unresolved')),
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (from_page_id) REFERENCES pages(id)
+);
+
+CREATE TABLE IF NOT EXISTS page_sources (
+  page_id TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  relation_type TEXT NOT NULL CHECK (relation_type IN ('primary', 'supporting', 'mentioned')),
+  PRIMARY KEY (page_id, source_id, relation_type),
+  FOREIGN KEY (page_id) REFERENCES pages(id)
+);
+
+CREATE TABLE IF NOT EXISTS aliases (
+  alias_text TEXT NOT NULL,
+  target_type TEXT NOT NULL CHECK (target_type IN ('page', 'entity')),
+  target_id TEXT NOT NULL,
+  PRIMARY KEY (alias_text, target_type, target_id)
+);
+
+CREATE TABLE IF NOT EXISTS tags (
+  page_id TEXT NOT NULL,
+  tag TEXT NOT NULL,
+  PRIMARY KEY (page_id, tag),
+  FOREIGN KEY (page_id) REFERENCES pages(id)
+);
+
+CREATE TABLE IF NOT EXISTS memories (
+  id TEXT PRIMARY KEY,
+  memory_type TEXT NOT NULL CHECK (
+    memory_type IN ('preference', 'active_context', 'agent_note', 'task_memory', 'working_fact')
+  ),
+  subject TEXT,
+  content TEXT NOT NULL,
+  source_ref TEXT,
+  confidence REAL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS jobs (
+  id TEXT PRIMARY KEY,
+  job_type TEXT NOT NULL CHECK (
+    job_type IN ('register_source', 'reindex_sqlite', 'refresh_duckdb', 'extract_claims', 'audit_health')
+  ),
+  status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'success', 'failed')),
+  started_at TEXT,
+  finished_at TEXT,
+  detail TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_pages_title ON pages(title);
+CREATE INDEX IF NOT EXISTS idx_page_links_from ON page_links(from_page_id);
+CREATE INDEX IF NOT EXISTS idx_page_links_to ON page_links(to_page_id);
+CREATE INDEX IF NOT EXISTS idx_aliases_text ON aliases(alias_text);
+CREATE INDEX IF NOT EXISTS idx_tags_tag ON tags(tag);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+"""
+
+
+def duckdb_analytical_schema_sql() -> str:
+    return """-- duckdb_analytical.schema.sql
+-- Purpose: analytical warehouse schema for a file-canonical LLM Wiki
+
+CREATE TABLE IF NOT EXISTS sources (
+  source_id VARCHAR PRIMARY KEY,
+  source_type VARCHAR,
+  uri VARCHAR,
+  created_at TIMESTAMP,
+  raw_checksum VARCHAR
+);
+
+CREATE TABLE IF NOT EXISTS page_coverage_snapshots (
+  page_id VARCHAR,
+  run_id VARCHAR,
+  source_count BIGINT,
+  claim_count BIGINT,
+  entity_count BIGINT,
+  freshness_score DOUBLE,
+  coverage_score DOUBLE,
+  captured_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS audit_events (
+  run_id VARCHAR,
+  phase VARCHAR,
+  status VARCHAR,
+  detail VARCHAR,
+  page_id VARCHAR,
+  severity VARCHAR,
+  created_at TIMESTAMP
+);
+"""
+
+
+def generated_helper_script(name: str) -> str:
+    source = (Path(__file__).resolve().parent / name).read_text(encoding="utf-8")
+    return source.replace("Path(__file__).resolve().parents[4]", "Path(__file__).resolve().parent.parent")
 
 
 def ensure_safe_target(target: Path, force: bool) -> None:
@@ -46,7 +211,7 @@ def ensure_safe_target(target: Path, force: bool) -> None:
         )
 
 
-PROFILES = ["wiki-only", "wiki-plus-ontology"]
+PROFILES = ["wiki-only", "wiki-plus-ontology", "llm-first-ontology"]
 
 
 def wiki_only_agents_md() -> str:
@@ -56,6 +221,8 @@ This repository is an Obsidian-first LLM Wiki.
 
 The human curates sources and asks questions.
 The agent maintains the wiki.
+
+<!-- LLM_WIKI_CONTRACT_START -->
 
 ## Mission
 
@@ -94,6 +261,15 @@ There are three layers:
 - `wiki/analyses/`: saved answers, comparison memos, synthesis notes, decision memos
 - `wiki/_meta/`: dashboard, index, log, and other operational pages
 
+## Page Creation And Promotion Thresholds
+
+- Create or refresh a `wiki/sources/` page for an explicit source that should remain verifiable or reusable.
+- Create or promote a concept, entity, person, project, or timeline page only when it is stable enough for future reuse, appears across multiple sources or canonical surfaces, or the user explicitly asks to preserve it.
+- A passing mention is not enough for a standalone page. Keep it in the source page until its scope becomes durable.
+- Before creating a page, search for an existing page with overlapping scope. Extend or merge the existing page instead of creating a duplicate.
+- Use `wiki/analyses/` for durable comparisons, decisions, synthesized answers, plan reviews, and unresolved tradeoffs.
+- A thin stub is acceptable only when the page is required as a navigation or evidence path and its missing evidence is stated explicitly.
+
 ## Page Conventions
 
 Every wiki page should start with YAML frontmatter when practical.
@@ -118,7 +294,7 @@ Guidelines:
 
 - `title`: human-readable page title
 - `type`: one of `source`, `concept`, `entity`, `person`, `project`, `timeline`, `analysis`, `meta`
-- `status`: usually `active`, `draft`, `superseded`, or `open-question`; source pages may use lifecycle statuses such as `inbox`, `registered`, or `pending-synthesis`
+- `status`: usually `active`, `draft`, `superseded`, or `open-question`
 - `sources`: wikilinks to source pages, not raw file paths
 - Keep sections crisp and scannable
 - Use headings instead of long uninterrupted prose
@@ -140,26 +316,6 @@ When the user asks to ingest a source:
 5. Create missing pages when a concept or entity clearly deserves its own page.
 6. Rebuild or refresh `wiki/_meta/index.md` if page inventory changed.
 7. Append an entry to `wiki/_meta/log.md`.
-
-If the local CLI `scripts/llm_wiki.py ingest` was used first, treat that as source registration only.
-
-## Closed Wiki Ingest Pipeline
-
-When the user asks to ingest a source, do not stop at source registration unless the user explicitly asks for registration only.
-
-Default wiki-only ingest must follow this lifecycle:
-
-1. Register the source.
-2. Project source-backed synthesis into `wiki/sources/` and affected wiki pages.
-3. Refresh `wiki/_meta/index.md`.
-4. Append a clear entry to `wiki/_meta/log.md`.
-5. Run structural validation or report why validation could not run.
-
-This pipeline closes the lifecycle, not semantic judgment.
-
-Do not use filename, keyword, directory, token-shape, graph, retrieval, or YAML shortcuts as hard gates for semantic routing. Inspect the source, existing wiki map, and relevant page bodies before choosing affected pages.
-
-Semantic no-fallback rule: when source-page synthesis, affected-page selection, contradiction handling, or wiki projection requires agent or configured LLM judgment, an unavailable, failed, or invalid judgment must be reported as `failed`, `partial`, or `pending`. Do not replace it with lexical diagnostics, retrieval output, graph projection, structural validation, filename/keyword summaries, or deterministic fallback prose and call the semantic step complete. Transport fallback for the same configured LLM request is allowed; semantic fallback that changes the judgment owner is not.
 
 ## Query Workflow
 
@@ -267,6 +423,8 @@ Default assumption:
 
 If unsure whether something belongs in the wiki, prefer asking:
 `Should I save this as a wiki page?`
+
+<!-- LLM_WIKI_CONTRACT_END -->
 """
 
 
@@ -277,6 +435,8 @@ This repository is an Obsidian-first LLM Wiki with a lightweight ontology layer.
 
 The human curates sources and asks questions.
 The agent maintains the wiki and the canonical ontology artifacts.
+
+<!-- LLM_WIKI_CONTRACT_START -->
 
 ## Mission
 
@@ -332,6 +492,15 @@ The ontology registries are the default machine-truth surface for provenance, co
 - `wiki/_meta/`: dashboard, index, log, and other operational pages
 - `intelligence/`: glossary and manifests that stabilize repo-local vocabulary, datasets, and action boundaries
 
+## Page Creation And Promotion Thresholds
+
+- Create or refresh a `wiki/sources/` page for an explicit source that should remain verifiable or reusable.
+- Create or promote a concept, entity, person, project, or timeline page only when it is stable enough for future reuse, appears across multiple sources or canonical surfaces, or the user explicitly asks to preserve it.
+- A passing mention is not enough for a standalone semantic page. Keep it in the source page or ontology citation substrate until its scope becomes durable.
+- Before creating a page, search for an existing page with overlapping scope. Extend or merge the existing page instead of creating a duplicate.
+- Use `wiki/analyses/` for durable comparisons, decisions, synthesized answers, plan reviews, and unresolved tradeoffs.
+- A thin stub is acceptable only when the page is required as a navigation or evidence path and its missing evidence is stated explicitly.
+
 ## Page Conventions
 
 Every wiki page should start with YAML frontmatter when practical.
@@ -356,7 +525,7 @@ Guidelines:
 
 - `title`: human-readable page title
 - `type`: one of `source`, `concept`, `entity`, `person`, `project`, `timeline`, `analysis`, `meta`
-- `status`: usually `active`, `draft`, `superseded`, or `open-question`; source pages may use lifecycle statuses such as `inbox`, `registered`, or `pending-synthesis`
+- `status`: usually `active`, `draft`, `superseded`, or `open-question`
 - `sources`: wikilinks to source pages, not raw file paths
 - Keep sections crisp and scannable
 - Use headings instead of long uninterrupted prose
@@ -381,33 +550,6 @@ When the user asks to ingest a source:
 8. Append an entry to `wiki/_meta/log.md`.
 
 If ontology-backed ingest is not yet available, wiki-only ingest may continue, but preserve source boundaries and note that canonical ontology extraction is pending.
-
-`scripts/llm_wiki.py ingest` is source registration only. It is not full ontology-backed ingest.
-
-`scripts/llm_full_ingest.py --apply` is the minimal configured-LLM full growth loop. It may complete the source page, create or append affected wiki pages, append proposed JSONL records, refresh index/log, and write an ingest report. It must not modify `raw/`, create accepted truth, delete content, rename pages, merge pages, or auto-commit. Review the resulting `git diff` before committing.
-
-`scripts/pipeline_check.py` is structural validation for the closed ingest lifecycle. It checks artifact presence and parseability; it must not be treated as semantic truth validation.
-
-## Closed Ingest Pipeline
-
-When the user asks to ingest a source, do not stop at source registration unless the user explicitly asks for registration only.
-
-Default source ingest must follow this lifecycle:
-
-1. Register the source.
-2. Extract or update canonical machine-truth registries under `warehouse/jsonl/` when ontology-backed ingest applies.
-3. Project source-backed synthesis into `wiki/sources/` and affected wiki pages.
-4. Refresh `wiki/_meta/index.md`.
-5. Append a clear entry to `wiki/_meta/log.md`.
-6. Run structural validation or report why validation could not run.
-
-This pipeline closes the lifecycle, not semantic judgment.
-
-Do not use filename, keyword, directory, token-shape, graph, retrieval, or YAML shortcuts as hard gates for semantic routing. Inspect the source, existing wiki map, relevant page bodies, and canonical evidence before choosing affected pages.
-
-Semantic no-fallback rule: when source-page synthesis, affected-page selection, claim extraction, contradiction handling, or wiki projection requires agent or configured LLM judgment, an unavailable, failed, or invalid judgment must be reported as `failed`, `partial`, or `pending`. Do not replace it with lexical diagnostics, retrieval output, graph projection, structural validation, filename/keyword summaries, or deterministic fallback prose and call the semantic step complete. Transport fallback for the same configured LLM request is allowed; semantic fallback that changes the judgment owner is not.
-
-Weak, passing, or uncertain signals may stay on the source page instead of becoming standalone pages. Accepted claims require explicit review metadata and supporting evidence. Graph projection, retrieval output, and workbench previews are derived aids, not canonical truth.
 
 ## Query Workflow
 
@@ -517,10 +659,104 @@ Default assumption:
 
 If unsure whether something belongs in the wiki, prefer asking:
 `Should I save this as a wiki page?`
+
+<!-- LLM_WIKI_CONTRACT_END -->
 """
 
 
 def agents_md(profile: str) -> str:
+    if profile == "llm-first-ontology":
+        return """# AGENTS.md
+
+This repository is an Obsidian-first LLM Wiki with a strict LLM-first ontology contract layer.
+
+<!-- LLM_WIKI_CONTRACT_START -->
+
+## Strict LLM-First Semantic Rule
+
+Semantic judgment has exactly one default path: LLM-first compile/query over wiki, ontology, source evidence, and citation anchors.
+
+The preferred autonomous path is the surrounding chat agent reading the repo contracts, wiki, ontology, and citation anchors directly. A configured helper LLM in `wikiconfig.json` is an optional backend accelerator for bounded compile/query work, not the only semantic path.
+
+Deterministic code may read files, generate IDs, calculate line ranges, create citation anchors, project source pages, refresh indexes/navigation pages, and validate structure.
+
+Deterministic code must not generate semantic answer drafts, choose meaning-bearing page updates as truth, silently fall back to regex/page heuristics, or treat unreviewed compile proposals as query evidence.
+
+If no helper LLM is configured, local scripts must emit an agent handoff bundle/prompt rather than claim semantic success. The surrounding chat agent may then perform the LLM-first semantic work and save a proposal or reviewed page intentionally.
+
+Compile output is a human-review proposal. It must not automatically modify active concept, entity, project, timeline, or analysis pages.
+
+## Wiki Page Roles And Promotion Thresholds
+
+- `wiki/sources/` registers explicit sources, citation coverage, source metadata, key claims, contradictions, uncertainty, and links to affected pages.
+- `wiki/concepts/`, `wiki/entities/`, `wiki/people/`, `wiki/projects/`, and `wiki/timelines/` contain stable reusable semantic pages.
+- `wiki/analyses/` contains durable comparisons, decisions, synthesized answers, plan reviews, compile proposals, and unresolved tradeoffs.
+- Create or promote a standalone semantic page only when it is stable enough for future reuse, appears across multiple sources or canonical surfaces, or the user explicitly asks to preserve it.
+- A passing mention is not enough. Before creating a page, search for overlapping scope and extend or propose a merge into the existing page.
+- A thin stub is acceptable only when it is required as a navigation or evidence path and its missing evidence is explicit.
+
+## Source Registration And Semantic Promotion Workflow
+
+When a source is ingested:
+
+1. Register the immutable source and citation anchors in the canonical file-layer substrate.
+2. Create or refresh its `wiki/sources/` page with summary, key facts, important claims, contradictions or uncertainty, open questions, and affected-page links.
+3. Identify affected semantic pages and check for overlapping scope before proposing new pages.
+4. Save meaning-bearing changes as an LLM compile proposal with human-review-required status.
+5. Do not automatically rewrite active concept, entity, person, project, timeline, or durable analysis pages.
+6. Refresh `wiki/_meta/index.md` when page inventory or reading routes change.
+7. Append a clear entry to `wiki/_meta/log.md` after meaningful ingest or review work.
+
+## Query Workflow
+
+When the user asks a question:
+
+1. Read `wiki/_meta/index.md` first.
+2. Identify likely relevant pages.
+3. Read the smallest set of pages that can answer well.
+4. Follow wikilinks. When a page you read contains `[[link-name]]` wikilinks relevant to the question, resolve and read those linked pages too. Wikilinks are not decoration; they are paths to evidence. For example, `[[concept-name]]` maps to `wiki/concepts/concept-name.md`, and `[[source-example]]` maps to `wiki/sources/source-example.md`.
+5. Traverse recursively. If a linked page contains further relevant wikilinks, follow them to a reasonable depth of 2–3 hops. Stop when the question is answered or no more relevant links exist.
+6. Use `warehouse/jsonl/...` for provenance checks, contradiction checks, claim validation, or exact source coverage when wiki pages are too thin or uncertain.
+7. Synthesize an answer grounded in the wiki, with ontology-backed verification when needed.
+8. Save durable answers according to the Durable Answer Rule below.
+
+## Link Traversal Rules
+
+- **Minimum depth.** For any question involving two or more concepts, follow at least 2 hops of relevant wikilinks before answering. Do not stop at the first page.
+- **Fan-out.** When a page links to multiple concepts relevant to the question, read all of those linked pages, not just the first.
+- **Refuse when evidence is absent.** If, after traversing up to 3 hops, no evidence supports an answer, explicitly state that the evidence is absent. Do not fabricate an answer.
+- **Track the path.** Before answering, list every page read in traversal order.
+
+## Durable Answer Rule
+
+Durable query answers must be saved automatically under `wiki/analyses/` when writes are available. Use `scripts/query_analysis.py` or an equivalent bounded write to include the question, answer, evidence basis, uncertainty, and proposed wiki updates.
+
+Automatic durable-answer saving may update `wiki/analyses/`, `wiki/_meta/index.md`, and `wiki/_meta/log.md`.
+It must not automatically rewrite active concept, entity, person, project, or timeline pages.
+Meaning-bearing active page changes belong in proposed updates or compile proposals until reviewed.
+
+## Startup Ritual
+
+Before substantial work:
+
+1. Read this `AGENTS.md`.
+2. Read `intelligence/contract_index.yaml`.
+3. Read `wiki/_meta/index.md` if it exists.
+4. Read recent entries in `wiki/_meta/log.md` if they exist.
+5. Prefer wiki pages and meta surfaces before raw files.
+
+## Layer Contract
+
+- `raw/` is immutable source truth.
+- `warehouse/jsonl/` is provenance and citation substrate.
+- `wiki/` is the LLM/human primary reasoning surface.
+- `intelligence/` is contract-only YAML, not a second wiki.
+- Python owns execution, validation, IDs, line ranges, and bookkeeping.
+- LLM owns semantic judgment.
+- Human review owns active truth approval.
+
+<!-- LLM_WIKI_CONTRACT_END -->
+"""
     if profile == "wiki-plus-ontology":
         return ontology_agents_md()
     return wiki_only_agents_md()
@@ -528,6 +764,53 @@ def agents_md(profile: str) -> str:
 
 def readme(target: Path, profile: str) -> str:
     root = target.resolve()
+    if profile == "llm-first-ontology":
+        return f"""# LLM-First Ontology Wiki
+
+This workspace was bootstrapped with the strict `llm-first-ontology` profile.
+
+It is not a heuristic analyzer and not a simple RAG chatbot.
+
+## Layers
+
+- `raw/`: immutable source material
+- `warehouse/jsonl/`: provenance and citation substrate
+- `wiki/`: Obsidian-first LLM/human reasoning surface
+- `intelligence/`: contract-only YAML for policies, workflows, registries, relation vocabulary, and meta surfaces
+- `scripts/`: thin execution and validation surfaces
+
+## Validation
+
+Run:
+
+```bash
+python3 scripts/validate_intelligence.py
+python3 scripts/validate_workbench_manifest.py
+python3 scripts/validate_profiles.py
+python3 scripts/validate_registries.py
+python3 scripts/validate_repo_docs_intelligence.py
+```
+
+## Strict LLM smoke
+
+Without a helper LLM, semantic workflows emit agent handoff bundles/prompts and do not claim semantic success:
+
+```bash
+python3 scripts/llm_query.py "smoke test"
+python3 scripts/llm_compile_source.py --source-page wiki/sources/<source>.md
+```
+
+Explicit prompt inspection is allowed:
+
+```bash
+python3 scripts/llm_query.py "smoke test" --emit-selection-prompt
+python3 scripts/llm_compile_source.py --source-page wiki/sources/<source>.md --emit-bundle
+```
+
+## Next step
+
+Put sources under `{root}/raw/inbox/`, create source pages/citation anchors, then use LLM compile proposals for semantic updates.
+"""
     if profile == "wiki-plus-ontology":
         return f"""# LLM Wiki for Obsidian
 
@@ -566,23 +849,32 @@ The LLM ingests, structures, cross-links, updates, and keeps the wiki healthy.
 │   ├── glossary.yaml
 │   └── manifests/
 │       ├── actions.yaml
-│       ├── datasets.yaml
-│       └── pipelines.yaml
+│       └── datasets.yaml
 ├── raw/
 │   ├── inbox/
 │   ├── processed/
 │   ├── assets/
 │   └── notes/
 ├── scripts/
-│   ├── helper_llm.py
-│   ├── llm_full_ingest.py
 │   ├── llm_wiki.py
-│   └── pipeline_check.py
+│   ├── reindex_sqlite_operational.py
+│   ├── refresh_duckdb_analytics.py
+│   └── verify_three_layer_drift.py
+├── state/
 ├── templates/
-│   ├── answer_receipt_template.md
-│   └── source_page_template.md
+│   ├── source_page_template.md
+│   └── llm-wiki-three-layer/
+│       ├── duckdb_analytical.schema.sql
+│       └── sqlite_operational.schema.sql
 ├── warehouse/
 │   └── jsonl/
+│       ├── messages.jsonl
+│       ├── documents.jsonl
+│       ├── entities.jsonl
+│       ├── claims.jsonl
+│       ├── claim_evidence.jsonl
+│       ├── segments.jsonl
+│       └── derived_edges.jsonl
 └── wiki/
     ├── _meta/
     │   ├── dashboard.md
@@ -621,7 +913,7 @@ source .venv/bin/activate
 python scripts/llm_wiki.py status
 ```
 
-No third-party Python packages are required for the local scaffold.
+No third-party Python packages are required for the local scaffold, though DuckDB refresh needs the `duckdb` package when you actually run it.
 
 ### 3. Add Sources
 
@@ -638,42 +930,27 @@ python scripts/llm_wiki.py ingest raw/inbox/my-source.md --title "My Source Titl
 This is source registration only. It creates a source page stub, appends a log entry, and rebuilds the index.
 It does not perform ontology-backed ingest by itself.
 
-The full closed lifecycle is: `raw -> register -> warehouse/jsonl when applicable -> wiki projection -> meta refresh -> structural validation`.
+### 5. Run Ontology-Backed Ingest
 
-### 5. Configure Helper LLM
+If you install `llm-wiki-ontology-ingest` later, use that skill after source registration so the repo can:
 
-Copy `wikiconfig.example.json` to `wikiconfig.json`, enable helper LLM calls, and
-fill in an OpenAI-compatible chat model.
+- update `warehouse/jsonl/...`
+- refresh affected wiki pages
+- keep provenance-aware structured truth aligned with human-facing synthesis
 
-```bash
-cp wikiconfig.example.json wikiconfig.json
-python scripts/helper_llm.py --root . --check-config
-```
+### 6. Rebuild SQLite Or Refresh Wiki Analytics DuckDB
 
-### 6. Run Configured Full Ingest
-
-When helper LLM config is ready, run:
+Run:
 
 ```bash
-python scripts/llm_full_ingest.py raw/inbox/my-source.md --apply
+python scripts/reindex_sqlite_operational.py --repo-root .
+python scripts/refresh_duckdb_analytics.py --repo-root .
+python scripts/verify_three_layer_drift.py --repo-root .
 ```
 
-This is the default automated growth loop. It completes the source page, creates
-or appends affected wiki pages, appends proposed JSONL records, refreshes
-`wiki/_meta/index.md` and `wiki/_meta/log.md`, and writes an ingest report.
-
-It must not modify `raw/`, create accepted truth, delete content, rename pages,
-merge pages, or auto-commit. Review `git diff` after each apply.
-
-Use `python scripts/pipeline_check.py raw/inbox/my-source.md` for structural
-status after ingest. This check validates artifact shape, not semantic truth.
-
-When a later answer required raw/source fallback or wiki repair, record the
-trace with:
-
-```bash
-python scripts/llm_wiki.py answer-receipt "Question text" --used-raw raw/inbox/my-source.md --wiki-update wiki/analyses/example.md
-```
+These helpers are rebuildable support tools.
+They do not replace canonical file truth under `raw/`, `warehouse/jsonl/`, or `wiki/`.
+The bootstrap-layer DuckDB is a local wiki analytics mirror, not the ontology-core mirror contract.
 
 ### 7. Ask Me To Maintain The Wiki
 
@@ -687,7 +964,7 @@ Use prompts like:
 
 1. Put a source into `raw/inbox/`
 2. Register it with the CLI
-3. Run `python scripts/llm_full_ingest.py raw/inbox/source.md --apply` when configured helper LLM ingest is available
+3. Run ontology-backed ingest if available
 4. Review changed wiki pages in Obsidian
 5. Move the raw file into `raw/processed/` when you are happy
 
@@ -827,8 +1104,6 @@ This is source registration only.
 It does not auto-summarize the source or perform ontology-backed ingest.
 That is deliberate: the LLM or a higher-level ingest skill should read the source and write the synthesis with context.
 
-Full wiki ingest means the closed lifecycle: `raw -> register -> wiki projection -> meta refresh -> structural validation`.
-
 ### 5. Ask Me To Maintain The Wiki
 
 Use prompts like:
@@ -964,23 +1239,7 @@ def glossary_yaml() -> str:
   - key: analysis_page
     definition: Durable answer or synthesis note saved under wiki/analyses/.
   - key: ontology_backed_ingest
-    definition: Repeated source-processing workflow that registers source identity, appends proposed ontology records during automatic ingest, and projects source-backed results into wiki pages before any accepted-truth promotion.
-  - key: closed_ingest_pipeline
-    definition: Artifact lifecycle contract for source ingest that continues beyond source registration into proposed JSONL appends, wiki projection, meta refresh, structural validation, and completion reporting.
-  - key: source_registration_only
-    definition: Lightweight source identity registration performed by scripts/llm_wiki.py ingest; it is not full ontology-backed ingest by itself.
-  - key: configured_full_ingest
-    definition: Configured helper-LLM runtime in scripts/llm_full_ingest.py that can dry-run or apply source-backed wiki growth and proposed JSONL output without semantic fallback.
-  - key: proposed_ontology_record
-    definition: Automatically generated entity, claim, evidence, or relation candidate stored as proposed/needs_review rather than accepted canonical truth.
-  - key: proposed_record_id
-    definition: Stable artifact identifier assigned to a proposed ontology record so repeated ingest can skip duplicates without semantic merging.
-  - key: content_hash
-    definition: Structural hash over source identity, record family, and field-specific source-backed text used for idempotent proposed JSONL writes.
-  - key: idempotent_proposed_append
-    definition: Append-or-skip behavior for proposed JSONL records where existing ids or content hashes prevent duplicate lines during repeated ingest.
-  - key: structural_validation
-    definition: Validation that checks artifact presence, parseability, required fields, link integrity, and provenance shape without judging semantic truth.
+    definition: Repeated source-processing workflow that updates canonical registries first and then projects results into wiki pages.
 """
 
 
@@ -1066,11 +1325,6 @@ def datasets_yaml() -> str:
     role: optional graph-style exploration layer exported from canonical truth
     truth_class: derived
     owner: graph
-  - id: pipeline_manifest
-    path: intelligence/manifests/pipelines.yaml
-    role: declarative stage contract for closed ingest lifecycle expectations
-    truth_class: contract
-    owner: operator
 """
 
 
@@ -1089,7 +1343,6 @@ def actions_yaml() -> str:
       - wiki/_meta/log.md
     notes:
       - This is lighter than ontology-backed ingest and may be used when canonical extraction is not yet available.
-      - This is source registration only; do not report it as completed ontology-backed ingest by itself.
   - id: ingest_with_ontology
     description: Update canonical ontology registries first, then refresh wiki pages and meta outputs.
     inputs:
@@ -1119,8 +1372,6 @@ def actions_yaml() -> str:
       - wiki/_meta/log.md
     notes:
       - This is the intended repeated user-facing ingest workflow once the ontology-backed ingest skill exists.
-      - Close the lifecycle across source registration, proposed JSONL appends, wiki projection, meta refresh, structural validation, and completion reporting.
-      - Agent or helper-model judgment may choose affected pages, claims, relations, contradictions, and uncertainties; filename, keyword, token-shape, retrieval, graph, or YAML shortcuts must not decide semantic truth.
   - id: answer_query
     description: Answer using wiki pages first, with ontology-backed verification when provenance or contradictions matter.
     inputs:
@@ -1134,77 +1385,6 @@ def actions_yaml() -> str:
       - wiki/_meta/log.md
     notes:
       - Prefer wiki as the human-facing answer surface and use ontology registries for provenance, contradictions, and coverage checks.
-"""
-
-
-def pipelines_yaml() -> str:
-    return """pipelines:
-  - id: ontology_backed_ingest
-    description: Closed artifact lifecycle for source ingest in an ontology-backed LLM Wiki.
-    current_configured_runtime: scripts/llm_full_ingest.py --apply
-    semantic_judgment_owner: agent_or_configured_helper_model
-    semantic_no_fallback: true
-    deterministic_script_scope:
-      - file_discovery
-      - source_registration
-      - id_generation
-      - jsonl_parseability
-      - required_field_validation
-      - link_integrity
-      - index_refresh
-      - log_append
-      - structural_completion_reporting
-    forbidden:
-      - filename_keyword_semantic_routing
-      - token_shape_semantic_routing
-      - regex_page_selection_as_understanding
-      - auto_accept_claims_without_review_metadata
-      - graph_projection_as_canonical_truth
-      - retrieval_result_as_truth
-      - yaml_as_semantic_wiki
-      - manifest_as_runtime_executor
-      - semantic_fallback_to_deterministic_summary
-      - semantic_success_without_agent_or_configured_llm_judgment
-      - structural_validation_as_semantic_completion
-    stages:
-      - id: register_source
-        required: true
-        deterministic: true
-        notes:
-          - scripts/llm_wiki.py ingest covers this stage, not the whole pipeline.
-      - id: append_proposed_jsonl
-        required_when: ontology_backed_ingest_applies
-        agent_judgment_required: true
-        notes:
-          - Automatic full ingest appends proposed/needs_review records only.
-          - Proposed records receive stable artifact ids and content_hash values for source-scoped idempotent append-or-skip.
-          - Accepted canonical promotion remains a separate review-gated workflow.
-          - Report emitted, appended, and skipped_existing for each relevant registry family.
-          - If agent or configured LLM judgment is unavailable, failed, or invalid, report pending/partial/failed instead of substituting deterministic output.
-      - id: project_to_wiki
-        required: true
-        agent_judgment_required: true
-        notes:
-          - Configured full ingest may create or append affected pages, but must not delete, rename, merge, or overwrite pages.
-          - Lexical previews, retrieval output, graph output, and YAML hints may inform diagnostics but must not become semantic fallback success.
-      - id: refresh_meta
-        required: true
-        deterministic: true
-      - id: validate
-        required: true
-        deterministic: true
-        structural_only: true
-        notes:
-          - Validation must not upgrade failed, partial, or pending semantic work into completion.
-    reporting:
-      required_sections:
-        - source_registered
-        - proposed_jsonl_records_emitted_appended_skipped_existing
-        - wiki_pages_created_or_updated
-        - meta_pages_refreshed
-        - validation_result
-        - unresolved_uncertainties
-        - follow_up_actions
 """
 
 
@@ -1326,9 +1506,6 @@ updated: {date}
 
 
 def llm_wiki_py() -> str:
-    asset = Path(__file__).resolve().parents[1] / "assets" / "llm_wiki.py"
-    if asset.exists():
-        return asset.read_text(encoding="utf-8")
     return """#!/usr/bin/env python3
 \"\"\"Minimal local tooling for an Obsidian-first LLM Wiki.
 
@@ -1368,7 +1545,8 @@ def today() -> str:
 
 def slugify(value: str) -> str:
     value = value.strip().lower()
-    value = re.sub(r"[^a-z0-9]+", "-", value)
+    value = re.sub(r"[^0-9a-z가-힣ㄱ-ㅎㅏ-ㅣ]+", "-", value)
+    value = re.sub(r"-{2,}", "-", value)
     return value.strip("-") or "untitled"
 
 
@@ -1663,33 +1841,609 @@ if __name__ == "__main__":
 """
 
 
-def helper_llm_py() -> str:
-    return read_source_repo_file("scripts/helper_llm.py")
+def llm_first_contract_files() -> dict[str, str]:
+    return {
+        "intelligence/contract_index.yaml": """version: 1
+purpose: "Index of deterministic contracts for the LLM-first wiki/ontology workspace."
+rules:
+  yaml_role: contract_only
+  yaml_must_not_contain: [semantic_judgment, answer_drafts, source_summaries, reasoning_claims]
+read_order:
+  - intelligence/policies/semantic_boundary.yaml
+  - intelligence/policies/proposal_lifecycle.yaml
+  - intelligence/manifests/semantic_workflows.yaml
+  - intelligence/manifests/page_policy.yaml
+  - intelligence/manifests/meta_surfaces.yaml
+  - intelligence/manifests/relation_types.yaml
+  - intelligence/manifests/registries.yaml
+contract_groups:
+  core:
+    - intelligence/glossary.yaml
+    - intelligence/policies/semantic_boundary.yaml
+    - intelligence/policies/proposal_lifecycle.yaml
+    - intelligence/manifests/semantic_workflows.yaml
+  query:
+    - intelligence/manifests/page_policy.yaml
+    - intelligence/manifests/meta_surfaces.yaml
+  ontology:
+    - intelligence/manifests/relation_types.yaml
+    - intelligence/manifests/registries.yaml
+  sources:
+    - intelligence/manifests/source_families.yaml
+    - intelligence/packs/*/pack.yaml
+  workbench:
+    - intelligence/manifests/workbench.yaml
+  docs_intelligence:
+    - intelligence/manifests/actions.yaml
+    - intelligence/manifests/datasets.yaml
+    - intelligence/manifests/entities.yaml
+    - intelligence/registry/capabilities.yaml
+""",
+        "intelligence/policies/semantic_boundary.yaml": """version: 1
+purpose: "Boundary between deterministic infrastructure and LLM semantic judgment."
+yaml_role: contract_only
+semantic_fallback_allowed: false
+semantic_llm_required_for_semantic_workflows: true
+helper_llm_required_for_semantic_workflows: false
+agent_llm_handoff_allowed: true
+deterministic_code_allowed: [read_files, compute_ids, compute_line_ranges, create_citation_anchors, project_source_pages, update_indexes, validate_contracts]
+deterministic_code_forbidden: [infer_semantic_truth, draft_answers, select_evidence_as_truth, apply_compile_results_to_active_wiki_without_human_review]
+content_units:
+  role: citation_anchor
+  forbidden_role: rag_answer_chunk
+compile_proposals:
+  status: draft
+  human_review_required: true
+  query_evidence_allowed_before_review: false
+prompt_bundle_emission:
+  explicit_flag_required: true
+agent_handoff_bundle_emission:
+  default_when_helper_missing: true
+  not_semantic_success: true
+""",
+        "intelligence/policies/proposal_lifecycle.yaml": """version: 1
+purpose: "Lifecycle policy for LLM-generated compile proposals."
+proposal_lifecycle:
+  compile_proposal:
+    initial_status: draft
+    analysis_method: llm_compile_proposal
+    trust_level: human_review_required
+    queryable_before_review: false
+    allowed_transitions:
+      draft: [accepted, rejected]
+      accepted: [applied]
+      rejected: []
+      applied: []
+""",
+        "intelligence/manifests/semantic_workflows.yaml": """version: 1
+purpose: "Strict LLM-first semantic workflow contract."
+workflows:
+  compile_source:
+    cli: scripts/llm_compile_source.py
+    function: scripts.llm_compile_source:compile_source
+    requires_semantic_llm: true
+    helper_llm_required: false
+    agent_llm_handoff_allowed: true
+    missing_helper_behavior: agent_handoff_bundle
+    fallback_allowed: false
+    explicit_prompt_flags: [--emit-bundle]
+    output_status: draft
+    output_analysis_method: llm_compile_proposal
+  query:
+    cli: scripts/llm_query.py
+    function: scripts.llm_query:llm_query
+    requires_semantic_llm: true
+    helper_llm_required: false
+    agent_llm_handoff_allowed: true
+    missing_helper_behavior: agent_handoff_bundle
+    fallback_allowed: false
+    explicit_prompt_flags: [--emit-selection-prompt]
+    selection_stage:
+      uses_page_bodies: false
+    answer_stage:
+      uses_page_bodies: true
+""",
+        "intelligence/manifests/page_policy.yaml": """version: 1
+purpose: "Runtime filtering policy for pages that may become query evidence."
+queryable:
+  denied_sections: [_meta]
+  denied_status: [draft, superseded]
+  denied_analysis_methods: [llm_compile_proposal]
+  require_human_review_before_query_evidence: true
+""",
+        "intelligence/manifests/meta_surfaces.yaml": """version: 1
+purpose: "Map-first wiki surfaces that help LLMs navigate before reading bodies."
+surfaces:
+  wiki_index:
+    path: wiki/_meta/index.md
+    used_by: [query_selection, compile]
+    max_chars: 16000
+  wiki_moc:
+    path: wiki/_meta/moc.md
+    used_by: [query_selection, compile]
+    max_chars: 16000
+  wiki_link_map:
+    path: wiki/_meta/link-map.md
+    used_by: [query_selection, compile]
+    max_chars: 16000
+  source_coverage:
+    path: wiki/_meta/source-coverage.md
+    used_by: [query_selection, query_answer, compile]
+    max_chars: 8000
+  orphan_review:
+    path: wiki/_meta/orphan-review.md
+    used_by: [query_answer, compile]
+    max_chars: 8000
+  contradiction_review:
+    path: wiki/_meta/contradiction-review.md
+    used_by: [query_answer, compile]
+    max_chars: 8000
+""",
+        "intelligence/manifests/relation_types.yaml": """version: 1
+purpose: "Vocabulary contract for relation labels; not a store of asserted facts."
+yaml_role: vocabulary_only
+relation_types:
+  supports:
+    class: semantic
+    inverse: supported_by
+    from: [claim, concept, source]
+    to: [claim, concept, source]
+    evidence_required: true
+    approval_required: true
+  documents:
+    class: mechanical
+    inverse: documented_by
+    from: [source, document]
+    to: [concept, entity, project]
+    evidence_required: true
+    approval_required: false
+  depends_on:
+    class: semantic
+    inverse: depended_on_by
+    from: [concept, project, analysis]
+    to: [concept, project, source]
+    evidence_required: false
+    approval_required: true
+""",
+        "intelligence/manifests/registries.yaml": """version: 1
+purpose: "Canonical JSONL registry shape contract."
+registries:
+  documents:
+    path: warehouse/jsonl/documents.jsonl
+    key: document_id
+    required_fields: [document_id, raw_path]
+  content_units:
+    path: warehouse/jsonl/content_units.jsonl
+    key: unit_id
+    required_fields: [unit_id, document_id, source_family_id, profile_id, unit_kind, sequence, text]
+    references:
+      document_id: {registry: documents, key: document_id}
+      profile_id: {registry: profiles, key: profile_id}
+  source_versions:
+    path: warehouse/jsonl/source_versions.jsonl
+    key: source_version_id
+    required_fields: [document_id, raw_path, content_hash, source_family_id, ingested_at]
+    references:
+      document_id: {registry: documents, key: document_id}
+      profile_id: {registry: profiles, key: profile_id}
+  compile_proposals:
+    path: warehouse/jsonl/compile_proposals.jsonl
+    key: proposal_id
+    required_fields: [proposal_id, proposal_path, status, analysis_method, trust_level, created_at]
+  review_events:
+    path: warehouse/jsonl/review_events.jsonl
+    key: review_event_id
+    required_fields: [review_event_id, target_type, target_id, action, reviewed_at]
+    references:
+      target_id: {registry: compile_proposals, key: proposal_id}
+""",
+        "intelligence/manifests/source_families.yaml": """version: 1
+source_families:
+  - key: generic-md-note
+    status: generic
+    match:
+      extensions: [.md, .txt]
+""",
+        "intelligence/glossary.yaml": """terms:
+  - key: strict_llm_first_semantic_workflow
+    definition: Semantic compile/query path that must use an LLM. A configured helper LLM may run locally; when no helper is configured, the workflow emits an agent handoff bundle for the surrounding chat LLM instead of falling back to deterministic answer drafts.
+  - key: contract_layer
+    definition: YAML-backed policy/schema/workflow surface; not a second wiki and not a semantic truth store.
+  - key: compile_proposal
+    definition: Draft LLM compile output requiring human review before active wiki updates.
+""",
+        "intelligence/manifests/actions.yaml": """actions:
+  - key: compile_source_with_llm
+    description: Create a human-review compile proposal through strict helper-LLM workflow.
+  - key: answer_query_with_llm_wiki
+    description: Answer through strict helper-LLM wiki/ontology query workflow.
+  - key: reindex_wiki_operational_index
+    description: Rebuild the derived SQLite operational index from canonical wiki files.
+  - key: refresh_wiki_analytics_mirror
+    description: Refresh the derived DuckDB wiki analytics mirror from canonical JSONL and wiki files.
+  - key: verify_three_layer_drift
+    description: Check coarse drift across file truth, SQLite operational state, and DuckDB analytics state.
+""",
+        "intelligence/manifests/datasets.yaml": """datasets:
+  - key: raw_inbox
+    path: raw/inbox/
+    truth_class: source
+  - key: wiki_sources
+    path: wiki/sources/
+    truth_class: human_facing
+  - key: contract_index
+    path: intelligence/contract_index.yaml
+    truth_class: contract
+  - key: sqlite_operational_index
+    path: state/wiki_index.sqlite
+    truth_class: derived_operational
+  - key: duckdb_wiki_analytics_mirror
+    path: state/wiki_analytics.duckdb
+    truth_class: derived_analytics
+  - key: three_layer_schema_templates
+    path: templates/llm-wiki-three-layer/
+    truth_class: contract
+""",
+        "intelligence/manifests/entities.yaml": "entities: []\n",
+        "intelligence/manifests/workbench.yaml": """version: 1
+workbench:
+  status: optional
+  mutation_policy:
+    - raw is immutable except on explicit user instruction
+    - warehouse/jsonl remains canonical and must not be edited directly from the browser
+""",
+        "intelligence/registry/capabilities.yaml": """capabilities:
+  - key: llm.source.compile
+    action: compile_source_with_llm
+    implementation: scripts/llm_compile_source.py:compile_source
+  - key: llm.query.answer
+    action: answer_query_with_llm_wiki
+    implementation: scripts/llm_query.py:llm_query
+  - key: wiki.operational.reindex
+    action: reindex_wiki_operational_index
+    implementation: scripts/reindex_sqlite_operational.py:main
+  - key: wiki.analytics.refresh
+    action: refresh_wiki_analytics_mirror
+    implementation: scripts/refresh_duckdb_analytics.py:main
+  - key: wiki.three_layer.verify_drift
+    action: verify_three_layer_drift
+    implementation: scripts/verify_three_layer_drift.py:main
+""",
+        "intelligence/packs/generic-md-note/pack.yaml": """profile_id: generic-analysis
+pack_id: generic-analysis
+version: 0.1.0
+status: built_in
+source_families: [generic-md-note]
+unit_kinds: [paragraph]
+observation_types: [common.open_question]
+analysis_outputs: [generic.compile_proposal]
+capabilities:
+  parse:
+    python: scripts.generic_ingest:parse_generic_source
+  compile:
+    python: scripts.llm_compile_source:compile_source
+""",
+    }
 
 
-def llm_full_ingest_py() -> str:
-    return read_source_repo_file("scripts/llm_full_ingest.py")
+def llm_first_script_files() -> dict[str, str]:
+    return {
+        "scripts/llm_query.py": """#!/usr/bin/env python3
+import argparse, json, sys
+from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent.parent
 
-def pipeline_check_py() -> str:
-    return read_source_repo_file("scripts/pipeline_check.py")
+def llm_query(root: Path, question: str, emit_selection_prompt: bool = False):
+    if emit_selection_prompt:
+        return {"status": "selection_prompt", "mode": "llm_query", "message": "Explicit selection prompt emission only; this is not semantic success.", "question": question}
+    return {"status": "agent_handoff", "mode": "llm_query", "message": "No enabled helper LLM found. Hand this prompt to the current chat agent/LLM. This is not semantic success.", "question": question}
 
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("question")
+    parser.add_argument("--emit-selection-prompt", action="store_true")
+    args = parser.parse_args()
+    try:
+        print(json.dumps(llm_query(ROOT, args.question, args.emit_selection_prompt), ensure_ascii=False, indent=2))
+        return 0
+    except RuntimeError as error:
+        print(json.dumps({"status": "error", "message": str(error)}, ensure_ascii=False), file=sys.stderr)
+        return 1
 
-def wikiconfig_example_json() -> str:
-    return read_source_repo_file("wikiconfig.example.json")
+if __name__ == "__main__":
+    raise SystemExit(main())
+""",
+        "scripts/llm_compile_source.py": """#!/usr/bin/env python3
+import argparse, json, sys
+from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent.parent
 
-def answer_receipt_template() -> str:
-    return read_source_repo_file("templates/answer_receipt_template.md")
+def compile_source(root: Path, source_page: str, emit_bundle: bool = False):
+    if emit_bundle:
+        return {"status": "prompt_bundle", "mode": "llm_compile_source", "source_page": source_page, "message": "Explicit prompt bundle emission only; this is not semantic success."}
+    return {"status": "agent_handoff", "mode": "llm_compile_source", "source_page": source_page, "message": "No enabled helper LLM found. Hand this bundle to the current chat agent/LLM. This is not semantic success."}
 
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source-page", required=True)
+    parser.add_argument("--emit-bundle", action="store_true")
+    args = parser.parse_args()
+    try:
+        print(json.dumps(compile_source(ROOT, args.source_page, args.emit_bundle), ensure_ascii=False, indent=2))
+        return 0
+    except RuntimeError as error:
+        print(json.dumps({"status": "error", "message": str(error)}, ensure_ascii=False), file=sys.stderr)
+        return 1
 
-def gitignore_text() -> str:
-    return """.venv/
-__pycache__/
-*.pyc
-.DS_Store
-wikiconfig.json
-"""
+if __name__ == "__main__":
+    raise SystemExit(main())
+""",
+        "scripts/query_analysis.py": """#!/usr/bin/env python3
+import argparse, datetime as dt, json, re, sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+def today():
+    return dt.date.today().isoformat()
+
+def slugify(value):
+    return re.sub(r"[^A-Za-z0-9가-힣]+", "-", value.strip().lower()).strip("-")[:72] or "query-answer"
+
+def unique_path(question):
+    base = f"analysis-{today()}-{slugify(question)}"
+    path = ROOT / "wiki/analyses" / f"{base}.md"
+    index = 2
+    while path.exists():
+        path = ROOT / "wiki/analyses" / f"{base}-{index}.md"
+        index += 1
+    return path
+
+def save_query_analysis(question, answer, sources=None, evidence_mix=None):
+    sources = sources or []
+    evidence_mix = evidence_mix or {}
+    path = unique_path(question)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    source_lines = "\\n".join(f"- {source}" for source in sources) or "- none recorded"
+    mix_lines = "\\n".join(f"- {key}: {value}" for key, value in evidence_mix.items()) or "- not recorded"
+    path.write_text(f'''---
+title: "Query answer - {question[:80].replace('"', "'")}"
+type: analysis
+status: active
+analysis_method: chat_agent_llm
+trust_level: evidence_grounded
+created: {today()}
+updated: {today()}
+tags:
+  - llm-wiki
+  - query-answer
+---
+
+# Query answer - {question}
+
+## Question
+
+{question}
+
+## Answer
+
+{answer.strip()}
+
+## Evidence Mix
+
+{mix_lines}
+
+## Sources
+
+{source_lines}
+
+## Proposed Wiki Updates
+
+_Candidates only. Active semantic pages require review._
+''', encoding="utf-8")
+    index_path = ROOT / "wiki/_meta/index.md"
+    if index_path.exists():
+        text = index_path.read_text(encoding="utf-8")
+        line = f"- [[{path.stem}]] - Saved durable query answer."
+        if f"[[{path.stem}]]" not in text:
+            text = text.replace("## Analyses\\n\\n", "## Analyses\\n\\n" + line + "\\n", 1) if "## Analyses\\n\\n" in text else text + "\\n\\n## Analyses\\n\\n" + line + "\\n"
+            index_path.write_text(text, encoding="utf-8")
+    log_path = ROOT / "wiki/_meta/log.md"
+    if log_path.exists():
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(f"\\n## [{today()}] query | {question[:80]}\\n\\n- Saved [[{path.stem}]] in wiki/analyses/.\\n- Active semantic page updates remain proposed updates pending review.\\n")
+    return path.relative_to(ROOT).as_posix()
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--question", required=True)
+    parser.add_argument("--source", action="append", default=[])
+    parser.add_argument("--evidence-mix")
+    args = parser.parse_args()
+    evidence_mix = json.loads(args.evidence_mix) if args.evidence_mix else {}
+    answer = sys.stdin.read()
+    print(json.dumps({"status": "ok", "analysis_path": save_query_analysis(args.question, answer, args.source, evidence_mix)}, ensure_ascii=False))
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+""",
+        "scripts/validate_intelligence.py": """#!/usr/bin/env python3
+from pathlib import Path
+import sys, yaml
+
+ROOT = Path(__file__).resolve().parent.parent
+
+def require(ok, msg):
+    if not ok:
+        raise SystemExit(msg)
+
+idx = yaml.safe_load((ROOT / "intelligence/contract_index.yaml").read_text()) or {}
+for path in idx.get("read_order", []):
+    require((ROOT / path).exists(), f"missing contract: {path}")
+for group, patterns in (idx.get("contract_groups", {}) or {}).items():
+    for pattern in patterns:
+        matches = list(ROOT.glob(pattern)) if "*" in pattern else [ROOT / pattern]
+        require(any(p.exists() for p in matches), f"missing contract group file: {group} {pattern}")
+boundary = yaml.safe_load((ROOT / "intelligence/policies/semantic_boundary.yaml").read_text()) or {}
+require(boundary.get("semantic_fallback_allowed") is False, "semantic fallback must be false")
+require(boundary.get("semantic_llm_required_for_semantic_workflows") is True, "semantic LLM must be required")
+require(boundary.get("helper_llm_required_for_semantic_workflows") is False, "helper LLM must be optional")
+require(boundary.get("agent_llm_handoff_allowed") is True, "agent LLM handoff must be allowed")
+workflows = yaml.safe_load((ROOT / "intelligence/manifests/semantic_workflows.yaml").read_text()) or {}
+for name, wf in (workflows.get("workflows", {}) or {}).items():
+    require(wf.get("requires_semantic_llm") is True, f"{name} must require semantic LLM")
+    require(wf.get("helper_llm_required") is False, f"{name} helper LLM must be optional")
+    require(wf.get("agent_llm_handoff_allowed") is True, f"{name} must allow agent handoff")
+    require(wf.get("missing_helper_behavior") == "agent_handoff_bundle", f"{name} missing helper behavior mismatch")
+    require(wf.get("fallback_allowed") is False, f"{name} must not allow fallback")
+print("OK intelligence")
+""",
+        "scripts/validate_workbench_manifest.py": """#!/usr/bin/env python3
+from pathlib import Path
+ROOT = Path(__file__).resolve().parent.parent
+assert (ROOT / "intelligence/manifests/workbench.yaml").exists()
+print("OK workbench manifest")
+""",
+        "scripts/validate_profiles.py": """#!/usr/bin/env python3
+from pathlib import Path
+ROOT = Path(__file__).resolve().parent.parent
+assert list((ROOT / "intelligence/packs").glob("*/pack.yaml"))
+print("OK profiles=1")
+""",
+        "scripts/validate_registries.py": """#!/usr/bin/env python3
+from pathlib import Path
+ROOT = Path(__file__).resolve().parent.parent
+for name in ("documents.jsonl", "content_units.jsonl", "source_versions.jsonl", "compile_proposals.jsonl", "review_events.jsonl"):
+    assert (ROOT / "warehouse/jsonl" / name).exists()
+print("OK registries")
+""",
+        "scripts/proposal_review.py": """#!/usr/bin/env python3
+import argparse, json, re, uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+REGISTRY_DIR = ROOT / "warehouse/jsonl"
+
+def now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+def read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+def write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+def append_jsonl(path: Path, row: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\\n")
+
+def proposal_id(path: Path) -> str:
+    return "proposal-" + re.sub(r"[^a-z0-9]+", "-", path.stem.lower()).strip("-")
+
+def proposal_status(path: Path) -> str:
+    text = read_text(path)
+    match = re.search(r"^status:\\s*([^\\n]+)", text, re.MULTILINE)
+    return match.group(1).strip().strip('"') if match else "draft"
+
+def replace_status(path: Path, status: str) -> None:
+    text = read_text(path)
+    if re.search(r"^status:\\s*[^\\n]+", text, re.MULTILINE):
+        text = re.sub(r"^status:\\s*[^\\n]+", f"status: {status}", text, count=1, flags=re.MULTILINE)
+    elif text.startswith("---\\n"):
+        text = text.replace("---\\n", f"---\\nstatus: {status}\\n", 1)
+    else:
+        text = f"---\\nstatus: {status}\\n---\\n\\n{text}"
+    write_text(path, text)
+
+def record_proposal(path: Path, status: str) -> str:
+    pid = proposal_id(path)
+    append_jsonl(REGISTRY_DIR / "compile_proposals.jsonl", {
+        "proposal_id": pid,
+        "proposal_path": str(path.relative_to(ROOT)),
+        "status": status,
+        "analysis_method": "llm_compile_proposal",
+        "trust_level": "human_review_required",
+        "created_at": now(),
+    })
+    return pid
+
+def record_event(pid: str, action: str) -> None:
+    append_jsonl(REGISTRY_DIR / "review_events.jsonl", {
+        "review_event_id": "review-" + uuid.uuid4().hex[:12],
+        "target_type": "compile_proposal",
+        "target_id": pid,
+        "action": action,
+        "reviewed_at": now(),
+    })
+
+def set_status(path: Path, status: str) -> int:
+    current = proposal_status(path)
+    allowed = {"draft": {"accepted", "rejected"}, "accepted": {"applied"}, "rejected": set(), "applied": set()}
+    if status not in allowed.get(current, set()):
+        raise SystemExit(f"invalid transition: {current} -> {status}")
+    replace_status(path, status)
+    pid = record_proposal(path, status)
+    record_event(pid, status)
+    print(json.dumps({"status": "ok", "proposal_id": pid, "proposal_status": status}, ensure_ascii=False))
+    return 0
+
+def apply_reviewed(path: Path, target: Path, content_file: Path) -> int:
+    if proposal_status(path) != "accepted":
+        raise SystemExit("proposal must be accepted before apply")
+    target = target.resolve()
+    if ROOT not in target.parents or "wiki" not in target.relative_to(ROOT).parts:
+        raise SystemExit("target must be inside this repo's wiki/")
+    write_text(target, read_text(content_file))
+    replace_status(path, "applied")
+    pid = record_proposal(path, "applied")
+    record_event(pid, "applied")
+    print(json.dumps({"status": "ok", "proposal_id": pid, "target": str(target.relative_to(ROOT))}, ensure_ascii=False))
+    return 0
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Review and apply human-approved LLM compile proposals.")
+    sub = parser.add_subparsers(dest="command", required=True)
+    status_parser = sub.add_parser("set-status")
+    status_parser.add_argument("proposal")
+    status_parser.add_argument("--status", required=True, choices=["accepted", "rejected"])
+    apply_parser = sub.add_parser("apply")
+    apply_parser.add_argument("proposal")
+    apply_parser.add_argument("--target", required=True)
+    apply_parser.add_argument("--content-file", required=True)
+    args = parser.parse_args()
+    if args.command == "set-status":
+        return set_status((ROOT / args.proposal).resolve(), args.status)
+    if args.command == "apply":
+        return apply_reviewed((ROOT / args.proposal).resolve(), (ROOT / args.target).resolve(), Path(args.content_file).resolve())
+    return 2
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+""",
+        "scripts/validate_repo_docs_intelligence.py": """#!/usr/bin/env python3
+from pathlib import Path
+ROOT = Path(__file__).resolve().parent.parent
+for path in ("AGENTS.md", "README.md", "intelligence/contract_index.yaml"):
+    assert (ROOT / path).exists()
+print("OK repo docs intelligence")
+""",
+        "scripts/generic_ingest.py": """#!/usr/bin/env python3
+print("generic ingest scaffold placeholder: implement repo-specific parsing before use")
+""",
+        "scripts/wiki_graph_navigation.py": """#!/usr/bin/env python3
+from pathlib import Path
+ROOT = Path(__file__).resolve().parent.parent
+for name in ("moc.md", "link-map.md", "orphan-review.md", "contradiction-review.md", "source-coverage.md"):
+    (ROOT / "wiki/_meta" / name).write_text(f"# {name}\\n", encoding="utf-8")
+print("OK wiki graph navigation")
+""",
+    }
 
 
 def scaffold(target: Path, force: bool, profile: str) -> None:
@@ -1713,10 +2467,28 @@ def scaffold(target: Path, force: bool, profile: str) -> None:
         target / "wiki" / "timelines",
     ]
 
+    if profile == "llm-first-ontology":
+        directories.extend(
+            [
+                target / "docs",
+                target / "intelligence" / "manifests",
+                target / "intelligence" / "packs" / "generic-md-note",
+                target / "intelligence" / "policies",
+                target / "intelligence" / "registry",
+                target / "intelligence" / "schemas",
+                target / "state",
+                target / "templates" / "llm-wiki-three-layer",
+                target / "warehouse" / "jsonl",
+                target / "warehouse" / "graph_projection",
+            ]
+        )
+
     if profile == "wiki-plus-ontology":
         directories.extend(
             [
                 target / "intelligence" / "manifests",
+                target / "state",
+                target / "templates" / "llm-wiki-three-layer",
                 target / "warehouse" / "jsonl",
             ]
         )
@@ -1726,22 +2498,51 @@ def scaffold(target: Path, force: bool, profile: str) -> None:
 
     write_text(target / "AGENTS.md", agents_md(profile))
     write_text(target / "README.md", readme(target, profile))
-    write_text(target / ".gitignore", gitignore_text())
+    write_text(target / ".gitignore", gitignore_text(profile))
     write_text(target / "scripts" / "llm_wiki.py", llm_wiki_py())
     write_text(target / "templates" / "source_page_template.md", source_template())
-    write_text(target / "templates" / "answer_receipt_template.md", answer_receipt_template())
     write_text(target / "wiki" / "_meta" / "dashboard.md", dashboard_md(date))
     write_text(target / "wiki" / "_meta" / "index.md", index_md(date))
     write_text(target / "wiki" / "_meta" / "log.md", log_md(date))
-    if profile == "wiki-plus-ontology":
+    if profile == "llm-first-ontology":
         write_text(target / "wikiconfig.example.json", wikiconfig_example_json())
-        write_text(target / "scripts" / "helper_llm.py", helper_llm_py())
-        write_text(target / "scripts" / "llm_full_ingest.py", llm_full_ingest_py())
-        write_text(target / "scripts" / "pipeline_check.py", pipeline_check_py())
+        write_text(target / "wikiconfig.json", wikiconfig_example_json())
+        for rel_path, content in llm_first_contract_files().items():
+            write_text(target / rel_path, content)
+        for rel_path, content in llm_first_script_files().items():
+            write_text(target / rel_path, content)
+        write_text(target / "scripts" / "reindex_sqlite_operational.py", generated_helper_script("reindex_sqlite_operational.py"))
+        write_text(target / "scripts" / "refresh_duckdb_analytics.py", generated_helper_script("refresh_duckdb_analytics.py"))
+        write_text(target / "scripts" / "verify_three_layer_drift.py", generated_helper_script("verify_three_layer_drift.py"))
+        write_text(target / "templates" / "llm-wiki-three-layer" / "sqlite_operational.schema.sql", sqlite_operational_schema_sql())
+        write_text(target / "templates" / "llm-wiki-three-layer" / "duckdb_analytical.schema.sql", duckdb_analytical_schema_sql())
+        write_text(target / "docs" / "README.md", "# Docs Portal\n\nStart with `../AGENTS.md` and `../intelligence/contract_index.yaml`.\n")
+        write_text(target / "docs" / "LLM_FIRST_ONTOLOGY_BOOTSTRAP_PROFILE.md", "# LLM-First Ontology Bootstrap Profile\n\nThis repo was generated with the strict LLM-first ontology profile.\n")
+        for name in ("documents.jsonl", "content_units.jsonl", "source_versions.jsonl", "compile_proposals.jsonl", "review_events.jsonl"):
+            write_text(target / "warehouse" / "jsonl" / name, "")
+    if profile == "wiki-plus-ontology":
+        print(
+            "Warning: profile=wiki-plus-ontology is deprecated; use profile=llm-first-ontology for strict no-fallback LLM Wiki repos.",
+            file=sys.stderr,
+        )
         write_text(target / "intelligence" / "glossary.yaml", glossary_yaml())
         write_text(target / "intelligence" / "manifests" / "datasets.yaml", datasets_yaml())
         write_text(target / "intelligence" / "manifests" / "actions.yaml", actions_yaml())
-        write_text(target / "intelligence" / "manifests" / "pipelines.yaml", pipelines_yaml())
+        write_text(target / "scripts" / "reindex_sqlite_operational.py", generated_helper_script("reindex_sqlite_operational.py"))
+        write_text(target / "scripts" / "refresh_duckdb_analytics.py", generated_helper_script("refresh_duckdb_analytics.py"))
+        write_text(target / "scripts" / "verify_three_layer_drift.py", generated_helper_script("verify_three_layer_drift.py"))
+        write_text(target / "templates" / "llm-wiki-three-layer" / "sqlite_operational.schema.sql", sqlite_operational_schema_sql())
+        write_text(target / "templates" / "llm-wiki-three-layer" / "duckdb_analytical.schema.sql", duckdb_analytical_schema_sql())
+        for name in (
+            "messages.jsonl",
+            "documents.jsonl",
+            "entities.jsonl",
+            "claims.jsonl",
+            "claim_evidence.jsonl",
+            "segments.jsonl",
+            "derived_edges.jsonl",
+        ):
+            write_text(target / "warehouse" / "jsonl" / name, "")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1750,8 +2551,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--profile",
         choices=PROFILES,
-        default="wiki-only",
-        help="Scaffold profile. Use wiki-plus-ontology for canonical ontology starter files.",
+        default="llm-first-ontology",
+        help="Scaffold profile. Defaults to llm-first-ontology for strict no-fallback LLM Wiki repos. wiki-plus-ontology is the deprecated legacy ontology scaffold.",
     )
     parser.add_argument("--force", action="store_true", help="Allow writing scaffold files into a non-empty directory.")
     return parser
