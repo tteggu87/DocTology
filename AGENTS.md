@@ -143,6 +143,14 @@ Semantic no-fallback rule: when source-page synthesis, affected-page selection, 
 
 Weak, passing, or uncertain signals may stay on the source page instead of becoming standalone pages. Accepted claims require explicit review metadata and supporting evidence. Graph projection, retrieval output, and workbench previews are derived aids, not canonical truth.
 
+## Procedure And Batch Completion Gate
+
+Source ingest must start a run with `scripts/wiki_workflow.py` before semantic mutation. Record the fixed stages in order and finalize only after structural validation plus a final review bound to the latest mutation fingerprint. Missing or stale stages keep the run active.
+
+Large-source work must use `scripts/wiki_batch.py`: freeze a source manifest, keep worker drafts under `state/wiki_batches/`, allow exactly one writer to apply canonical files, run `scripts/pipeline_check.py --strict --batch <manifest>`, record representative-question receipts, and certify the resulting corpus fingerprint.
+
+Pending sources, unobserved canonical mutations, conflicting drafts, a second writer, stale reviews, stale question receipts, or a stale corpus fingerprint block completion. Repair them or report the work as partial/pending; never describe a blocked gate as complete.
+
 ## Query Workflow
 
 When the user asks a question:

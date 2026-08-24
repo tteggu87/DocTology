@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -264,6 +266,35 @@ status: applied
         self.assertEqual(result["semantic_status"], "pending_broader_projection")
         wiki_check = next(item for item in result["checks"] if item["name"] == "broader_wiki_projection")
         self.assertEqual(wiki_check["status"], "pending")
+
+    def test_strict_cli_rejects_pending_source_and_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "vault"
+            self.bootstrap.scaffold(root, force=False, profile="wiki-only")
+            source = root / "raw" / "inbox" / "pending.md"
+            source.write_text("# Pending\n", encoding="utf-8")
+            manifest = root / "batch.json"
+            manifest.write_text(
+                json.dumps({"schema_version": 1, "sources": [{"path": "raw/inbox/pending.md"}]}) + "\n",
+                encoding="utf-8",
+            )
+
+            source_result = subprocess.run(
+                [sys.executable, str(PIPELINE_CHECK_PATH), "--root", str(root), "--source", "raw/inbox/pending.md", "--strict"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            batch_result = subprocess.run(
+                [sys.executable, str(PIPELINE_CHECK_PATH), "--root", str(root), "--batch", "batch.json", "--strict"],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(source_result.returncode, 1)
+        self.assertEqual(batch_result.returncode, 1)
+        self.assertIn("pending", batch_result.stdout)
 
 
 if __name__ == "__main__":

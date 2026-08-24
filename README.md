@@ -101,6 +101,8 @@ Treat the other skills as later-stage refinement or optional extension layers.
 5. Review `git diff`, then run lint/status checks.
 6. Use `ontology-pipeline-operator` when existing outputs need refresh or validation.
 
+For procedure-gated ingest, start a source run with `scripts/wiki_workflow.py`. For large-source work, use `scripts/wiki_batch.py` to freeze the manifest, stage worker drafts, apply through one writer, run `scripts/pipeline_check.py --strict --batch`, record representative-question receipts, and certify the corpus fingerprint. Missing or stale stages are not completion.
+
 `scripts/llm_wiki.py ingest` is registration only. `scripts/llm_full_ingest.py
 --apply` is the minimal configured-LLM growth loop: `raw -> register -> source
 page -> affected wiki pages -> proposed JSONL -> meta refresh -> ingest report`.
@@ -305,6 +307,8 @@ Useful entry points include:
 - `scripts/helper_llm.py` for local `wikiconfig.json` probes and OpenAI-compatible helper calls
 - `scripts/wiki_growth_graph.py` for strict LangGraph source-page growth runtime
 - `scripts/pipeline_check.py` for pending-aware structural route checks
+- `scripts/wiki_workflow.py` for fixed-stage source procedure completion and stale-review detection
+- `scripts/wiki_batch.py` for immutable batch plans, one-writer apply, corpus fingerprints, and representative-question certification
 - `scripts/llm_full_ingest.py` for configured-LLM full growth dry-run/apply
 - `scripts/incremental_ingest.py` for repeated export-style ingest paths
 - `scripts/workbench_api.py` as a compatibility shell for local workbench adapters

@@ -41,8 +41,13 @@ Do not use this skill when the user only wants to ingest one source into an exis
    - `raw/`
    - `wiki/`
    - `scripts/llm_wiki.py`
+   - `scripts/pipeline_check.py`
+   - `scripts/wiki_workflow.py`
+   - `scripts/wiki_batch.py`
    - `templates/source_page_template.md`
    - `wiki/_meta/index.md`, `dashboard.md`, `log.md`
+   - `wiki/_meta/representative_questions.json`
+   - `state/wiki_runs/`, `state/wiki_batches/`
    - for `llm-first-ontology`, also verify:
      - `wikiconfig.example.json`
      - `wikiconfig.json` ignored by `.gitignore`
@@ -115,10 +120,12 @@ Add `--force` only when the user explicitly wants overwrites.
 - repo-local `AGENTS.md`
 - starter `README.md`
 - minimal CLI for `ingest`, `reindex`, `lint`, `status`, `log`
+- DuckCrab-style source procedure gate, strict source/batch pipeline checker, and one-writer corpus certification runtime
 - source-page template
 - starter dashboard, index, and log pages
 - default strict ontology-ready `warehouse/jsonl/`, `intelligence/`, LLM compile/query scripts, proposal review CLI, validators, `state/`, and lightweight SQLite/DuckDB helper files
 - durable query-answer persistence helper under `scripts/query_analysis.py`
+- persistent bounded run/batch receipts under `state/`, plus a representative-question contract under `wiki/_meta/`
 - `wikiconfig.example.json` plus a local ignored `wikiconfig.json` placeholder with `llmWiki.enabled=false`; disabled helper mode emits agent handoff bundles/prompts rather than semantic success
 
 ## Three-Layer Follow-On Guidance
@@ -144,6 +151,7 @@ The default `llm-first-ontology` bootstrap ships lightweight local SQLite/DuckDB
 - The scaffold should teach page-threshold discipline so passing mentions do not immediately become standalone pages.
 - The scaffold should teach source registration before semantic promotion, overlapping-scope checks before page creation, and `wiki/_meta/index.md` plus `wiki/_meta/log.md` refresh after meaningful work.
 - The generated wiki workflow must stay inside the `LLM_WIKI_CONTRACT` managed markers so later repository-guidance tools can preserve it.
+- The generated contract must block source completion on missing/stale procedure stages and block batch completion on pending sources, unobserved writes, writer conflicts, or stale corpus/question fingerprints.
 - If the scaffold is ontology-ready, it should describe `warehouse/jsonl/` as canonical structured truth and `wiki/` as human-facing synthesis.
 - If a later wiki-local conventions page is ever added, it must remain subordinate to `AGENTS.md`.
 
@@ -166,6 +174,8 @@ After changes to this skill:
 5. Run the bootstrap script in a third temporary directory for legacy `wiki-plus-ontology`.
 6. Verify the expected files exist for all profiles.
 7. Spot-check `AGENTS.md`, `README.md`, and `scripts/llm_wiki.py`.
-8. Confirm the generated wording does not imply markdown pages, SQLite, or DuckDB are canonical semantic truth.
+8. Run source procedure missing/stale/repair-to-PASS tests and batch one-writer/fingerprint/certification tests.
+9. Confirm `pipeline_check.py --strict` returns nonzero for pending work.
+10. Confirm the generated wording does not imply markdown pages, SQLite, or DuckDB are canonical semantic truth.
 
 Prefer deterministic script validation over vague chat-only claims.

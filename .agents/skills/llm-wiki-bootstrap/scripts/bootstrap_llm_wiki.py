@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import sys
 from pathlib import Path
 
@@ -424,6 +425,14 @@ Default assumption:
 If unsure whether something belongs in the wiki, prefer asking:
 `Should I save this as a wiki page?`
 
+## Procedure And Batch Completion Gate
+
+Source ingest must use `scripts/wiki_workflow.py`. Start an INGEST run before semantic work, record the fixed stages in order, and finalize only after structural validation and a final review bound to the latest mutation fingerprint.
+
+Large-source work must use `scripts/wiki_batch.py`: freeze the source manifest, stage worker drafts under `state/wiki_batches/`, let exactly one writer apply canonical changes, run `scripts/pipeline_check.py --strict --batch ...`, and certify representative questions against the resulting corpus fingerprint.
+
+Missing or stale stages keep the run active. Pending sources, unobserved canonical mutations, writer conflicts, stale question receipts, or stale corpus fingerprints block completion. Repair them or report the work as partial/pending; never describe a blocked gate as complete.
+
 <!-- LLM_WIKI_CONTRACT_END -->
 """
 
@@ -621,6 +630,14 @@ Look for:
 
 When possible, fix issues directly and record the pass in the log.
 
+## Procedure And Batch Completion Gate
+
+Source ingest must use `scripts/wiki_workflow.py`. Start an INGEST run before semantic work, record the fixed stages in order, and finalize only after structural validation and a final review bound to the latest mutation fingerprint.
+
+Large-source work must use `scripts/wiki_batch.py`: freeze the source manifest, stage worker drafts under `state/wiki_batches/`, let exactly one writer apply canonical changes, run `scripts/pipeline_check.py --strict --batch ...`, and certify representative questions against the resulting corpus fingerprint.
+
+Missing or stale stages keep the run active. Pending sources, unobserved canonical mutations, writer conflicts, stale question receipts, or stale corpus fingerprints block completion. Repair them or report the work as partial/pending; never describe a blocked gate as complete.
+
 ## Writing Style
 
 - Be factual, compressed, and explicit
@@ -755,6 +772,14 @@ Before substantial work:
 - LLM owns semantic judgment.
 - Human review owns active truth approval.
 
+## Procedure And Batch Completion Gate
+
+Source ingest must use `scripts/wiki_workflow.py`. Start an INGEST run before semantic work, record the fixed stages in order, and finalize only after structural validation and a final review bound to the latest mutation fingerprint.
+
+Large-source work must use `scripts/wiki_batch.py`: freeze the source manifest, stage worker drafts under `state/wiki_batches/`, let exactly one writer apply canonical changes, run `scripts/pipeline_check.py --strict --batch ...`, and certify representative questions against the resulting corpus fingerprint.
+
+Missing or stale stages keep the run active. Pending sources, unobserved canonical mutations, writer conflicts, stale question receipts, or stale corpus fingerprints block completion. Repair them or report the work as partial/pending; never describe a blocked gate as complete.
+
 <!-- LLM_WIKI_CONTRACT_END -->
 """
     if profile == "wiki-plus-ontology":
@@ -810,6 +835,10 @@ python3 scripts/llm_compile_source.py --source-page wiki/sources/<source>.md --e
 ## Next step
 
 Put sources under `{root}/raw/inbox/`, create source pages/citation anchors, then use LLM compile proposals for semantic updates.
+
+## Procedure Gate
+
+Use `python3 scripts/wiki_workflow.py start --workflow ingest --source raw/inbox/<source>` for one source. Use `python3 scripts/wiki_batch.py plan --source raw/inbox/<source>` plus `python3 scripts/wiki_batch.py certify --batch <id>` for a corpus batch. A blocked run or stale certification is not complete.
 """
     if profile == "wiki-plus-ontology":
         return f"""# LLM Wiki for Obsidian
@@ -980,6 +1009,10 @@ You can later add:
 - git-based review workflows
 
 Until then, the repo-local contracts and folder structure are enough to start compounding knowledge.
+
+## Procedure Gate
+
+Use `python3 scripts/wiki_workflow.py start --workflow ingest --source raw/inbox/<source>` for one source. For a batch, use `wiki_batch.py plan`, staged drafts, one writer `apply`, strict pipeline checking, representative-question receipts, and `certify`. A blocked run or stale certification is not complete.
 """
 
     return f"""# LLM Wiki for Obsidian
@@ -1132,6 +1165,8 @@ The operating rules I should follow are in `AGENTS.md`.
 2. Register each source with the CLI
 3. Ask me or an ontology-backed ingest skill to process them one by one
 4. Ask me to run `lint` and clean up gaps afterward
+
+The completion path is stricter than lint: use `wiki_batch.py plan`, source procedure runs, staged drafts, one writer `apply`, `pipeline_check.py --strict --batch`, representative-question receipts, and `wiki_batch.py certify`.
 
 ## Commands
 
@@ -1432,6 +1467,30 @@ TBD.
 
 - TBD
 """
+
+
+def representative_questions_json() -> str:
+    return json.dumps(
+        {
+            "schema_version": 1,
+            "cases": [
+                {
+                    "id": "direct_lookup",
+                    "question": "Replace with a corpus-specific direct lookup question.",
+                    "required": False,
+                    "expected_posture": "supported",
+                },
+                {
+                    "id": "evidence_refusal",
+                    "question": "Replace with a question the corpus should refuse when evidence is absent.",
+                    "required": False,
+                    "expected_posture": "abstain",
+                },
+            ],
+        },
+        ensure_ascii=False,
+        indent=2,
+    ) + "\n"
 
 
 def dashboard_md(date: str) -> str:
@@ -2465,6 +2524,8 @@ def scaffold(target: Path, force: bool, profile: str) -> None:
         target / "wiki" / "projects",
         target / "wiki" / "sources",
         target / "wiki" / "timelines",
+        target / "state" / "wiki_runs",
+        target / "state" / "wiki_batches",
     ]
 
     if profile == "llm-first-ontology":
@@ -2500,10 +2561,14 @@ def scaffold(target: Path, force: bool, profile: str) -> None:
     write_text(target / "README.md", readme(target, profile))
     write_text(target / ".gitignore", gitignore_text(profile))
     write_text(target / "scripts" / "llm_wiki.py", llm_wiki_py())
+    write_text(target / "scripts" / "pipeline_check.py", generated_helper_script("pipeline_check.py"))
+    write_text(target / "scripts" / "wiki_workflow.py", generated_helper_script("wiki_workflow.py"))
+    write_text(target / "scripts" / "wiki_batch.py", generated_helper_script("wiki_batch.py"))
     write_text(target / "templates" / "source_page_template.md", source_template())
     write_text(target / "wiki" / "_meta" / "dashboard.md", dashboard_md(date))
     write_text(target / "wiki" / "_meta" / "index.md", index_md(date))
     write_text(target / "wiki" / "_meta" / "log.md", log_md(date))
+    write_text(target / "wiki" / "_meta" / "representative_questions.json", representative_questions_json())
     if profile == "llm-first-ontology":
         write_text(target / "wikiconfig.example.json", wikiconfig_example_json())
         write_text(target / "wikiconfig.json", wikiconfig_example_json())

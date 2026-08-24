@@ -101,6 +101,8 @@ DocTology의 기본 약속은 다음입니다.
 5. `git diff`를 검토한 뒤 lint/status를 확인합니다.
 6. 기존 산출물 점검·갱신이 필요하면 `ontology-pipeline-operator`를 사용합니다.
 
+절차 게이트가 필요한 ingest는 `scripts/wiki_workflow.py`로 source run을 먼저 시작합니다. 대량 source 작업은 `scripts/wiki_batch.py`로 manifest를 고정하고, worker draft를 staging한 뒤 단일 writer로 반영합니다. 이어서 `scripts/pipeline_check.py --strict --batch`와 대표 질문 receipt를 통과해 corpus fingerprint를 인증해야 합니다. 누락되거나 stale한 단계는 완료가 아닙니다.
+
 `scripts/llm_wiki.py ingest`는 registration only입니다. `scripts/llm_full_ingest.py
 --apply`는 최소 configured-LLM growth loop입니다: `raw -> register -> source
 page -> affected wiki pages -> proposed JSONL -> meta refresh -> ingest report`.
@@ -306,6 +308,8 @@ Answer receipt는 context receipt이지 answer generator나 page-selection rule�
 - `scripts/helper_llm.py` — 로컬 `wikiconfig.json` probe와 OpenAI-compatible helper 호출
 - `scripts/wiki_growth_graph.py` — strict LangGraph source-page growth runtime
 - `scripts/pipeline_check.py` — pending-aware structural route check
+- `scripts/wiki_workflow.py` — 고정 단계 source 절차 완료 및 stale review 검증
+- `scripts/wiki_batch.py` — 불변 batch 계획, 단일 writer 반영, corpus fingerprint 및 대표 질문 인증
 - `scripts/llm_full_ingest.py` — configured-LLM full growth dry-run/apply
 - `scripts/incremental_ingest.py` — 반복 export-style ingest path
 - `scripts/workbench_api.py` — local workbench adapter용 compatibility shell

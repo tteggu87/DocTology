@@ -82,6 +82,9 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
             self.assertIn("follow at least 2 hops", contract)
             self.assertIn("list every page read in traversal order", contract)
             self.assertIn("overlapping scope", contract)
+            self.assertIn("## Procedure And Batch Completion Gate", contract)
+            self.assertIn("final review bound to the latest mutation fingerprint", contract)
+            self.assertIn("exactly one writer", contract)
 
         self.assertIn("## Strict LLM-First Semantic Rule", strict_agents)
         self.assertIn("Deterministic code must not generate semantic answer drafts", strict_agents)
@@ -126,6 +129,9 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
                 "scripts/llm_query.py",
                 "scripts/query_analysis.py",
                 "scripts/proposal_review.py",
+                "scripts/pipeline_check.py",
+                "scripts/wiki_workflow.py",
+                "scripts/wiki_batch.py",
                 "scripts/reindex_sqlite_operational.py",
                 "scripts/refresh_duckdb_analytics.py",
                 "scripts/verify_three_layer_drift.py",
@@ -133,8 +139,26 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
                 "templates/llm-wiki-three-layer/duckdb_analytical.schema.sql",
                 "warehouse/jsonl/compile_proposals.jsonl",
                 "warehouse/jsonl/review_events.jsonl",
+                "wiki/_meta/representative_questions.json",
             ):
                 self.assertTrue((target / relative_path).exists(), relative_path)
+
+    def test_all_profiles_generate_procedure_and_batch_gate_runtime(self) -> None:
+        for profile in ("wiki-only", "wiki-plus-ontology", "llm-first-ontology"):
+            with self.subTest(profile=profile), tempfile.TemporaryDirectory() as tmp:
+                target = Path(tmp) / "vault"
+                self.bootstrap.scaffold(target, force=False, profile=profile)
+                for relative_path in (
+                    "scripts/pipeline_check.py",
+                    "scripts/wiki_workflow.py",
+                    "scripts/wiki_batch.py",
+                    "wiki/_meta/representative_questions.json",
+                ):
+                    self.assertTrue((target / relative_path).exists(), relative_path)
+                self.assertTrue((target / "state" / "wiki_runs").is_dir())
+                self.assertTrue((target / "state" / "wiki_batches").is_dir())
+                agents = (target / "AGENTS.md").read_text(encoding="utf-8")
+                self.assertIn("## Procedure And Batch Completion Gate", agents)
 
     def test_bootstrap_writes_legacy_ontology_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
