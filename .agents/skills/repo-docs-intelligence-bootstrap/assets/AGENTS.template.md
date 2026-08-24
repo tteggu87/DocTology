@@ -9,6 +9,7 @@
 - Update the smallest canonical truth first when concepts, actions, or boundaries change.
 - Treat drift between code, docs, contracts, wiki memory, and guidance as a bug to resolve or record in the same task.
 - Run the repository-local validator with `python scripts/validate_repo_docs_intelligence.py --repo-root .` when it exists; otherwise use the bundled skill validator from the installed `repo-docs-intelligence-bootstrap` skill.
+- Before declaring structural repo-docs work complete, run the validator after the last mutation with an exact changed-file list and `--finalize`; use `--verify-finalized` to detect a stale `state/repo_docs_finalize.json` receipt.
 - Keep YAML for meaning/contracts, SQL for schema/materialization, policy files for gates/rules, and Python for execution only.
 
 ## Repository rules
@@ -70,4 +71,4 @@ Before finishing, report:
 - Contracts and capability bindings stay aligned with implementation.
 - Durable reasoning is preserved in wiki memory when it will help future sessions.
 - Impact summary is written for structural changes.
-- Validator failures are resolved before reporting success.
+- The final validator gate is warning-free, its changed-file list matches current Git state when available, and its receipt is bound to the latest listed file contents.

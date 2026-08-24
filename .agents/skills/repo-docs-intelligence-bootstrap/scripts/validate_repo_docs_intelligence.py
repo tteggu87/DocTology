@@ -2,11 +2,24 @@
 from __future__ import annotations
 
 import argparse
+import ast
+import hashlib
 import json
 import re
+import subprocess
 import sys
+from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
+
+try:
+    import tomllib
+except ImportError:  # pragma: no cover - Python 3.10 compatibility
+    try:
+        import tomli as tomllib
+    except ImportError:  # pragma: no cover
+        tomllib = None
 
 try:
     import yaml
@@ -63,6 +76,10 @@ NEGATING_HINTS = (
     "does not clearly",
     "not yet",
 )
+FINALIZE_RECEIPT_VERSION: Final = 1
+DEFAULT_FINALIZE_RECEIPT: Final = "state/repo_docs_finalize.json"
+PLACEHOLDER_PREFIXES: Final = ("list ", "record ", "describe ", "replace ")
+PLACEHOLDER_VALUES: Final = {"todo", "tbd", "n/a", "na", "placeholder", "replace me"}
 
 
 class ValidationReport:
@@ -70,6 +87,7 @@ class ValidationReport:
         self.repo_root = repo_root
         self.errors: list[dict[str, str]] = []
         self.warnings: list[dict[str, str]] = []
+        self.finalize: dict[str, object] | None = None
 
     def add_error(self, code: str, message: str, path: Path | None = None) -> None:
         self.errors.append(self._make_issue("error", code, message, path))
@@ -77,7 +95,17 @@ class ValidationReport:
     def add_warning(self, code: str, message: str, path: Path | None = None) -> None:
         self.warnings.append(self._make_issue("warning", code, message, path))
 
-    def _make_issue(self, level: str, code: str, message: str, path: Path | None) -> dict[str, str]:
+    def promote_warnings(self) -> None:
+        for issue in self.warnings:
+            promoted = dict(issue)
+            promoted["level"] = "error"
+            promoted["code"] = f"finalize.{issue['code']}"
+            self.errors.append(promoted)
+        self.warnings.clear()
+
+    def _make_issue(
+        self, level: str, code: str, message: str, path: Path | None
+    ) -> dict[str, str]:
         issue = {"level": level, "code": code, "message": message}
         if path is not None:
             issue["path"] = self._display_path(path)
@@ -103,6 +131,10 @@ class ValidationReport:
             for issue in self.warnings:
                 location = f" ({issue['path']})" if "path" in issue else ""
                 print(f"- [{issue['code']}] {issue['message']}{location}")
+        if self.finalize is not None:
+            print("\nFinalize:")
+            for key, value in self.finalize.items():
+                print(f"- {key}: {value}")
 
     def as_json(self) -> str:
         return json.dumps(
@@ -115,6 +147,7 @@ class ValidationReport:
                 },
                 "errors": self.errors,
                 "warnings": self.warnings,
+                "finalize": self.finalize,
             },
             indent=2,
         )
@@ -157,7 +190,11 @@ def scan_markdown_refs(text: str) -> list[str]:
         candidate = candidate.strip()
         if candidate.startswith(("http://", "https://")):
             continue
-        if candidate == "AGENTS.md" or "/" in candidate or candidate.endswith(PATHLIKE_EXTENSIONS):
+        if (
+            candidate == "AGENTS.md"
+            or "/" in candidate
+            or candidate.endswith(PATHLIKE_EXTENSIONS)
+        ):
             refs.append(candidate)
     return sorted(set(refs))
 
@@ -187,7 +224,9 @@ def section_key_field(key: str) -> str:
     return key_fields.get(key, "key")
 
 
-def load_list_section(path: Path, key: str, report: ValidationReport) -> list[dict[str, object]] | None:
+def load_list_section(
+    path: Path, key: str, report: ValidationReport
+) -> list[dict[str, object]] | None:
     data = load_yaml(path, report)
     if data is None:
         return None
@@ -196,13 +235,19 @@ def load_list_section(path: Path, key: str, report: ValidationReport) -> list[di
         return None
     section = data.get(key)
     if section is None:
-        report.add_error("yaml.missing_section", f"Missing top-level `{key}` section.", path)
+        report.add_error(
+            "yaml.missing_section", f"Missing top-level `{key}` section.", path
+        )
         return None
     items: list[dict[str, object]] = []
     if isinstance(section, list):
         for item in section:
             if not isinstance(item, dict):
-                report.add_error("yaml.invalid_item", f"Each item in `{key}` must be a mapping.", path)
+                report.add_error(
+                    "yaml.invalid_item",
+                    f"Each item in `{key}` must be a mapping.",
+                    path,
+                )
                 continue
             items.append(item)
         return items
@@ -243,11 +288,17 @@ def keyed_items(
     for item in items:
         value = item.get(key_field)
         if not value:
-            report.add_error("yaml.missing_key", f"Missing required `{key_field}` field in item.", path)
+            report.add_error(
+                "yaml.missing_key",
+                f"Missing required `{key_field}` field in item.",
+                path,
+            )
             continue
         key = str(value)
         if key in result:
-            report.add_error("yaml.duplicate_key", f"Duplicate `{key_field}` value `{key}`.", path)
+            report.add_error(
+                "yaml.duplicate_key", f"Duplicate `{key_field}` value `{key}`.", path
+            )
             continue
         result[key] = item
     return result
@@ -272,12 +323,20 @@ def validate_doc_metadata(path: Path, report: ValidationReport) -> None:
         )
 
 
-def validate_markdown_refs(path: Path, repo_root: Path, report: ValidationReport) -> None:
+def validate_markdown_refs(
+    path: Path, repo_root: Path, report: ValidationReport
+) -> None:
     for ref in scan_markdown_refs(path.read_text(encoding="utf-8")):
-        if ":" in ref and not ref.startswith(("docs/", "intelligence/", "scripts/", "AGENTS.md")):
+        if ":" in ref and not ref.startswith(
+            ("docs/", "intelligence/", "scripts/", "AGENTS.md")
+        ):
             continue
         if not (repo_root / ref).exists():
-            report.add_error("docs.broken_reference", f"Referenced path `{ref}` does not exist.", path)
+            report.add_error(
+                "docs.broken_reference",
+                f"Referenced path `{ref}` does not exist.",
+                path,
+            )
 
 
 def validate_archive_banners(archive_dir: Path, report: ValidationReport) -> None:
@@ -296,13 +355,21 @@ def validate_repo_map(repo_root: Path, report: ValidationReport) -> None:
     if not repo_map_dir.exists():
         return
     if not repo_map_dir.is_dir():
-        report.add_error("repo_map.invalid_path", "`docs/repo-map` must be a directory.", repo_map_dir)
+        report.add_error(
+            "repo_map.invalid_path",
+            "`docs/repo-map` must be a directory.",
+            repo_map_dir,
+        )
         return
 
     for name in REPO_MAP_DOCS:
         path = repo_map_dir / name
         if not path.exists():
-            report.add_error("repo_map.missing_doc", f"Missing repo-map doc `docs/repo-map/{name}`.", path)
+            report.add_error(
+                "repo_map.missing_doc",
+                f"Missing repo-map doc `docs/repo-map/{name}`.",
+                path,
+            )
             continue
         validate_doc_metadata(path, report)
         validate_markdown_refs(path, repo_root, report)
@@ -350,19 +417,153 @@ def extract_console_scripts(repo_root: Path) -> list[tuple[str, str]]:
     pyproject_path = repo_root / "pyproject.toml"
     if not pyproject_path.exists():
         return []
-    text = pyproject_path.read_text(encoding="utf-8")
-    match = re.search(r"^\[project\.scripts\]\s*$([\s\S]*?)(?=^\[|\Z)", text, re.MULTILINE)
-    if not match:
-        return []
+    if tomllib is not None:
+        try:
+            data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+        scripts: dict[str, object] = {}
+        project = data.get("project") if isinstance(data, dict) else None
+        if isinstance(project, dict):
+            for section in ("scripts", "gui-scripts"):
+                values = project.get(section)
+                if isinstance(values, dict):
+                    scripts.update(values)
+        tool = data.get("tool") if isinstance(data, dict) else None
+        poetry = tool.get("poetry") if isinstance(tool, dict) else None
+        poetry_scripts = poetry.get("scripts") if isinstance(poetry, dict) else None
+        if isinstance(poetry_scripts, dict):
+            scripts.update(poetry_scripts)
+        normalized_scripts = [
+            (str(name), normalize_script_target(target))
+            for name, target in scripts.items()
+        ]
+        normalized_scripts = [
+            (name, target) for name, target in normalized_scripts if target
+        ]
+        if normalized_scripts:
+            return sorted(normalized_scripts)
 
+    text = pyproject_path.read_text(encoding="utf-8")
     scripts: list[tuple[str, str]] = []
-    for line in match.group(1).splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    for section in ("project.scripts", "project.gui-scripts", "tool.poetry.scripts"):
+        match = re.search(
+            rf"^\[{re.escape(section)}\]\s*$([\s\S]*?)(?=^\[|\Z)", text, re.MULTILINE
+        )
+        if not match:
             continue
-        name, value = line.split("=", 1)
-        scripts.append((name.strip(), value.strip().strip("\"'")))
-    return scripts
+        for line in match.group(1).splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, value = line.split("=", 1)
+            target = value.strip().strip("\"'")
+            if target.startswith("{"):
+                reference = re.search(r"reference\s*=\s*[\"']([^\"']+)[\"']", target)
+                target = reference.group(1) if reference else ""
+            if target:
+                scripts.append((name.strip().strip("\"'"), target))
+    return sorted(set(scripts))
+
+
+def normalize_script_target(target: object) -> str:
+    if isinstance(target, str):
+        return target
+    if isinstance(target, dict):
+        reference = target.get("reference")
+        return str(reference) if reference else ""
+    return ""
+
+
+def entrypoint_is_documented(text: str, script_name: str, target: str) -> bool:
+    code_spans = {value.strip().lower() for value in re.findall(r"`([^`]+)`", text)}
+    script_name = script_name.lower()
+    target = target.lower()
+    command_present = any(
+        value == script_name
+        or re.search(rf"(^|\s){re.escape(script_name)}(\s|=|$)", value)
+        for value in code_spans
+    )
+    target_present = any(
+        value == target or re.search(rf"(^|=|\s){re.escape(target)}($|\s)", value)
+        for value in code_spans
+    )
+    return command_present and target_present
+
+
+def module_exposes_symbol(path: Path, symbol: str) -> bool:
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, UnicodeError):
+        return False
+    parts = symbol.split(".")
+    nodes: list[ast.stmt] = tree.body
+    for index, part in enumerate(parts):
+        matching: ast.AST | None = None
+        for node in nodes:
+            names: set[str] = set()
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                names.add(node.name)
+            elif isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = (
+                    node.targets if isinstance(node, ast.Assign) else [node.target]
+                )
+                names.update(
+                    target.id for target in targets if isinstance(target, ast.Name)
+                )
+            elif isinstance(node, ast.Import):
+                names.update(
+                    alias.asname or alias.name.split(".", 1)[0] for alias in node.names
+                )
+            elif isinstance(node, ast.ImportFrom):
+                names.update(alias.asname or alias.name for alias in node.names)
+            if part in names:
+                matching = node
+                break
+        if matching is None:
+            return False
+        if index == len(parts) - 1:
+            return True
+        if not isinstance(matching, ast.ClassDef):
+            return False  # A strict static gate cannot prove deeper attributes on imports or assignments.
+        nodes = matching.body
+    return True
+
+
+def validate_registered_entrypoints(repo_root: Path, report: ValidationReport) -> None:
+    scripts = extract_console_scripts(repo_root)
+    if not scripts:
+        return
+
+    current_state_path = repo_root / "docs" / "CURRENT_STATE.md"
+    repo_map_path = repo_root / "docs" / "repo-map" / "ENTRYPOINTS.md"
+    surfaces = [path for path in (current_state_path, repo_map_path) if path.exists()]
+
+    for script_name, target in scripts:
+        module_file, symbol = resolve_python_target(repo_root, target)
+        if module_file is None or symbol is None:
+            report.add_error(
+                "entrypoint.target_unresolved",
+                f"Registered entrypoint `{script_name} = {target}` does not resolve inside the repository.",
+                repo_root / "pyproject.toml",
+            )
+        elif not module_exposes_symbol(module_file, symbol):
+            report.add_error(
+                "entrypoint.symbol_missing",
+                f"Registered entrypoint `{script_name} = {target}` does not define `{symbol}`.",
+                module_file,
+            )
+
+        for path in surfaces:
+            if entrypoint_is_documented(
+                path.read_text(encoding="utf-8"), script_name, target
+            ):
+                continue
+            report.add_warning(
+                "docs.entrypoint_registration_missing",
+                f"Registered entrypoint `{script_name} = {target}` is not documented in `{path.relative_to(repo_root)}`.",
+                path,
+            )
 
 
 def collect_live_legacy_dependencies(repo_root: Path) -> list[Path]:
@@ -371,13 +572,17 @@ def collect_live_legacy_dependencies(repo_root: Path) -> list[Path]:
         if any(part.startswith(".") for part in path.parts):
             continue
         text = path.read_text(encoding="utf-8")
-        for module_name in re.findall(r"^\s*from\s+([A-Za-z0-9_\.]+)\s+import\s+", text, re.MULTILINE):
+        for module_name in re.findall(
+            r"^\s*from\s+([A-Za-z0-9_\.]+)\s+import\s+", text, re.MULTILINE
+        ):
             if "legacy" not in module_name.lower():
                 continue
             resolved = resolve_module_file(repo_root, module_name)
             if resolved is not None:
                 legacy_paths.add(resolved)
-        for module_name in re.findall(r"^\s*import\s+([A-Za-z0-9_\.]+)", text, re.MULTILINE):
+        for module_name in re.findall(
+            r"^\s*import\s+([A-Za-z0-9_\.]+)", text, re.MULTILINE
+        ):
             if "legacy" not in module_name.lower():
                 continue
             primary_name = module_name.split(",", 1)[0].strip()
@@ -399,7 +604,11 @@ def validate_impact_summary_sections(path: Path, report: ValidationReport) -> No
         "remaining drift": ("## remaining drift",),
         "validator summary": ("## validator summary",),
     }
-    missing = [section for section, options in aliases.items() if not any(option in text for option in options)]
+    missing = [
+        section
+        for section, options in aliases.items()
+        if not any(option in text for option in options)
+    ]
     if missing:
         report.add_error(
             "docs.impact_summary_incomplete",
@@ -414,42 +623,23 @@ def extract_markdown_section(text: str, heading: str) -> str:
     return match.group(1).strip() if match else ""
 
 
-def validate_current_state_visibility(current_state_path: Path, repo_root: Path, report: ValidationReport) -> None:
+def validate_current_state_visibility(
+    current_state_path: Path, repo_root: Path, report: ValidationReport
+) -> None:
     text = current_state_path.read_text(encoding="utf-8")
-    normalized_text = text.lower()
     transitional_section = extract_markdown_section(text, "Transitional Facts").lower()
     current_truth_section = extract_markdown_section(text, "Current Truth").lower()
-    visibility_sections = "\n".join(part for part in (transitional_section, current_truth_section) if part)
-
-    missing_console_scripts: list[str] = []
-    for script_name, target in extract_console_scripts(repo_root):
-        target_path = ""
-        if ":" in target:
-            module_name, _symbol = target.split(":", 1)
-            module_file = resolve_module_file(repo_root, module_name)
-            if module_file is not None:
-                target_path = module_file.relative_to(repo_root).as_posix().lower()
-        script_name_lc = script_name.lower()
-        if script_name_lc in normalized_text:
-            continue
-        if target.lower() in normalized_text:
-            continue
-        if target_path and target_path in normalized_text:
-            continue
-        missing_console_scripts.append(script_name)
-
-    if missing_console_scripts:
-        report.add_warning(
-            "docs.current_state_missing_console_script",
-            "Current state docs do not mention console script(s): " + ", ".join(sorted(missing_console_scripts)) + ".",
-            current_state_path,
-        )
+    visibility_sections = "\n".join(
+        part for part in (transitional_section, current_truth_section) if part
+    )
 
     unreported_legacy_paths: list[str] = []
     for legacy_path in collect_live_legacy_dependencies(repo_root):
         relative = legacy_path.relative_to(repo_root).as_posix().lower()
         mentioned = relative in visibility_sections
-        has_visibility_hint = any(hint in visibility_sections for hint in LEGACY_VISIBILITY_HINTS)
+        has_visibility_hint = any(
+            hint in visibility_sections for hint in LEGACY_VISIBILITY_HINTS
+        )
         is_negated = any(hint in visibility_sections for hint in NEGATING_HINTS)
         if not mentioned or not has_visibility_hint or is_negated:
             unreported_legacy_paths.append(relative)
@@ -464,14 +654,18 @@ def validate_current_state_visibility(current_state_path: Path, repo_root: Path,
         )
 
 
-def resolve_python_target(repo_root: Path, implementation: str) -> tuple[Path | None, str | None]:
+def resolve_python_target(
+    repo_root: Path, implementation: str
+) -> tuple[Path | None, str | None]:
     if ":" not in implementation:
         return None, None
     module_path, symbol = implementation.split(":", 1)
     return resolve_module_file(repo_root, module_path), symbol
 
 
-def validate_implementation_link(implementation: object, report: ValidationReport, path: Path) -> None:
+def validate_implementation_link(
+    implementation: object, report: ValidationReport, path: Path
+) -> None:
     if not implementation:
         report.add_error("impl.missing", "Missing implementation link.", path)
         return
@@ -503,13 +697,21 @@ def validate_implementation_link(implementation: object, report: ValidationRepor
 def validate_docs(repo_root: Path, report: ValidationReport) -> None:
     docs_dir = repo_root / "docs"
     if not docs_dir.exists():
-        report.add_warning("docs.missing", "No docs directory found; skipping docs validation.", docs_dir)
+        report.add_warning(
+            "docs.missing",
+            "No docs directory found; skipping docs validation.",
+            docs_dir,
+        )
         return
 
     for name in CURRENT_DOCS:
         path = docs_dir / name
         if not path.exists():
-            report.add_warning("docs.optional_missing", f"Expected current doc `docs/{name}` is missing.", path)
+            report.add_warning(
+                "docs.optional_missing",
+                f"Expected current doc `docs/{name}` is missing.",
+                path,
+            )
             continue
         validate_doc_metadata(path, report)
         validate_markdown_refs(path, repo_root, report)
@@ -522,6 +724,7 @@ def validate_docs(repo_root: Path, report: ValidationReport) -> None:
     if archive_dir.exists():
         validate_archive_banners(archive_dir, report)
     validate_repo_map(repo_root, report)
+    validate_registered_entrypoints(repo_root, report)
 
 
 def validate_glossary(glossary_path: Path, report: ValidationReport) -> set[str]:
@@ -557,27 +760,55 @@ def validate_intelligence(repo_root: Path, report: ValidationReport) -> None:
     if glossary_path.exists():
         glossary_terms = validate_glossary(glossary_path, report)
     else:
-        report.add_warning("intelligence.glossary_missing", "Missing `intelligence/glossary.yaml`.", glossary_path)
+        report.add_warning(
+            "intelligence.glossary_missing",
+            "Missing `intelligence/glossary.yaml`.",
+            glossary_path,
+        )
 
     actions_path = intelligence_dir / "manifests" / "actions.yaml"
     entities_path = intelligence_dir / "manifests" / "entities.yaml"
     datasets_path = intelligence_dir / "manifests" / "datasets.yaml"
     capabilities_path = intelligence_dir / "registry" / "capabilities.yaml"
 
-    actions = load_list_section(actions_path, "actions", report) if actions_path.exists() else None
+    actions = (
+        load_list_section(actions_path, "actions", report)
+        if actions_path.exists()
+        else None
+    )
     if actions is None and not actions_path.exists():
-        report.add_warning("intelligence.actions_missing", "Missing `intelligence/manifests/actions.yaml`.", actions_path)
+        report.add_warning(
+            "intelligence.actions_missing",
+            "Missing `intelligence/manifests/actions.yaml`.",
+            actions_path,
+        )
     action_map = keyed_items(actions, "key", report, actions_path)
 
-    entities = load_list_section(entities_path, "entities", report) if entities_path.exists() else None
+    entities = (
+        load_list_section(entities_path, "entities", report)
+        if entities_path.exists()
+        else None
+    )
     entity_map = keyed_items(entities, "key", report, entities_path)
 
-    datasets = load_list_section(datasets_path, "datasets", report) if datasets_path.exists() else None
+    datasets = (
+        load_list_section(datasets_path, "datasets", report)
+        if datasets_path.exists()
+        else None
+    )
     if datasets is None and not datasets_path.exists():
-        report.add_warning("intelligence.datasets_missing", "Missing `intelligence/manifests/datasets.yaml`.", datasets_path)
+        report.add_warning(
+            "intelligence.datasets_missing",
+            "Missing `intelligence/manifests/datasets.yaml`.",
+            datasets_path,
+        )
     dataset_map = keyed_items(datasets, "dataset_key", report, datasets_path)
 
-    capabilities = load_list_section(capabilities_path, "capabilities", report) if capabilities_path.exists() else None
+    capabilities = (
+        load_list_section(capabilities_path, "capabilities", report)
+        if capabilities_path.exists()
+        else None
+    )
     if capabilities is None and not capabilities_path.exists():
         report.add_warning(
             "intelligence.capabilities_missing",
@@ -588,7 +819,9 @@ def validate_intelligence(repo_root: Path, report: ValidationReport) -> None:
 
     for capability_key, item in capability_map.items():
         if str(item.get("status", "")).lower() in {"active", "implemented"}:
-            validate_implementation_link(item.get("implementation"), report, capabilities_path)
+            validate_implementation_link(
+                item.get("implementation"), report, capabilities_path
+            )
 
     for action_key, item in action_map.items():
         capability = item.get("capability")
@@ -613,7 +846,9 @@ def validate_intelligence(repo_root: Path, report: ValidationReport) -> None:
                     actions_path,
                 )
         if item.get("implementation"):
-            validate_implementation_link(item.get("implementation"), report, actions_path)
+            validate_implementation_link(
+                item.get("implementation"), report, actions_path
+            )
         for dataset_key in item.get("touches_datasets") or []:
             dataset_name = str(dataset_key)
             if not dataset_map:
@@ -685,11 +920,19 @@ def validate_intelligence(repo_root: Path, report: ValidationReport) -> None:
                     )
             for step in data.get("chain") or []:
                 if not isinstance(step, dict):
-                    report.add_error("handlers.invalid_step", "Each handler chain step must be a mapping.", handler_path)
+                    report.add_error(
+                        "handlers.invalid_step",
+                        "Each handler chain step must be a mapping.",
+                        handler_path,
+                    )
                     continue
                 action_key = step.get("action")
                 if not action_key:
-                    report.add_error("handlers.missing_action", "Handler chain step is missing an action.", handler_path)
+                    report.add_error(
+                        "handlers.missing_action",
+                        "Handler chain step is missing an action.",
+                        handler_path,
+                    )
                     continue
                 if action_map and str(action_key) not in action_map:
                     report.add_error(
@@ -744,20 +987,32 @@ def validate_wiki_memory(repo_root: Path, report: ValidationReport) -> None:
             )
 
 
-def validate_changed_files(repo_root: Path, changed_files_path: Path | None, report: ValidationReport) -> None:
+def validate_changed_files(
+    repo_root: Path,
+    changed_files_path: Path | None,
+    report: ValidationReport,
+    *,
+    strict: bool = False,
+) -> list[str]:
+    def missing_input(code: str, message: str, path: Path | None = None) -> None:
+        if strict:
+            report.add_error(code, message, path)
+        else:
+            report.add_warning(code, message, path)
+
     if changed_files_path is None:
-        report.add_warning(
+        missing_input(
             "drift.changed_files_missing",
             "No `--changed-files` input provided; drift suspicion checks were limited.",
         )
-        return
+        return []
     if not changed_files_path.exists():
-        report.add_warning(
+        missing_input(
             "drift.changed_files_not_found",
             f"Changed files list `{changed_files_path}` does not exist.",
             changed_files_path,
         )
-        return
+        return []
 
     changed = [
         line.strip().replace("\\", "/")
@@ -765,15 +1020,43 @@ def validate_changed_files(repo_root: Path, changed_files_path: Path | None, rep
         if line.strip()
     ]
     if not changed:
-        report.add_warning(
+        missing_input(
             "drift.changed_files_empty",
             "Changed files list is empty; drift suspicion checks were limited.",
             changed_files_path,
         )
-        return
+        return []
+
+    def is_normalized_repo_path(value: str) -> bool:
+        if Path(value).is_absolute() or re.match(r"^[A-Za-z]:/", value):
+            return False
+        if ".." in Path(value).parts or value.startswith("./") or "//" in value:
+            return False
+        return Path(value).as_posix() == value and "/./" not in f"/{value}/"
+
+    invalid = sorted({path for path in changed if not is_normalized_repo_path(path)})
+    if invalid:
+        report.add_error(
+            "drift.changed_files_invalid",
+            "Changed files must be normalized repository-relative paths: "
+            + ", ".join(invalid)
+            + ".",
+            changed_files_path,
+        )
+    duplicates = sorted(path for path, count in Counter(changed).items() if count > 1)
+    if duplicates:
+        report.add_error(
+            "drift.changed_files_duplicate",
+            "Changed files list contains duplicate path(s): "
+            + ", ".join(duplicates)
+            + ".",
+            changed_files_path,
+        )
+    changed = sorted(set(changed))
 
     canonical_repo_memory_changed = any(
-        path.startswith(("docs/", "intelligence/")) or path == "AGENTS.md" for path in changed
+        path.startswith(("docs/", "intelligence/")) or path == "AGENTS.md"
+        for path in changed
     )
     code_changed = any(
         path.endswith((".py", ".sql", ".yaml", ".yml"))
@@ -788,7 +1071,10 @@ def validate_changed_files(repo_root: Path, changed_files_path: Path | None, rep
         )
 
     entrypoint_names = ("cli.py", "main.py", "serve.py", "server.py", "app.py")
-    entrypoint_changed = any(path.endswith(entrypoint_names) or path.startswith(("scripts/", "bin/")) for path in changed)
+    entrypoint_changed = any(
+        path.endswith(entrypoint_names) or path.startswith(("scripts/", "bin/"))
+        for path in changed
+    )
     if entrypoint_changed and "docs/CURRENT_STATE.md" not in changed:
         report.add_warning(
             "drift.current_state_missing",
@@ -808,7 +1094,8 @@ def validate_changed_files(repo_root: Path, changed_files_path: Path | None, rep
         )
 
     code_map_changed = any(
-        path in {"docs/repo-map/MODULES.md", "docs/repo-map/SYMBOL_GRAPH.md"} for path in changed
+        path in {"docs/repo-map/MODULES.md", "docs/repo-map/SYMBOL_GRAPH.md"}
+        for path in changed
     )
     broad_code_changes = [
         path
@@ -823,35 +1110,415 @@ def validate_changed_files(repo_root: Path, changed_files_path: Path | None, rep
             repo_root / "docs" / "repo-map",
         )
 
-    if "intelligence/manifests/actions.yaml" in changed and "intelligence/registry/capabilities.yaml" not in changed:
+    if (
+        "intelligence/manifests/actions.yaml" in changed
+        and "intelligence/registry/capabilities.yaml" not in changed
+    ):
         report.add_warning(
             "drift.capability_sync_missing",
             "`actions.yaml` changed without a matching `capabilities.yaml` change in the changed file list.",
             repo_root / "intelligence" / "registry" / "capabilities.yaml",
         )
 
-    if any(path.startswith("intelligence/handlers/") for path in changed) and "intelligence/manifests/actions.yaml" not in changed:
+    if (
+        any(path.startswith("intelligence/handlers/") for path in changed)
+        and "intelligence/manifests/actions.yaml" not in changed
+    ):
         report.add_warning(
             "drift.handler_sync_missing",
             "Handler files changed without `actions.yaml` in the changed file list.",
             repo_root / "intelligence" / "manifests" / "actions.yaml",
         )
 
-    if canonical_repo_memory_changed and not any(path.startswith("wiki/") for path in changed):
+    if canonical_repo_memory_changed and not any(
+        path.startswith("wiki/") for path in changed
+    ):
         report.add_warning(
             "drift.wiki_memory_sync_missing",
             "Docs, intelligence, or AGENTS changed without a wiki memory update in the changed file list.",
             repo_root / "wiki",
         )
+    return changed
+
+
+def extract_impact_section(text: str, section: str) -> str:
+    aliases = {
+        "changed": ("Changed",),
+        "checked not changed": (
+            "Checked Not Changed",
+            "Checked-Not-Changed",
+            "Checked But Did Not Need Changes",
+        ),
+        "remaining drift": ("Remaining Drift",),
+        "validator summary": ("Validator Summary",),
+    }
+    for heading in aliases[section]:
+        body = extract_markdown_section(text, heading)
+        if body:
+            return body
+    return ""
+
+
+def is_placeholder_section(body: str, section: str) -> bool:
+    normalized = re.sub(r"^[\s>*-]+", "", body.strip().lower())
+    if not normalized or normalized.startswith(PLACEHOLDER_PREFIXES):
+        return True
+    for raw_line in normalized.splitlines():
+        line = re.sub(r"^[\s>*-]+", "", raw_line).strip().rstrip(".")
+        if not line or line.startswith("<!--"):
+            continue
+        if line in PLACEHOLDER_VALUES or line.startswith(PLACEHOLDER_PREFIXES):
+            return True
+        if section != "remaining drift" and line in {"none", "none recorded"}:
+            return True
+    return False
+
+
+def validate_finalize_contract(
+    repo_root: Path, changed: list[str], report: ValidationReport
+) -> None:
+    impact_path = repo_root / "docs" / "IMPACT_SUMMARY.md"
+    if not impact_path.exists():
+        report.add_error(
+            "finalize.impact_summary_missing",
+            "`--finalize` requires `docs/IMPACT_SUMMARY.md`.",
+            impact_path,
+        )
+        return
+
+    text = impact_path.read_text(encoding="utf-8")
+    sections = {
+        name: extract_impact_section(text, name)
+        for name in IMPACT_SUMMARY_REQUIRED_SECTIONS
+    }
+    incomplete = [
+        name for name, body in sections.items() if is_placeholder_section(body, name)
+    ]
+    if incomplete:
+        report.add_error(
+            "finalize.impact_summary_placeholder",
+            "Finalize requires non-placeholder impact summary sections: "
+            + ", ".join(incomplete)
+            + ".",
+            impact_path,
+        )
+
+    documented_paths = {
+        value.strip().replace("\\", "/")
+        for value in re.findall(r"`([^`]+)`", sections["changed"])
+    }
+    uncovered = [path for path in changed if path not in documented_paths]
+    if uncovered:
+        report.add_error(
+            "finalize.impact_summary_changed_files_missing",
+            "Impact summary `Changed` must name every changed file: "
+            + ", ".join(uncovered)
+            + ".",
+            impact_path,
+        )
+
+
+def state_fingerprint(repo_root: Path, changed: list[str]) -> str:
+    files: list[dict[str, str]] = []
+    for relative in changed:
+        path = repo_root / relative
+        if path.is_symlink():
+            digest = (
+                "symlink:"
+                + hashlib.sha256(
+                    str(path.readlink()).encode("utf-8", errors="surrogateescape")
+                ).hexdigest()
+            )
+            mode = oct(path.lstat().st_mode & 0o777)
+        elif path.is_file():
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            mode = oct(path.stat().st_mode & 0o777)
+        elif path.exists():
+            try:
+                revision = subprocess.run(
+                    ["git", "-C", str(path), "rev-parse", "HEAD"],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                status = subprocess.run(
+                    ["git", "-C", str(path), "status", "--porcelain=v2", "-z"],
+                    capture_output=True,
+                    check=False,
+                )
+                if revision.returncode == 0 and status.returncode == 0:
+                    submodule_state = (
+                        revision.stdout.strip().encode("utf-8") + b"\0" + status.stdout
+                    )
+                    digest = "git-dir:" + hashlib.sha256(submodule_state).hexdigest()
+                else:
+                    digest = "<non-file>"
+            except OSError:
+                digest = "<non-file>"
+            mode = oct(path.stat().st_mode & 0o777)
+        else:
+            try:
+                baseline = subprocess.run(
+                    ["git", "-C", str(repo_root), "show", f"HEAD:./{relative}"],
+                    capture_output=True,
+                    check=False,
+                )
+                digest = (
+                    "deleted:" + hashlib.sha256(baseline.stdout).hexdigest()
+                    if baseline.returncode == 0
+                    else "<deleted-or-missing>"
+                )
+            except OSError:
+                digest = "<deleted-or-missing>"
+            mode = "<deleted>"
+        files.append({"path": relative, "sha256": digest, "mode": mode})
+    payload = json.dumps(
+        files, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def collect_git_changed_files(repo_root: Path) -> tuple[set[str] | None, str]:
+    try:
+        probe = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None, "git_unavailable"
+    if probe.returncode != 0:
+        return None, "not_git"
+    try:
+        git_root = Path(probe.stdout.strip()).resolve()
+    except Exception:
+        return None, "git_root_invalid"
+    try:
+        repo_root.resolve().relative_to(git_root)
+    except ValueError:
+        return None, "git_root_mismatch"
+
+    try:
+        tracked = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "diff",
+                "--relative",
+                "--name-only",
+                "-z",
+                "HEAD",
+                "--",
+                ".",
+            ],
+            capture_output=True,
+            check=False,
+        )
+        if tracked.returncode != 0:
+            tracked = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo_root),
+                    "diff",
+                    "--cached",
+                    "--relative",
+                    "--name-only",
+                    "-z",
+                    "--",
+                    ".",
+                ],
+                capture_output=True,
+                check=False,
+            )
+        untracked = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "ls-files",
+                "--others",
+                "--exclude-standard",
+                "-z",
+                "--",
+            ],
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None, "git_unavailable"
+    if tracked.returncode != 0 or untracked.returncode != 0:
+        return None, "git_status_failed"
+
+    return (
+        {
+            value.decode("utf-8", errors="surrogateescape").replace("\\", "/")
+            for value in (tracked.stdout + untracked.stdout).split(b"\0")
+            if value
+        },
+        "ok",
+    )
+
+
+def validate_git_changed_file_coverage(
+    repo_root: Path,
+    changed: list[str],
+    changed_files_path: Path | None,
+    receipt_path: Path,
+    report: ValidationReport,
+) -> None:
+    observed, status = collect_git_changed_files(repo_root)
+    if observed is None:
+        if status != "not_git":
+            report.add_error(
+                "finalize.git_state_unavailable",
+                f"Could not collect strict Git changed-file state ({status}).",
+                repo_root,
+            )
+        return
+    exclusions: set[str] = set()
+    for path in (changed_files_path, receipt_path):
+        if path is None:
+            continue
+        try:
+            exclusions.add(path.resolve().relative_to(repo_root.resolve()).as_posix())
+        except ValueError:
+            pass
+    observed -= exclusions
+    declared = set(changed)
+    omitted = sorted(observed - declared)
+    extra = sorted(declared - observed)
+    if omitted:
+        report.add_error(
+            "finalize.changed_files_incomplete",
+            "Changed files list omits current Git change(s): "
+            + ", ".join(omitted)
+            + ".",
+            changed_files_path,
+        )
+    if extra:
+        report.add_error(
+            "finalize.changed_files_not_current",
+            "Changed files list includes path(s) that are not current Git changes: "
+            + ", ".join(extra)
+            + ".",
+            changed_files_path,
+        )
+
+
+def write_finalize_receipt(
+    receipt_path: Path, changed: list[str], fingerprint: str
+) -> None:
+    receipt = {
+        "version": FINALIZE_RECEIPT_VERSION,
+        "status": "passed",
+        "finalized_at": datetime.now(timezone.utc).isoformat(),
+        "state_fingerprint": fingerprint,
+        "changed_files": changed,
+    }
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = receipt_path.with_suffix(receipt_path.suffix + ".tmp")
+    temporary.write_text(
+        json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    temporary.replace(receipt_path)
+
+
+def verify_finalize_receipt(
+    receipt_path: Path,
+    changed: list[str],
+    fingerprint: str,
+    report: ValidationReport,
+) -> None:
+    if not receipt_path.exists():
+        report.add_error(
+            "finalize.receipt_missing", "Finalize receipt does not exist.", receipt_path
+        )
+        return
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        report.add_error(
+            "finalize.receipt_invalid",
+            f"Finalize receipt could not be parsed: {exc}",
+            receipt_path,
+        )
+        return
+    if not isinstance(receipt, dict):
+        report.add_error(
+            "finalize.receipt_invalid",
+            "Finalize receipt root must be an object.",
+            receipt_path,
+        )
+        return
+    if (
+        receipt.get("version") != FINALIZE_RECEIPT_VERSION
+        or receipt.get("status") != "passed"
+    ):
+        report.add_error(
+            "finalize.receipt_schema_invalid",
+            "Finalize receipt has an unsupported version or non-passed status.",
+            receipt_path,
+        )
+        return
+    finalized_at = receipt.get("finalized_at")
+    try:
+        if not isinstance(finalized_at, str):
+            raise ValueError("missing finalized_at")
+        parsed_finalized_at = datetime.fromisoformat(
+            finalized_at.replace("Z", "+00:00")
+        )
+        if parsed_finalized_at.tzinfo is None:
+            raise ValueError("finalized_at must include a timezone")
+    except ValueError:
+        report.add_error(
+            "finalize.receipt_schema_invalid",
+            "Finalize receipt has an invalid `finalized_at` timestamp.",
+            receipt_path,
+        )
+        return
+    if (
+        receipt.get("changed_files") != changed
+        or receipt.get("state_fingerprint") != fingerprint
+    ):
+        report.add_error(
+            "finalize.receipt_stale",
+            "Finalize receipt is stale because the changed-file list or file contents changed.",
+            receipt_path,
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate docs/intelligence alignment in a repository.")
-    parser.add_argument("--repo-root", required=True, help="Repository root to validate.")
-    parser.add_argument("--format", default="text", choices=("text", "json"), help="Output format.")
+    parser = argparse.ArgumentParser(
+        description="Validate docs/intelligence alignment in a repository."
+    )
+    parser.add_argument(
+        "--repo-root", required=True, help="Repository root to validate."
+    )
+    parser.add_argument(
+        "--format", default="text", choices=("text", "json"), help="Output format."
+    )
     parser.add_argument(
         "--changed-files",
         help="Optional path to a newline-delimited changed files list for drift suspicion checks.",
+    )
+    finalize_group = parser.add_mutually_exclusive_group()
+    finalize_group.add_argument(
+        "--finalize",
+        action="store_true",
+        help="Require a warning-free final gate and write a state-bound completion receipt.",
+    )
+    finalize_group.add_argument(
+        "--verify-finalized",
+        action="store_true",
+        help="Require the final gate and verify that an existing completion receipt is current.",
+    )
+    parser.add_argument(
+        "--receipt",
+        default=DEFAULT_FINALIZE_RECEIPT,
+        help=f"Finalize receipt path relative to repo root (default: {DEFAULT_FINALIZE_RECEIPT}).",
     )
     args = parser.parse_args(argv)
 
@@ -861,13 +1528,60 @@ def main(argv: list[str] | None = None) -> int:
     if not repo_root.exists():
         report.add_error("repo.missing", "Repository root does not exist.", repo_root)
     elif not repo_root.is_dir():
-        report.add_error("repo.invalid", "Repository root must be a directory.", repo_root)
+        report.add_error(
+            "repo.invalid", "Repository root must be a directory.", repo_root
+        )
     else:
+        final_gate = args.finalize or args.verify_finalized
+        changed_files_path = (
+            Path(args.changed_files).resolve() if args.changed_files else None
+        )
+        changed = validate_changed_files(
+            repo_root,
+            changed_files_path,
+            report,
+            strict=final_gate,
+        )
         validate_docs(repo_root, report)
         validate_intelligence(repo_root, report)
         validate_wiki_memory(repo_root, report)
-        changed_files = Path(args.changed_files).resolve() if args.changed_files else None
-        validate_changed_files(repo_root, changed_files, report)
+        if final_gate:
+            receipt_argument = Path(args.receipt)
+            receipt_path = (repo_root / receipt_argument).resolve()
+            try:
+                receipt_path.relative_to(repo_root)
+            except ValueError:
+                report.add_error(
+                    "finalize.receipt_outside_repo",
+                    "Finalize receipt must stay inside the repository root.",
+                    receipt_path,
+                )
+            validate_finalize_contract(repo_root, changed, report)
+            validate_git_changed_file_coverage(
+                repo_root,
+                changed,
+                changed_files_path,
+                receipt_path,
+                report,
+            )
+            report.promote_warnings()
+            fingerprint = state_fingerprint(repo_root, changed)
+            report.finalize = {
+                "mode": "verify" if args.verify_finalized else "write",
+                "receipt": report._display_path(receipt_path),
+                "state_fingerprint": fingerprint,
+                "changed_file_count": len(changed),
+                "status": "failed" if report.errors else "passed",
+            }
+            if not report.errors:
+                if args.verify_finalized:
+                    verify_finalize_receipt(receipt_path, changed, fingerprint, report)
+                    report.finalize["status"] = (
+                        "failed" if report.errors else "verified"
+                    )
+                else:
+                    write_finalize_receipt(receipt_path, changed, fingerprint)
+                    report.finalize["status"] = "written"
 
     if args.format == "json":
         print(report.as_json())

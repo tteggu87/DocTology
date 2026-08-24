@@ -456,6 +456,31 @@ Do not claim success if the validator reports hard failures.
 If the validator reports warnings, surface them under remaining drift or cautions.
 If neither the repository-local validator nor the bundled skill validator can be run, say why and fall back to a manual drift check rather than implying validator-clean alignment.
 
+For ordinary inspection, the validator remains advisory: warnings identify likely drift without blocking exploratory work.
+For completion, run the hard final gate after the last intended mutation:
+
+```bash
+python scripts/validate_repo_docs_intelligence.py \
+  --repo-root <path> \
+  --changed-files <newline-delimited-path-list> \
+  --finalize
+```
+
+`--finalize` requires a normalized, duplicate-free changed-file list. In a Git repository, that list must exactly match the current tracked and untracked Git changes, excluding the list itself and the receipt. It also requires every validator warning to be resolved, non-placeholder required sections in `docs/IMPACT_SUMMARY.md`, and every changed path to be named under `## Changed`.
+
+The successful gate writes one state-bound receipt at `state/repo_docs_finalize.json` by default. This is a completion receipt, not a workflow ledger. If any listed file changes after finalization, the receipt becomes stale. Check it without rewriting it with:
+
+```bash
+python scripts/validate_repo_docs_intelligence.py \
+  --repo-root <path> \
+  --changed-files <newline-delimited-path-list> \
+  --verify-finalized
+```
+
+Do not finalize before the last docs or code mutation, do not hand-edit the receipt, and do not report completion when receipt verification is stale.
+
+Registered Python entrypoints are checked from `pyproject.toml` (`project.scripts`, `project.gui-scripts`, and Poetry scripts). Their targets must resolve, and each registration must remain visible in `docs/CURRENT_STATE.md` plus `docs/repo-map/ENTRYPOINTS.md` when that repo map exists. Keep secondary wrappers visible separately; registration evidence decides the canonical surface.
+
 ### 11. Report Drift Status
 
 ## Reporting Format

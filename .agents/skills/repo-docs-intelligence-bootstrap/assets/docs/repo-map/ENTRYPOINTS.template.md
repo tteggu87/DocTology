@@ -9,7 +9,7 @@ superseded_by: N/A
 
 ## Canonical Entrypoints
 
-List confirmed CLI, HTTP, package, script, or application entrypoints.
+List confirmed CLI, HTTP, package, script, or application entrypoints. Preserve the exact registered command name and `module:symbol` target for Python entrypoints so the validator can compare docs with live package metadata.
 
 | Surface | Path Or Registration | Owner | Notes |
 | --- | --- | --- | --- |

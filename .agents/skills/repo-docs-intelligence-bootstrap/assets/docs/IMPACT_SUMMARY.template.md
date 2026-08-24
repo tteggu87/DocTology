@@ -9,7 +9,7 @@ superseded_by: N/A
 
 ## Changed
 
-List the docs, intelligence artifacts, runtime surfaces, and legacy classifications that changed.
+List every changed path exactly, then summarize the docs, intelligence artifacts, runtime surfaces, and legacy classifications that changed. `--finalize` checks path coverage against the supplied changed-file list.
 
 ## Checked Not Changed
 
@@ -29,4 +29,4 @@ List newly introduced glossary terms, actions, datasets, policies, or schema con
 
 ## Validator Summary
 
-Record validator success, hard failures, warnings, or why the validator was not run.
+Record the final validator command, success or hard failures, unresolved warnings, and the receipt path. Do not claim success from a receipt created before the latest mutation.

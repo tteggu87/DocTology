@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -72,6 +73,35 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         return json.loads(result.stdout)
 
+    def run_validator_command(self, repo_root: Path, *args: str) -> tuple[int, dict]:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(VALIDATOR_PATH),
+                "--repo-root",
+                str(repo_root),
+                "--format",
+                "json",
+                *args,
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        return result.returncode, json.loads(result.stdout)
+
+    def copy_complete_fixture(self, destination: Path) -> None:
+        source = (
+            ROOT
+            / ".agents"
+            / "skills"
+            / "repo-docs-intelligence-bootstrap"
+            / "evals"
+            / "files"
+            / "fixture_repo_mapping_manifest_with_wiki"
+        )
+        shutil.copytree(source, destination, dirs_exist_ok=True)
+
     def test_repo_map_is_rejected_when_index_links_are_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -81,7 +111,11 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
             write_doc(repo_map / "MODULES.md", "Modules")
             write_doc(repo_map / "DATA_FLOW.md", "Data Flow")
             write_doc(repo_map / "SYMBOL_GRAPH.md", "Symbol Graph")
-            write_doc(root / "wiki" / "_meta" / "index.md", "Repo Memory Index", "- `docs/CURRENT_STATE.md`")
+            write_doc(
+                root / "wiki" / "_meta" / "index.md",
+                "Repo Memory Index",
+                "- `docs/CURRENT_STATE.md`",
+            )
 
             payload = self.run_validator(root)
 
@@ -142,7 +176,418 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
 
         self.assertIn("repository-local validator", skill_text)
         self.assertIn("bundled skill validator", skill_text)
+        self.assertIn("--finalize", skill_text)
+        self.assertIn("--verify-finalized", skill_text)
         self.assertIn("bundled skill validator", agents_template_text)
+        self.assertIn("--finalize", agents_template_text)
+
+    def test_finalize_requires_changed_files_input(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.copy_complete_fixture(root)
+
+            returncode, payload = self.run_validator_command(root, "--finalize")
+
+        self.assertEqual(returncode, 1)
+        codes = {issue["code"] for issue in payload["errors"]}
+        self.assertIn("drift.changed_files_missing", codes)
+
+    def test_finalize_writes_and_verifies_state_bound_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.copy_complete_fixture(root)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "config", "user.email", "test@example.com"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(root), "config", "user.name", "Test"], check=True
+            )
+            subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "commit", "-qm", "fixture"], check=True
+            )
+            changed_files = root / "changed-files.txt"
+            changed_files.write_text(
+                "docs/IMPACT_SUMMARY.md\nwiki/_meta/log.md\n",
+                encoding="utf-8",
+            )
+            impact_path = root / "docs" / "IMPACT_SUMMARY.md"
+            impact_path.write_text(
+                impact_path.read_text(encoding="utf-8").replace(
+                    "- Created the unified memory profile fixture.",
+                    "- Updated `docs/IMPACT_SUMMARY.md`.\n- Updated `wiki/_meta/log.md`.",
+                ),
+                encoding="utf-8",
+            )
+            with (root / "wiki" / "_meta" / "log.md").open(
+                "a", encoding="utf-8"
+            ) as handle:
+                handle.write("\n- final gate fixture update\n")
+
+            returncode, payload = self.run_validator_command(
+                root,
+                "--changed-files",
+                str(changed_files),
+                "--finalize",
+            )
+            self.assertEqual(returncode, 0, payload)
+            self.assertEqual(payload["finalize"]["status"], "written")
+            receipt = root / "state" / "repo_docs_finalize.json"
+            self.assertTrue(receipt.exists())
+
+            returncode, payload = self.run_validator_command(
+                root,
+                "--changed-files",
+                str(changed_files),
+                "--verify-finalized",
+            )
+            self.assertEqual(returncode, 0, payload)
+            self.assertEqual(payload["finalize"]["status"], "verified")
+
+            with (root / "wiki" / "_meta" / "log.md").open(
+                "a", encoding="utf-8"
+            ) as handle:
+                handle.write("\n- mutation after review\n")
+            returncode, payload = self.run_validator_command(
+                root,
+                "--changed-files",
+                str(changed_files),
+                "--verify-finalized",
+            )
+
+        self.assertEqual(returncode, 1)
+        codes = {issue["code"] for issue in payload["errors"]}
+        self.assertIn("finalize.receipt_stale", codes)
+
+    def test_finalize_rejects_unlisted_changed_file_in_impact_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.copy_complete_fixture(root)
+            changed_files = root / "changed-files.txt"
+            changed_files.write_text("wiki/_meta/log.md\n", encoding="utf-8")
+
+            returncode, payload = self.run_validator_command(
+                root,
+                "--changed-files",
+                str(changed_files),
+                "--finalize",
+            )
+
+        self.assertEqual(returncode, 1)
+        codes = {issue["code"] for issue in payload["errors"]}
+        self.assertIn("finalize.impact_summary_changed_files_missing", codes)
+
+    def test_impact_summary_path_coverage_is_exact_and_rejects_placeholders(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            impact = root / "docs" / "IMPACT_SUMMARY.md"
+            write_doc(
+                impact,
+                "Impact Summary",
+                "\n".join(
+                    [
+                        "## Changed",
+                        "- Updated `ba.py`.",
+                        "",
+                        "## Checked Not Changed",
+                        "TODO",
+                        "",
+                        "## Remaining Drift",
+                        "- None recorded.",
+                        "",
+                        "## Validator Summary",
+                        "- Expected pass.",
+                    ]
+                ),
+            )
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_finalize_contract(root, ["a.py"], report)
+
+        codes = {issue["code"] for issue in report.errors}
+        self.assertIn("finalize.impact_summary_changed_files_missing", codes)
+        self.assertIn("finalize.impact_summary_placeholder", codes)
+
+    def test_registered_entrypoint_must_be_visible_in_repo_map(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "pkg").mkdir(parents=True)
+            (root / "pkg" / "cli.py").write_text(
+                "def main():\n    return 0\n", encoding="utf-8"
+            )
+            (root / "pyproject.toml").write_text(
+                '[project]\nname = "sample"\nversion = "0.1.0"\n\n'
+                '[project.scripts]\nsample = "pkg.cli:main"\n',
+                encoding="utf-8",
+            )
+            write_doc(
+                root / "docs" / "CURRENT_STATE.md",
+                "Current State",
+                "`sample = pkg.cli:main`",
+            )
+            write_doc(
+                root / "docs" / "repo-map" / "ENTRYPOINTS.md",
+                "Entrypoints",
+                "No CLI listed.",
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_registered_entrypoints(root, report)
+
+        codes = {issue["code"] for issue in report.warnings}
+        self.assertIn("docs.entrypoint_registration_missing", codes)
+
+    def test_registered_entrypoint_must_also_be_visible_in_current_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "pkg").mkdir(parents=True)
+            (root / "pkg" / "cli.py").write_text(
+                "def main():\n    return 0\n", encoding="utf-8"
+            )
+            (root / "pyproject.toml").write_text(
+                '[project]\nname = "sample"\nversion = "0.1.0"\n\n'
+                '[project.scripts]\nsample = "pkg.cli:main"\n',
+                encoding="utf-8",
+            )
+            write_doc(
+                root / "docs" / "CURRENT_STATE.md",
+                "Current State",
+                "No exact registration.",
+            )
+            write_doc(
+                root / "docs" / "repo-map" / "ENTRYPOINTS.md",
+                "Entrypoints",
+                "Run `sample`; registration is `pkg.cli:main`.",
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_registered_entrypoints(root, report)
+
+        warning_paths = {issue.get("path") for issue in report.warnings}
+        self.assertIn("docs/CURRENT_STATE.md", warning_paths)
+
+    def test_entrypoint_docs_require_exact_command_and_target_evidence(self) -> None:
+        text = "The application uses `pkg.cli:main` internally."
+        self.assertFalse(
+            self.validator.entrypoint_is_documented(text, "app", "pkg.cli:main")
+        )
+        self.assertTrue(
+            self.validator.entrypoint_is_documented(
+                "Run `app`; registration is `pkg.cli:main`.",
+                "app",
+                "pkg.cli:main",
+            )
+        )
+
+    def test_poetry_table_gui_script_and_dotted_target_are_supported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "pkg").mkdir()
+            (root / "pkg" / "cli.py").write_text(
+                "class Commands:\n    @staticmethod\n    def run():\n        return 0\n",
+                encoding="utf-8",
+            )
+            (root / "pyproject.toml").write_text(
+                "\n".join(
+                    [
+                        "[project]",
+                        'name = "sample"',
+                        'version = "0.1.0"',
+                        "",
+                        "[project.gui-scripts]",
+                        'sample-gui = "pkg.cli:Commands.run"',
+                        "",
+                        "[tool.poetry.scripts]",
+                        'sample-poetry = { reference = "pkg.cli:Commands.run", type = "console" }',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            scripts = self.validator.extract_console_scripts(root)
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_registered_entrypoints(root, report)
+
+        self.assertEqual(
+            scripts,
+            [
+                ("sample-gui", "pkg.cli:Commands.run"),
+                ("sample-poetry", "pkg.cli:Commands.run"),
+            ],
+        )
+        self.assertEqual(report.errors, [])
+
+    def test_unprovable_imported_dotted_target_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "cli.py"
+            path.write_text("from somewhere import Commands\n", encoding="utf-8")
+            self.assertFalse(
+                self.validator.module_exposes_symbol(path, "Commands.nonexistent")
+            )
+
+    def test_fingerprint_tracks_symlink_target_and_dirty_git_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "one.txt").write_text("same\n", encoding="utf-8")
+            (root / "two.txt").write_text("same\n", encoding="utf-8")
+            link = root / "link.txt"
+            link.symlink_to("one.txt")
+            first_link = self.validator.state_fingerprint(root, ["link.txt"])
+            link.unlink()
+            link.symlink_to("two.txt")
+            second_link = self.validator.state_fingerprint(root, ["link.txt"])
+            self.assertNotEqual(first_link, second_link)
+
+            submodule = root / "submodule"
+            subprocess.run(["git", "init", "-q", str(submodule)], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(submodule),
+                    "config",
+                    "user.email",
+                    "test@example.com",
+                ],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(submodule), "config", "user.name", "Test"], check=True
+            )
+            (submodule / "state.txt").write_text("clean\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(submodule), "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", str(submodule), "commit", "-qm", "fixture"], check=True
+            )
+            clean = self.validator.state_fingerprint(root, ["submodule"])
+            (submodule / "state.txt").write_text("dirty\n", encoding="utf-8")
+            dirty = self.validator.state_fingerprint(root, ["submodule"])
+            self.assertNotEqual(clean, dirty)
+
+    def test_receipt_schema_is_verified_before_fingerprint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt_path = root / "state" / "repo_docs_finalize.json"
+            receipt_path.parent.mkdir(parents=True)
+            receipt_path.write_text(
+                json.dumps(
+                    {
+                        "version": 999,
+                        "status": "failed",
+                        "finalized_at": "not-a-date",
+                        "state_fingerprint": "fingerprint",
+                        "changed_files": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            report = self.validator.ValidationReport(root)
+            self.validator.verify_finalize_receipt(
+                receipt_path, [], "fingerprint", report
+            )
+
+        codes = {issue["code"] for issue in report.errors}
+        self.assertIn("finalize.receipt_schema_invalid", codes)
+
+    def test_receipt_timestamp_requires_timezone(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            receipt_path = root / "receipt.json"
+            receipt_path.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "status": "passed",
+                        "finalized_at": "2026-08-24T12:00:00",
+                        "state_fingerprint": "fingerprint",
+                        "changed_files": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            report = self.validator.ValidationReport(root)
+            self.validator.verify_finalize_receipt(
+                receipt_path, [], "fingerprint", report
+            )
+
+        codes = {issue["code"] for issue in report.errors}
+        self.assertIn("finalize.receipt_schema_invalid", codes)
+
+    def test_finalize_changed_files_must_match_git_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(
+                ["git", "-C", str(root), "config", "user.email", "test@example.com"],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(root), "config", "user.name", "Test"], check=True
+            )
+            (root / "a.txt").write_text("a\n", encoding="utf-8")
+            (root / "b.txt").write_text("b\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "-C", str(root), "add", "a.txt", "b.txt"], check=True
+            )
+            subprocess.run(
+                ["git", "-C", str(root), "commit", "-qm", "fixture"], check=True
+            )
+            (root / "a.txt").write_text("changed a\n", encoding="utf-8")
+            (root / "b.txt").write_text("changed b\n", encoding="utf-8")
+            changed_files_path = Path(tmp).parent / f"{root.name}-changed-files.txt"
+            changed_files_path.write_text("a.txt\n", encoding="utf-8")
+            self.addCleanup(changed_files_path.unlink, missing_ok=True)
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_git_changed_file_coverage(
+                root,
+                ["a.txt"],
+                changed_files_path,
+                root / "state" / "repo_docs_finalize.json",
+                report,
+            )
+
+        codes = {issue["code"] for issue in report.errors}
+        self.assertIn("finalize.changed_files_incomplete", codes)
+
+    def test_git_coverage_supports_repo_profile_below_git_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            git_root = Path(tmp)
+            profile_root = git_root / "profile"
+            profile_root.mkdir()
+            subprocess.run(["git", "init", "-q", str(git_root)], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(git_root),
+                    "config",
+                    "user.email",
+                    "test@example.com",
+                ],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "-C", str(git_root), "config", "user.name", "Test"], check=True
+            )
+            (profile_root / "inside.txt").write_text("inside\n", encoding="utf-8")
+            (git_root / "outside.txt").write_text("outside\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(git_root), "add", "."], check=True)
+            subprocess.run(
+                ["git", "-C", str(git_root), "commit", "-qm", "fixture"], check=True
+            )
+            (profile_root / "inside.txt").write_text(
+                "changed inside\n", encoding="utf-8"
+            )
+            (git_root / "outside.txt").write_text("changed outside\n", encoding="utf-8")
+
+            observed, status = self.validator.collect_git_changed_files(profile_root)
+
+        self.assertEqual(status, "ok")
+        self.assertEqual(observed, {"inside.txt"})
 
 
 if __name__ == "__main__":
