@@ -1,0 +1,8 @@
+# Ralph Progress Log
+Started: 2026-08-25T00:00:00+09:00
+
+## Codebase Patterns
+- `AGENTS.md` and bootstrap-generated scripts own workspace-specific procedure; reusable skills should orchestrate, not duplicate that contract.
+- Canonical completion evidence already lives in `state/wiki_runs/` and `state/wiki_batches/`; do not add a second workflow ledger.
+- `.codex/`, `.omo/`, and `docs/reviews/` contain pre-existing user artifacts. Stage only the explicit Ralph files and story-owned source/test changes.
+---

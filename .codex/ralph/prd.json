@@ -1,0 +1,49 @@
+{
+  "branchName": "ralph/ingest-operator",
+  "product": "LLM Wiki ontology ingest operator",
+  "goal": "Refocus llm-wiki-ontology-ingest into a thin DuckGraph-lite operator that detects repo capabilities, proposes the right single or batch workflow, relies on repo-owned runtime gates, performs bounded repair, and turns repeated failures into review-only improvement proposals.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Refocus ingest skill as a capability-aware operator",
+      "description": "As a wiki operator, I want the ingest skill to inspect the workspace and select the available ingest lane instead of repeating bootstrap AGENTS.md or assuming one legacy runner exists.",
+      "priority": 1,
+      "passes": false,
+      "acceptanceCriteria": [
+        "SKILL.md clearly assigns repo contracts/runtime to bootstrap, orchestration to this skill, and ontology truth conventions to lightweight-ontology-core.",
+        "The workflow distinguishes llm-first-ontology, wiki-plus-ontology, and wiki-only capabilities without relying on semantic filename or keyword routing.",
+        "The skill no longer unconditionally recommends scripts/llm_full_ingest.py and instead selects only commands that exist in the target repo.",
+        "Existing closed-pipeline and semantic no-fallback guarantees remain explicit.",
+        "Relevant contract tests pass."
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Bind ingest completion to existing procedure and batch gates",
+      "description": "As a wiki operator, I want every ingest plan to start and finish through the repo-owned run or batch gate with bounded repair and an honest completion posture.",
+      "priority": 2,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Single-source flow uses wiki_workflow.py and fresh final review; large-source flow uses wiki_batch.py, one writer, pipeline_check.py --strict, representative questions, and corpus certification when available.",
+        "The skill reuses state/wiki_runs and state/wiki_batches rather than creating a duplicate plan/event runtime.",
+        "A bounded same-run repair loop maps structured blockers to targeted repair and never labels stale or unavailable semantic judgment complete.",
+        "Completion reporting distinguishes ready, partial, not_ready, and blocked outcomes.",
+        "Tests validate the operator/gate contract."
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Add proposal-only repeated-failure improvement loop",
+      "description": "As a maintainer, I want recurring stable ingest failures to produce a reviewable improvement proposal without allowing the skill to rewrite runtime contracts or canonical truth automatically.",
+      "priority": 3,
+      "passes": false,
+      "acceptanceCriteria": [
+        "The skill applies local repair to an isolated failure and requires at least three independent runs with the same stable failure and contract digest before proposing a reusable improvement.",
+        "Improvement proposals contain bounded metadata and expected tests, exclude raw/private source content, and require human review before adoption.",
+        "Automatic canary deployment, rollback machinery, daemon scheduling, runtime self-modification, and automatic truth promotion are explicitly out of scope.",
+        "Repo-local and global llm-wiki-ontology-ingest skill copies are synchronized.",
+        "Skill validation and the relevant repository test suite pass, and the worktree contains only the pre-existing user-owned untracked paths."
+      ]
+    }
+  ]
+}
