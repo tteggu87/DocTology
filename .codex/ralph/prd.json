@@ -22,7 +22,7 @@
       "title": "Bind ingest completion to existing procedure and batch gates",
       "description": "As a wiki operator, I want every ingest plan to start and finish through the repo-owned run or batch gate with bounded repair and an honest completion posture.",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Single-source flow uses wiki_workflow.py and fresh final review; large-source flow uses wiki_batch.py, one writer, pipeline_check.py --strict, representative questions, and corpus certification when available.",
         "The skill reuses state/wiki_runs and state/wiki_batches rather than creating a duplicate plan/event runtime.",

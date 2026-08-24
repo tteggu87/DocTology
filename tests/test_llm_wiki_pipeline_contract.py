@@ -80,6 +80,20 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
             text,
         )
 
+    def test_ingest_skill_reuses_repo_owned_procedure_and_batch_gates(self) -> None:
+        text = read_repo_text(".agents/skills/llm-wiki-ontology-ingest/SKILL.md")
+        self.assertIn("## Completion Posture", text)
+        self.assertIn("Reuse `state/wiki_runs/`", text)
+        self.assertIn("`state/wiki_batches/`", text)
+        self.assertIn("start a run with `scripts/wiki_workflow.py`", text)
+        self.assertIn("Exactly one writer", text)
+        self.assertIn("`scripts/pipeline_check.py --strict --batch <manifest>`", text)
+        self.assertIn("representative-question receipts", text)
+        self.assertIn("final corpus fingerprint", text)
+        self.assertIn("bounded to three attempts per stable blocker", text)
+        for posture in ("`ready`", "`partial`", "`not_ready`", "`blocked`"):
+            self.assertIn(posture, text)
+
     def test_operator_skill_does_not_accept_missing_validation_as_success(self) -> None:
         text = read_repo_text(".agents/skills/ontology-pipeline-operator/SKILL.md")
         self.assertIn("validation must check the closed ingest lifecycle", text)

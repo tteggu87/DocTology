@@ -172,7 +172,40 @@ Important:
 - never invent flags; inspect the selected command's local help or documentation first
 - repo-owned apply commands must not exceed the mutation and promotion authority granted by `AGENTS.md`
 
-### 4. Build Truth Appropriate To The Lane
+### 4. Freeze The Plan And Open The Repo-Owned Gate
+
+Before semantic mutation, present a compact plan containing:
+
+- selected capability lane and the evidence used to select it
+- fixed source set and whether it is a single-source or batch run
+- available semantic judgment owner and selected repo-owned runner
+- expected canonical and wiki write surfaces
+- validation, final-review, and certification commands that actually exist
+
+Do not create a separate skill-owned workflow ledger. Reuse `state/wiki_runs/`
+and `state/wiki_batches/` when the repo provides them.
+
+For a single source, start a run with `scripts/wiki_workflow.py` before semantic
+mutation. Record the repo-defined stages in order, run structural validation,
+and bind final review to the latest mutation fingerprint. A missing or stale
+stage leaves the run active or incomplete.
+
+For a large source set, use `scripts/wiki_batch.py` to freeze the manifest and
+keep worker output in its draft area. Exactly one writer may apply canonical
+files. When the repo provides these gates, require all of the following before
+certification:
+
+1. every non-deferred source has a completed source run
+2. `scripts/pipeline_check.py --strict --batch <manifest>` passes
+3. required representative-question receipts match the current corpus
+4. the final corpus fingerprint is certified after the last mutation
+
+Do not weaken a missing gate by substituting a checklist or prose assertion.
+If these runtime files are absent, follow the local contract's available
+validation path and report that strict procedure or batch certification was
+unavailable.
+
+### 5. Build Truth Appropriate To The Lane
 
 For `llm-first-ontology`, use the repo-owned semantic compile/proposal path and preserve human-review boundaries.
 
@@ -194,7 +227,7 @@ Do not let wiki summaries become the canonical truth layer.
 For automatic ingest, write records as proposed/needs_review unless the user has
 explicitly requested and reviewed accepted promotion.
 
-### 5. Project Back Into The Wiki
+### 6. Project Back Into The Wiki
 
 Once the selected lane's truth or proposal step is complete:
 
@@ -210,7 +243,7 @@ Do not let duplicate or weakly justified pages accumulate when an existing page 
 
 In `llm-first-ontology`, do not apply active semantic page changes automatically when the repo requires a reviewed proposal.
 
-### 6. Refresh Meta Pages
+### 7. Refresh Meta Pages
 
 After meaningful ingest work:
 
@@ -218,6 +251,20 @@ After meaningful ingest work:
 2. append a clear log entry to `wiki/_meta/log.md`
 
 If the ingest changed how the repo should be interpreted, update `AGENTS.md` or a durable analysis page rather than leaving that insight only in chat.
+
+### 8. Repair Only From Gate Evidence
+
+When a gate blocks completion, use its structured blocker to make the smallest
+targeted repair, then rerun the same gate. Typical repairs include completing a
+missing source run, resolving a conflicting draft before the single writer
+applies it, rerunning final review after a mutation, or refreshing a stale
+question receipt against the current corpus fingerprint.
+
+Keep this repair loop bounded to three attempts per stable blocker in one run.
+Stop earlier when the repair would require new user authority, unavailable
+semantic judgment, a source-scope change, or edits to `raw/`. After the bound,
+leave the run open and report the blocker; do not change lanes, relax the gate,
+or call the ingest complete.
 
 ## User-Facing Routine
 
@@ -231,9 +278,16 @@ The normal human workflow should look like this:
 The human should not need to call `lightweight-ontology-core` directly for normal ingest.
 That lower-level skill remains available for advanced tuning, debugging, or operator workflows.
 
-## Success Criteria
+## Completion Posture
 
-The ingest succeeded when, for the selected lane:
+Use exactly one final posture:
+
+- `ready`: every required semantic, structural, procedure, review, and batch certification gate passes against the latest state
+- `partial`: useful in-scope artifacts exist, but an explicitly identified optional or user-deferred part remains
+- `not_ready`: required work or evidence is missing, stale, or invalid and can still be repaired in the current scope
+- `blocked`: completion requires unavailable semantic judgment, new authority, or an external state change
+
+The ingest is `ready` only when, for the selected lane:
 
 - source coverage is reflected in `wiki/sources/`
 - ontology truth or reviewed proposals are updated when the lane supports them
@@ -254,6 +308,7 @@ Report:
 6. Validation result
 7. Open questions and uncertainty
 8. Files changed
+9. Completion posture and any gate blocker codes
 
 ## Notes
 

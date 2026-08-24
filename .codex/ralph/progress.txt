@@ -19,3 +19,15 @@ Started: 2026-08-25T00:00:00+09:00
   - `git diff --check` -> pass: no whitespace errors.
 - Learnings for future iterations: the repository-local and global ingest skill copies already differed before this story; global synchronization remains intentionally deferred to US-003.
 ---
+## 2026-08-25T02:16:41+09:00 - US-002
+- Bound single-source ingest to the existing `wiki_workflow.py` run and fresh final-review fingerprint, and large-source ingest to the existing batch manifest, single writer, strict pipeline check, representative questions, and corpus certification.
+- Added a three-attempt same-run repair bound driven by structured blockers and explicit `ready`, `partial`, `not_ready`, and `blocked` completion postures.
+- Reused `state/wiki_runs/` and `state/wiki_batches/`; no duplicate workflow ledger or new runtime was added.
+- Files changed: `.agents/skills/llm-wiki-ontology-ingest/SKILL.md`, `tests/test_llm_wiki_pipeline_contract.py`, `.codex/ralph/prd.json`, `.codex/ralph/progress.txt`.
+- Quality checks run and result:
+  - `python3 -m pytest tests/test_llm_wiki_pipeline_contract.py -q` -> pass: 16 tests and 3 subtests.
+  - `python3 /Users/hoyasung007hotmail.com/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/llm-wiki-ontology-ingest` -> pass: skill is valid.
+  - `/Users/hoyasung007hotmail.com/.local/bin/ruff check tests/test_llm_wiki_pipeline_contract.py` -> pass: all checks passed.
+  - `git diff --check` -> pass: no whitespace errors.
+- Learnings for future iterations: completion certification belongs to repo-owned state and fingerprints; the reusable skill should only select and drive those surfaces.
+---
