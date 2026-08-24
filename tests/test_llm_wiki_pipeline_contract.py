@@ -94,6 +94,19 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
         for posture in ("`ready`", "`partial`", "`not_ready`", "`blocked`"):
             self.assertIn(posture, text)
 
+    def test_ingest_skill_improvement_loop_is_proposal_only(self) -> None:
+        text = read_repo_text(".agents/skills/llm-wiki-ontology-ingest/SKILL.md")
+        self.assertIn("### 9. Learn By Proposal, Never By Self-Modification", text)
+        self.assertIn("at least three independent runs", text)
+        self.assertIn("same procedure contract digest", text)
+        self.assertIn("repeated retries inside one run count once", text)
+        self.assertIn("symptom stated without raw/private source excerpts", text)
+        self.assertIn("expected tests, scope, risk, and `status: proposed`", text)
+        self.assertIn("A human must review and approve", text)
+        self.assertIn("Do not add automatic canary deployment", text)
+        self.assertIn("runtime self-modification", text)
+        self.assertIn("automatic truth", text)
+
     def test_operator_skill_does_not_accept_missing_validation_as_success(self) -> None:
         text = read_repo_text(".agents/skills/ontology-pipeline-operator/SKILL.md")
         self.assertIn("validation must check the closed ingest lifecycle", text)

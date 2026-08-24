@@ -36,7 +36,7 @@
       "title": "Add proposal-only repeated-failure improvement loop",
       "description": "As a maintainer, I want recurring stable ingest failures to produce a reviewable improvement proposal without allowing the skill to rewrite runtime contracts or canonical truth automatically.",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "The skill applies local repair to an isolated failure and requires at least three independent runs with the same stable failure and contract digest before proposing a reusable improvement.",
         "Improvement proposals contain bounded metadata and expected tests, exclude raw/private source content, and require human review before adoption.",

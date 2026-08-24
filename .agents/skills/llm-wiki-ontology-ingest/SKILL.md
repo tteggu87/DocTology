@@ -266,6 +266,33 @@ semantic judgment, a source-scope change, or edits to `raw/`. After the bound,
 leave the run open and report the blocker; do not change lanes, relax the gate,
 or call the ingest complete.
 
+### 9. Learn By Proposal, Never By Self-Modification
+
+Treat one isolated failure as a local repair case. Create a reusable improvement
+proposal only when the same stable failure code and affected component recur in
+at least three independent runs with the same procedure contract digest. Runs
+from one batch count independently only when they have distinct run IDs and
+source scopes; repeated retries inside one run count once.
+
+The proposal is advisory and must contain only bounded operational metadata:
+
+- stable failure code and affected component
+- distinct run IDs and their shared contract digest
+- symptom stated without raw/private source excerpts
+- proposed instruction, validator, or test change
+- expected tests, scope, risk, and `status: proposed`
+
+Store it only in the review location authorized by the target repo. If the repo
+defines no improvement-proposal location, report the candidate in the final
+handoff instead of inventing a new state store. A human must review and approve
+the proposal before any skill, `AGENTS.md`, policy, validator, or runtime change.
+Never include raw source bodies, private excerpts, credentials, or accepted
+canonical truth in an improvement proposal.
+
+Do not add automatic canary deployment, rollback machinery, daemon scheduling,
+runtime self-modification, automatic gate relaxation, or automatic truth
+promotion. Those are separate systems, not ingest completion features.
+
 ## User-Facing Routine
 
 The normal human workflow should look like this:
