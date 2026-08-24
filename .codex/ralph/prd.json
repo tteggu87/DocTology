@@ -8,7 +8,7 @@
       "title": "Refocus ingest skill as a capability-aware operator",
       "description": "As a wiki operator, I want the ingest skill to inspect the workspace and select the available ingest lane instead of repeating bootstrap AGENTS.md or assuming one legacy runner exists.",
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "SKILL.md clearly assigns repo contracts/runtime to bootstrap, orchestration to this skill, and ontology truth conventions to lightweight-ontology-core.",
         "The workflow distinguishes llm-first-ontology, wiki-plus-ontology, and wiki-only capabilities without relying on semantic filename or keyword routing.",

@@ -6,3 +6,16 @@ Started: 2026-08-25T00:00:00+09:00
 - Canonical completion evidence already lives in `state/wiki_runs/` and `state/wiki_batches/`; do not add a second workflow ledger.
 - `.codex/`, `.omo/`, and `docs/reviews/` contain pre-existing user artifacts. Stage only the explicit Ralph files and story-owned source/test changes.
 ---
+## 2026-08-25T02:15:13+09:00 - US-001
+- Refocused the repository-local `llm-wiki-ontology-ingest` skill as a capability-aware operator with explicit ownership boundaries for bootstrap/runtime, orchestration, and ontology truth conventions.
+- Added contract-driven selection for `llm-first-ontology`, `wiki-plus-ontology`, and `wiki-only`, with command existence checks and no unconditional `llm_full_ingest.py` recommendation.
+- Preserved the closed-pipeline and semantic no-fallback contracts and added a focused regression test.
+- Files changed: `.agents/skills/llm-wiki-ontology-ingest/SKILL.md`, `tests/test_llm_wiki_pipeline_contract.py`, `.codex/ralph/prd.json`, `.codex/ralph/progress.txt`.
+- Quality checks run and result:
+  - `python3 -m pytest tests/test_llm_wiki_pipeline_contract.py -q` -> pass: 15 tests and 3 subtests.
+  - `python3 -m pytest -q` -> pass: 103 tests and 3 subtests.
+  - `python3 /Users/hoyasung007hotmail.com/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/llm-wiki-ontology-ingest` -> pass: skill is valid.
+  - `/Users/hoyasung007hotmail.com/.local/bin/ruff check .agents/skills/llm-wiki-ontology-ingest tests/test_llm_wiki_pipeline_contract.py` -> pass: all checks passed. (`python3 -m ruff` was unavailable in the active interpreter.)
+  - `git diff --check` -> pass: no whitespace errors.
+- Learnings for future iterations: the repository-local and global ingest skill copies already differed before this story; global synchronization remains intentionally deferred to US-003.
+---

@@ -64,6 +64,22 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
         self.assertIn("do not report the result as completed ontology-backed ingest", text)
         self.assertIn("Semantic no-fallback rule", text)
 
+    def test_ingest_skill_is_a_capability_aware_operator(self) -> None:
+        text = read_repo_text(".agents/skills/llm-wiki-ontology-ingest/SKILL.md")
+        self.assertIn("workspace contracts and runtime files", text)
+        self.assertIn("this skill inspects those capabilities", text)
+        self.assertIn("owns reusable ontology truth and provenance conventions", text)
+        self.assertIn("**`llm-first-ontology`**", text)
+        self.assertIn("**`wiki-plus-ontology`**", text)
+        self.assertIn("**`wiki-only`**", text)
+        self.assertIn("Do not classify a lane from source filenames, keywords", text)
+        self.assertIn("select only commands whose files exist", text)
+        self.assertIn("do not assume `scripts/llm_full_ingest.py`", text)
+        self.assertNotIn(
+            "run `python scripts/llm_full_ingest.py raw/inbox/source.md --apply`",
+            text,
+        )
+
     def test_operator_skill_does_not_accept_missing_validation_as_success(self) -> None:
         text = read_repo_text(".agents/skills/ontology-pipeline-operator/SKILL.md")
         self.assertIn("validation must check the closed ingest lifecycle", text)
