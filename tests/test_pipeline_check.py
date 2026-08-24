@@ -54,6 +54,60 @@ class PipelineCheckTest(unittest.TestCase):
         self.assertEqual(result["source_page_stage"], "pending")
         self.assertEqual(result["semantic_status"], "pending")
 
+    def test_ontology_integrity_is_profile_aware(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "wiki-only"
+            self.bootstrap.scaffold(root, force=False, profile="wiki-only")
+            wiki_only = self.pipeline_check.ontology_integrity_check(root)
+
+            ontology_results = []
+            for profile in ("wiki-plus-ontology", "llm-first-ontology"):
+                ontology_root = Path(tmp) / profile
+                self.bootstrap.scaffold(ontology_root, force=False, profile=profile)
+                ontology_results.append(self.pipeline_check.ontology_integrity_check(ontology_root))
+
+        self.assertEqual(wiki_only["status"], "not_applicable")
+        self.assertEqual([item["status"] for item in ontology_results], ["ok", "ok"])
+
+    def test_ontology_integrity_rejects_unreviewed_accepted_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "vault"
+            self.bootstrap.scaffold(root, force=False, profile="wiki-plus-ontology")
+            jsonl = root / "warehouse" / "jsonl"
+            (jsonl / "documents.jsonl").write_text('{"document_id":"doc:1"}\n', encoding="utf-8")
+            (jsonl / "entities.jsonl").write_text('{"entity_id":"entity:1"}\n', encoding="utf-8")
+            (jsonl / "claims.jsonl").write_text(
+                '{"claim_id":"claim:1","status":"accepted","review_state":"approved","subject_id":"entity:1","source_document_id":"doc:1"}\n',
+                encoding="utf-8",
+            )
+
+            result = self.pipeline_check.ontology_integrity_check(root)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(
+            any(code.startswith("ACCEPTED_CLAIM_MISSING_REVIEW:claim:1") for code in result["reason_codes"])
+        )
+        self.assertIn("ACCEPTED_CLAIM_WITHOUT_EVIDENCE:claim:1", result["reason_codes"])
+
+    def test_ontology_integrity_rejects_derived_edge_from_proposed_claim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "vault"
+            self.bootstrap.scaffold(root, force=False, profile="wiki-plus-ontology")
+            jsonl = root / "warehouse" / "jsonl"
+            (jsonl / "claims.jsonl").write_text(
+                '{"claim_id":"claim:1","status":"proposed","review_state":"needs_review"}\n',
+                encoding="utf-8",
+            )
+            (jsonl / "derived_edges.jsonl").write_text(
+                '{"source_claim_id":"claim:1","source":"entity:a","target":"entity:b"}\n',
+                encoding="utf-8",
+            )
+
+            result = self.pipeline_check.ontology_integrity_check(root)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("DERIVED_FROM_NON_ACCEPTED_CLAIM:1:claim:1", result["reason_codes"])
+
     def test_log_matching_uses_exact_source_identity_not_basename(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "vault"

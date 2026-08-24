@@ -29,7 +29,6 @@ Created:
 
 Checked and left unchanged:
 
-- `scripts/llm_wiki.py`
 - `scripts/incremental_ingest.py`
 - `scripts/incremental_support.py`
 - `scripts/workbench/*.py`
@@ -39,10 +38,15 @@ Also updated outside `docs/`:
 - `AGENTS.md`
 - `README.md`
 - `README.ko.md`
+- `scripts/llm_wiki.py`
 - `scripts/llm_full_ingest.py`
 - `scripts/pipeline_check.py`
 - `.agents/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py`
-- `.agents/skills/llm-wiki-ontology-ingest/SKILL.md`
+- `.agents/skills/llm-wiki-loop/SKILL.md`
+- `.agents/skills/llm-wiki-loop/references/ontology-contract.md`
+- `archive/skills/README.md`
+- `archive/skills/lightweight-ontology-core/`
+- `archive/skills/lg-ontology/`
 - `.agents/skills/ontology-pipeline-operator/SKILL.md`
 - `tests/test_llm_wiki_pipeline_contract.py`
 - `tests/test_llm_full_ingest_runtime.py`

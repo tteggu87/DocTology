@@ -16,6 +16,40 @@ from pathlib import Path
 from typing import Any
 
 
+ONTOLOGY_REGISTRIES = {
+    "documents.jsonl": "document_id",
+    "entities.jsonl": "entity_id",
+    "claims.jsonl": "claim_id",
+    "claim_evidence.jsonl": ("evidence_id", ("claim_id", "segment_id", "char_start", "char_end")),
+    "segments.jsonl": "segment_id",
+    "derived_edges.jsonl": ("edge_id", ("source", "target", "label", "source_claim_id")),
+}
+
+LLM_FIRST_REGISTRIES = {
+    "documents.jsonl": "document_id",
+    "content_units.jsonl": "unit_id",
+    "source_versions.jsonl": "source_version_id",
+    "compile_proposals.jsonl": "proposal_id",
+    "review_events.jsonl": "review_event_id",
+}
+
+ALLOWED_STATUS_REVIEW = {
+    "proposed": "needs_review",
+    "accepted": "approved",
+    "disputed": "conflict_open",
+    "rejected": "rejected",
+    "superseded": "archived",
+}
+
+ACCEPTED_REVIEW_FIELDS = (
+    "reviewed_by",
+    "reviewed_at",
+    "decision_by",
+    "decision_at",
+    "decision_note",
+)
+
+
 def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
@@ -40,6 +74,185 @@ def check_item(name: str, status: str, message: str = "", **extra: Any) -> dict[
         item["message"] = message
     item.update(extra)
     return item
+
+
+def read_jsonl_registry(
+    path: Path,
+    id_spec: str | tuple[str, tuple[str, ...]],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    rows: list[dict[str, Any]] = []
+    errors: list[str] = []
+    seen: set[str] = set()
+    if not path.exists():
+        return rows, [f"MISSING_REGISTRY:{path.name}"]
+    for line_number, raw in enumerate(read_text(path).splitlines(), start=1):
+        if not raw.strip():
+            continue
+        try:
+            row = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            errors.append(f"INVALID_JSON:{path.name}:{line_number}:{exc.msg}")
+            continue
+        if not isinstance(row, dict):
+            errors.append(f"NON_OBJECT_ROW:{path.name}:{line_number}")
+            continue
+        rows.append(row)
+        id_field = id_spec if isinstance(id_spec, str) else id_spec[0]
+        value = row.get(id_field)
+        if value in (None, "") and not isinstance(id_spec, str):
+            composite_fields = id_spec[1]
+            composite_values = [row.get(field) for field in composite_fields]
+            if all(value not in (None, "") for value in composite_values):
+                value = "|".join(str(value) for value in composite_values)
+        if value in (None, ""):
+            errors.append(f"MISSING_ID:{path.name}:{line_number}:{id_field}")
+            continue
+        identity = str(value)
+        if identity in seen:
+            errors.append(f"DUPLICATE_ID:{path.name}:{identity}")
+        seen.add(identity)
+    return rows, errors
+
+
+def ontology_failure_check(errors: list[str], profile: str) -> dict[str, Any]:
+    reason_counts: dict[str, int] = {}
+    reason_samples: dict[str, str] = {}
+    for error in errors:
+        family = error.split(":", 1)[0]
+        reason_counts[family] = reason_counts.get(family, 0) + 1
+        reason_samples.setdefault(family, error)
+    return check_item(
+        "ontology_integrity",
+        "failed",
+        f"{len(errors)} ontology integrity blocker(s)",
+        profile=profile,
+        reason_counts=dict(sorted(reason_counts.items())),
+        reason_codes=[reason_samples[family] for family in sorted(reason_samples)],
+    )
+
+
+def ontology_integrity_check(root: Path) -> dict[str, Any]:
+    jsonl_dir = root / "warehouse" / "jsonl"
+    if not jsonl_dir.exists():
+        return check_item("ontology_integrity", "not_applicable", "wiki-only workspace")
+
+    llm_first = (jsonl_dir / "content_units.jsonl").exists()
+    registry_contract = LLM_FIRST_REGISTRIES if llm_first else ONTOLOGY_REGISTRIES
+    registries: dict[str, list[dict[str, Any]]] = {}
+    errors: list[str] = []
+    for filename, id_spec in registry_contract.items():
+        rows, row_errors = read_jsonl_registry(jsonl_dir / filename, id_spec)
+        registries[filename] = rows
+        errors.extend(row_errors)
+
+    document_ids = {str(row["document_id"]) for row in registries["documents.jsonl"] if row.get("document_id")}
+    if llm_first:
+        proposal_ids = {
+            str(row["proposal_id"])
+            for row in registries["compile_proposals.jsonl"]
+            if row.get("proposal_id")
+        }
+        for row in registries["content_units.jsonl"]:
+            unit_id = str(row.get("unit_id") or "<missing>")
+            document_id = str(row.get("document_id") or "")
+            if document_id and document_id not in document_ids:
+                errors.append(f"CONTENT_UNIT_UNKNOWN_DOCUMENT:{unit_id}:{document_id}")
+        for row in registries["source_versions.jsonl"]:
+            version_id = str(row.get("source_version_id") or "<missing>")
+            document_id = str(row.get("document_id") or "")
+            if document_id and document_id not in document_ids:
+                errors.append(f"SOURCE_VERSION_UNKNOWN_DOCUMENT:{version_id}:{document_id}")
+        for row in registries["review_events.jsonl"]:
+            event_id = str(row.get("review_event_id") or "<missing>")
+            target_id = str(row.get("target_id") or "")
+            if target_id and target_id not in proposal_ids:
+                errors.append(f"REVIEW_EVENT_UNKNOWN_PROPOSAL:{event_id}:{target_id}")
+        if errors:
+            return ontology_failure_check(errors, "llm-first-ontology")
+        return check_item(
+            "ontology_integrity",
+            "ok",
+            "LLM-first canonical registries and proposal/review references are structurally valid",
+            profile="llm-first-ontology",
+        )
+
+    entity_ids = {str(row["entity_id"]) for row in registries["entities.jsonl"] if row.get("entity_id")}
+    segment_ids = {str(row["segment_id"]) for row in registries["segments.jsonl"] if row.get("segment_id")}
+    claims = {str(row["claim_id"]): row for row in registries["claims.jsonl"] if row.get("claim_id")}
+    evidence_by_claim: dict[str, list[dict[str, Any]]] = {}
+
+    for row in registries["segments.jsonl"]:
+        segment_id = str(row.get("segment_id") or "<missing>")
+        document_id = str(row.get("document_id") or row.get("source_document_id") or "")
+        if document_id and document_id not in document_ids:
+            errors.append(f"SEGMENT_UNKNOWN_DOCUMENT:{segment_id}:{document_id}")
+
+    for row in registries["claim_evidence.jsonl"]:
+        claim_id = str(row.get("claim_id") or "")
+        if not claim_id or claim_id not in claims:
+            errors.append(f"EVIDENCE_UNKNOWN_CLAIM:{claim_id or '<missing>'}")
+        else:
+            evidence_by_claim.setdefault(claim_id, []).append(row)
+        document_id = str(row.get("source_document_id") or row.get("document_id") or "")
+        if document_id and document_id not in document_ids:
+            errors.append(f"EVIDENCE_UNKNOWN_DOCUMENT:{claim_id or '<missing>'}:{document_id}")
+        segment_id = str(row.get("source_segment_id") or row.get("segment_id") or "")
+        if segment_id and segment_id not in segment_ids:
+            errors.append(f"EVIDENCE_UNKNOWN_SEGMENT:{claim_id or '<missing>'}:{segment_id}")
+
+    accepted_claim_ids: set[str] = set()
+    for claim_id, row in claims.items():
+        status_value = row.get("status")
+        review_state = str(row.get("review_state") or "")
+        if status_value not in (None, ""):
+            status = str(status_value)
+            expected_review = ALLOWED_STATUS_REVIEW.get(status)
+            if expected_review is None:
+                errors.append(f"CLAIM_INVALID_STATUS:{claim_id}:{status}")
+            elif review_state != expected_review:
+                errors.append(f"CLAIM_INVALID_REVIEW_STATE:{claim_id}:{status}:{review_state or '<missing>'}")
+        elif review_state and review_state not in set(ALLOWED_STATUS_REVIEW.values()):
+            errors.append(f"CLAIM_INVALID_REVIEW_STATE:{claim_id}:legacy:{review_state}")
+
+        accepted = str(status_value or "") == "accepted" or review_state == "approved"
+        if accepted:
+            accepted_claim_ids.add(claim_id)
+            for field in ACCEPTED_REVIEW_FIELDS:
+                if row.get(field) in (None, ""):
+                    errors.append(f"ACCEPTED_CLAIM_MISSING_REVIEW:{claim_id}:{field}")
+            decision_by = str(row.get("decision_by") or "")
+            if decision_by and not decision_by.startswith("human:"):
+                errors.append(f"ACCEPTED_CLAIM_NON_HUMAN_DECISION:{claim_id}")
+            if not evidence_by_claim.get(claim_id):
+                errors.append(f"ACCEPTED_CLAIM_WITHOUT_EVIDENCE:{claim_id}")
+
+        for field in ("subject_id", "object_id"):
+            entity_id = str(row.get(field) or "")
+            if entity_id and entity_id not in entity_ids:
+                errors.append(f"CLAIM_UNKNOWN_ENTITY:{claim_id}:{field}:{entity_id}")
+        document_id = str(row.get("source_document_id") or row.get("document_id") or "")
+        if document_id and document_id not in document_ids:
+            errors.append(f"CLAIM_UNKNOWN_DOCUMENT:{claim_id}:{document_id}")
+        segment_id = str(row.get("source_segment_id") or row.get("segment_id") or "")
+        if segment_id and segment_id not in segment_ids:
+            errors.append(f"CLAIM_UNKNOWN_SEGMENT:{claim_id}:{segment_id}")
+
+    for index, row in enumerate(registries["derived_edges.jsonl"], start=1):
+        source_claim_id = str(row.get("source_claim_id") or "")
+        if not source_claim_id or source_claim_id not in claims:
+            errors.append(f"DERIVED_UNKNOWN_CLAIM:{index}:{source_claim_id or '<missing>'}")
+        edge_status = str(row.get("status") or row.get("relation_state") or "")
+        requires_accepted_source = edge_status not in {"draft", "proposed", "needs_review"}
+        if source_claim_id in claims and requires_accepted_source and source_claim_id not in accepted_claim_ids:
+            errors.append(f"DERIVED_FROM_NON_ACCEPTED_CLAIM:{index}:{source_claim_id}")
+
+    if errors:
+        return ontology_failure_check(errors, "wiki-plus-ontology")
+    return check_item(
+        "ontology_integrity",
+        "ok",
+        "canonical JSONL registries and lifecycle references are structurally valid",
+    )
 
 
 def resolve_source(root: Path, source: str) -> Path:
@@ -293,6 +506,7 @@ def check_source(root: Path, source: str) -> dict[str, Any]:
     proposed_jsonl_files = proposed_jsonl_files_for_source(root, source_path, source_page)
     applied_report = report_status(report) == "applied"
     report_has_skips = report_has_skipped_affected_pages(report)
+    ontology_check = ontology_integrity_check(root)
 
     if source_page is None:
         if handoff is not None:
@@ -311,6 +525,7 @@ def check_source(root: Path, source: str) -> dict[str, Any]:
         checks.append(check_item("log_mentions_source", "pending", "source page/log closure is pending"))
         checks.append(check_item("jsonl_projection", "pending", "proposed JSONL projection is pending"))
         checks.append(check_item("broader_wiki_projection", "pending", "affected wiki projection is pending"))
+        checks.append(ontology_check)
         status = aggregate_status(checks)
         return {
             "status": status,
@@ -368,6 +583,7 @@ def check_source(root: Path, source: str) -> dict[str, Any]:
         checks.append(check_item("jsonl_projection", "pending", "proposed JSONL records are pending or source was too thin"))
     else:
         checks.append(check_item("jsonl_projection", "not_applicable", "wiki-only workspace"))
+    checks.append(ontology_check)
 
     if report_has_applied_affected_pages(report) and applied_report and not report_has_skips:
         checks.append(check_item("broader_wiki_projection", "ok", "applied ingest report lists affected wiki page updates"))

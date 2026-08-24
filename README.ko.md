@@ -74,12 +74,8 @@ DocTology의 기본 약속은 다음입니다.
 
 - 새 위키를 만들고 싶다
   - `llm-wiki-bootstrap`
-- 새 자료를 넣고 싶다
-  - `llm-wiki-ontology-ingest`
-- claim, evidence, entity가 맞는지 보고 싶다
-  - `lightweight-ontology-core`
-- 관계망, 경로, 이웃 탐색을 하고 싶다
-  - `lg-ontology`
+- 새 자료를 넣고 wiki를 성장시키거나 ontology·corpus를 검증하고 싶다
+  - `llm-wiki-loop`
 - 코드레포 docs와 AGENTS 기억을 정리하고 싶다
   - `repo-docs-intelligence-bootstrap`
 - 이미 있는 ontology/wiki 산출물을 점검·갱신하고 싶다
@@ -88,16 +84,17 @@ DocTology의 기본 약속은 다음입니다.
 대부분의 사용자는 다음 순서로 시작하면 됩니다.
 
 1. `llm-wiki-bootstrap`
-2. 반복적인 `llm-wiki-ontology-ingest`
+2. 반복적인 `llm-wiki-loop`
 
-나머지 스킬은 나중 단계의 정제 또는 선택적 확장 레이어입니다.
+Ontology integrity는 wiki loop 안에서 처리합니다. 기존 ontology core와
+graph skill은 병렬 사용자 workflow로 노출하지 않고 archive에 보존합니다.
 
 ## 이미 DocTology repo를 운영 중이라면
 
 1. 먼저 `AGENTS.md`를 읽습니다.
 2. 새 source를 `raw/inbox/`에 넣습니다.
 3. configured helper LLM ingest를 쓸 수 있으면 `python scripts/llm_full_ingest.py raw/inbox/source.md --apply`를 실행합니다.
-4. 추가 검토나 수리가 필요하면 `llm-wiki-ontology-ingest` 또는 직접 에이전트 ingest로 보강합니다.
+4. ontology-aware synthesis, 검토, 수리, 인증이 필요하면 `llm-wiki-loop`를 사용합니다.
 5. `git diff`를 검토한 뒤 lint/status를 확인합니다.
 6. 기존 산출물 점검·갱신이 필요하면 `ontology-pipeline-operator`를 사용합니다.
 
@@ -125,36 +122,13 @@ agent가 `AGENTS.md`, wiki map, source page, evidence를 직접 읽어 처리하
 
 - wiki bootstrap 실행
 - 생성된 `raw/inbox/`에 문서 넣기
-- source page와 ontology-backed provenance가 필요하면 `llm-wiki-ontology-ingest` 실행
+- `llm-wiki-loop`로 source page, ontology-backed provenance, 관련 wiki page를 하나의 gated workflow에서 성장
 - 에이전트가 먼저 wiki map을 읽고, 그다음 관련 page body와 source citation을 읽어 답변
 - durable answer는 `wiki/analyses/`와 관련 concept/entity/person/project page에 반영
 
 시작점은 항상 **wiki-first** 입니다.
 
-### 2) wiki 아래 ontology 구조를 더 강하게 만들고 싶나요?
-
-`lightweight-ontology-core`를 사용하세요.
-
-이 단계는 다음을 위한 것입니다.
-
-- entity
-- claim
-- evidence link
-- segment
-- relation vocabulary
-- contradiction 또는 supersession handling
-
-ontology layer는 wiki를 보조해야 합니다. 사람이 읽는 reasoning surface인 wiki를 대체하면 안 됩니다.
-
-### 3) graph-style neighborhood 탐색이 필요한가요?
-
-`lg-ontology`를 사용하세요.
-
-이 단계는 선택 사항입니다. Canonical truth는 JSONL에 유지한 채 graph projection, multi-hop inspection, neighborhood/path exploration을 돕습니다.
-
-Graph projection을 canonical truth로 취급하면 안 됩니다.
-
-### 4) 개인 LLM Wiki가 아니라 프로젝트 전용 repo memory가 필요한가요?
+### 2) 개인 LLM Wiki가 아니라 프로젝트 전용 repo memory가 필요한가요?
 
 `repo-docs-intelligence-bootstrap`을 사용하세요.
 
@@ -185,16 +159,15 @@ Canonical repo-local skillset은 `.agents/skills/` 아래에 있습니다. `~/.c
 
 - `.agents/skills/llm-wiki-bootstrap`
   - Obsidian-first LLM Wiki 시작
-- `.agents/skills/llm-wiki-ontology-ingest`
-  - inbox 문서를 ontology-backed wiki로 ingest
-- `.agents/skills/lightweight-ontology-core`
-  - wiki 아래 canonical ontology truth 정리
-- `.agents/skills/lg-ontology`
-  - ontology graph / neighborhood exploration 확장
+- `.agents/skills/llm-wiki-loop`
+  - raw source, canonical ontology, human-facing wiki를 하나의 loop로 성장·인증
 - `.agents/skills/repo-docs-intelligence-bootstrap`
   - project-specific memory / repo intelligence bootstrap
 - `.agents/skills/ontology-pipeline-operator`
   - 기존 ontology/wiki artifact와 반복 유지보수 flow refresh
+
+폐기된 standalone ontology·graph skill package는 `archive/skills/`에
+보존하며 active user-facing skill로 노출하지 않습니다.
 
 ## 운영 모델
 
@@ -340,9 +313,9 @@ Keep wiki/ as the human-facing synthesis surface.
 예시:
 
 ```text
-Use llm-wiki-ontology-ingest.
+Use llm-wiki-loop.
 Follow the repo-local AGENTS.md.
 Process sources from raw/inbox.
-Update source pages, affected concept/project pages, and JSONL provenance when useful.
-Refresh wiki/_meta/index.md and wiki/_meta/log.md.
+Update canonical JSONL and affected wiki pages when the selected profile supports them.
+Run the source or batch gate and report the final completion posture.
 ```

@@ -211,7 +211,7 @@ When ontology-backed ingest is available, treat the default repeated workflow as
 3. wiki pages are updated from source plus canonical registries
 4. meta pages are refreshed
 
-For repeated user-facing source processing, prefer the ontology-backed ingest skill over ad hoc manual steps.
+For repeated user-facing source processing, prefer `llm-wiki-loop` over ad hoc manual steps.
 Reserve direct ontology-core operation for tuning, debugging, or operator workflows.
 
 ## New Thread Bootstrap

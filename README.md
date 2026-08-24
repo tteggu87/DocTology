@@ -74,12 +74,8 @@ Use this practical chooser:
 
 - Want to create a new wiki?
   - Use `llm-wiki-bootstrap`
-- Want to ingest new material?
-  - Use `llm-wiki-ontology-ingest`
-- Want to inspect claims, evidence, or entities?
-  - Use `lightweight-ontology-core`
-- Want graph neighborhoods, paths, or relation exploration?
-  - Use `lg-ontology`
+- Want to add sources, grow the wiki, validate ontology, or certify a corpus?
+  - Use `llm-wiki-loop`
 - Want to organize codebase docs and AGENTS memory?
   - Use `repo-docs-intelligence-bootstrap`
 - Want to refresh or validate existing ontology/wiki outputs?
@@ -88,16 +84,17 @@ Use this practical chooser:
 Most users should begin with:
 
 1. `llm-wiki-bootstrap`
-2. repeated `llm-wiki-ontology-ingest`
+2. repeated `llm-wiki-loop`
 
-Treat the other skills as later-stage refinement or optional extension layers.
+Ontology integrity is part of the wiki loop. The former standalone ontology and
+graph skills are archived rather than exposed as parallel user workflows.
 
 ## If you are already operating a DocTology repo
 
 1. Read `AGENTS.md` first.
 2. Put new sources into `raw/inbox/`.
 3. Run `python scripts/llm_full_ingest.py raw/inbox/source.md --apply` when configured helper LLM ingest is available.
-4. Use `llm-wiki-ontology-ingest` or direct agent-maintained ingest when the source needs extra review or repair.
+4. Use `llm-wiki-loop` when the source needs ontology-aware synthesis, review, repair, or certification.
 5. Review `git diff`, then run lint/status checks.
 6. Use `ontology-pipeline-operator` when existing outputs need refresh or validation.
 
@@ -124,36 +121,13 @@ The flow is simple:
 
 - run the wiki bootstrap
 - put documents into the generated `raw/inbox/`
-- run `llm-wiki-ontology-ingest` when you want source pages plus ontology-backed provenance
+- run `llm-wiki-loop` to grow source pages, ontology-backed provenance, and affected wiki pages through one gated workflow
 - ask the agent to answer from the wiki map first, then relevant page bodies and source citations
 - let durable answers update `wiki/analyses/` and, when appropriate, affected concept/entity/person/project pages
 
 The first step is always **wiki-first**.
 
-### 2) Do you want stronger ontology structure under the wiki?
-
-Use `lightweight-ontology-core`.
-
-This stage is for:
-
-- entities
-- claims
-- evidence links
-- segments
-- relation vocabularies
-- contradiction or supersession handling
-
-The ontology layer should support the wiki. It should not replace the wiki as the human-facing reasoning surface.
-
-### 3) Do you want graph-style neighborhood exploration?
-
-Use `lg-ontology`.
-
-This stage is optional. It helps with graph projection, multi-hop inspection, and neighborhood/path exploration, while keeping canonical truth in JSONL.
-
-Do not treat graph projection as canonical truth.
-
-### 4) Do you want project-specific repo memory instead of a personal LLM Wiki?
+### 2) Do you want project-specific repo memory instead of a personal LLM Wiki?
 
 Use `repo-docs-intelligence-bootstrap`.
 
@@ -184,16 +158,15 @@ The canonical repo-local skillset lives under `.agents/skills/`. Installed copie
 
 - `.agents/skills/llm-wiki-bootstrap`
   - start an Obsidian-first LLM Wiki
-- `.agents/skills/llm-wiki-ontology-ingest`
-  - ingest inbox documents into an ontology-backed wiki
-- `.agents/skills/lightweight-ontology-core`
-  - refine canonical ontology truth beneath the wiki
-- `.agents/skills/lg-ontology`
-  - extend into ontology graph / neighborhood exploration
+- `.agents/skills/llm-wiki-loop`
+  - grow and certify raw sources, canonical ontology, and human-facing wiki pages through one loop
 - `.agents/skills/repo-docs-intelligence-bootstrap`
   - bootstrap project-specific memory / repo intelligence
 - `.agents/skills/ontology-pipeline-operator`
   - refresh existing ontology/wiki artifacts and repeated maintenance flows
+
+Retired standalone ontology and graph skill packages are preserved under
+`archive/skills/`; they are not active user-facing skills.
 
 ## Operating model
 
@@ -339,9 +312,9 @@ Keep wiki/ as the human-facing synthesis surface.
 Example:
 
 ```text
-Use llm-wiki-ontology-ingest.
+Use llm-wiki-loop.
 Follow the repo-local AGENTS.md.
 Process sources from raw/inbox.
-Update source pages, affected concept/project pages, and JSONL provenance when useful.
-Refresh wiki/_meta/index.md and wiki/_meta/log.md.
+Update canonical JSONL and affected wiki pages when the selected profile supports them.
+Run the source or batch gate and report the final completion posture.
 ```

@@ -429,6 +429,8 @@ If unsure whether something belongs in the wiki, prefer asking:
 
 Source ingest must use `scripts/wiki_workflow.py`. Start an INGEST run before semantic work, record the fixed stages in order, and finalize only after structural validation and a final review bound to the latest mutation fingerprint.
 
+`scripts/pipeline_check.py` must report `ontology_integrity: not_applicable` for this wiki-only profile.
+
 Large-source work must use `scripts/wiki_batch.py`: freeze the source manifest, stage worker drafts under `state/wiki_batches/`, let exactly one writer apply canonical changes, run `scripts/pipeline_check.py --strict --batch ...`, and certify representative questions against the resulting corpus fingerprint.
 
 Missing or stale stages keep the run active. Pending sources, unobserved canonical mutations, writer conflicts, stale question receipts, or stale corpus fingerprints block completion. Repair them or report the work as partial/pending; never describe a blocked gate as complete.
@@ -585,7 +587,7 @@ When the user asks a question:
 ## Ontology-Aware Ingest And Query Defaults
 
 - New source material enters through `raw/inbox/`.
-- Repeated source processing should prefer an ontology-backed ingest skill over ad hoc manual steps.
+- Repeated source processing should prefer `llm-wiki-loop` over ad hoc manual steps.
 - Direct ontology-core operation is reserved for tuning, debugging, or operator workflows.
 - Important answers should still land in `wiki/analyses/` even when the ontology layer did most of the structured work.
 
@@ -633,6 +635,8 @@ When possible, fix issues directly and record the pass in the log.
 ## Procedure And Batch Completion Gate
 
 Source ingest must use `scripts/wiki_workflow.py`. Start an INGEST run before semantic work, record the fixed stages in order, and finalize only after structural validation and a final review bound to the latest mutation fingerprint.
+
+`scripts/pipeline_check.py` must report `ontology_integrity: ok` against the current canonical JSONL before this ontology-capable profile can complete.
 
 Large-source work must use `scripts/wiki_batch.py`: freeze the source manifest, stage worker drafts under `state/wiki_batches/`, let exactly one writer apply canonical changes, run `scripts/pipeline_check.py --strict --batch ...`, and certify representative questions against the resulting corpus fingerprint.
 
@@ -775,6 +779,8 @@ Before substantial work:
 ## Procedure And Batch Completion Gate
 
 Source ingest must use `scripts/wiki_workflow.py`. Start an INGEST run before semantic work, record the fixed stages in order, and finalize only after structural validation and a final review bound to the latest mutation fingerprint.
+
+`scripts/pipeline_check.py` must report `ontology_integrity: ok` against the current canonical JSONL before this ontology-capable profile can complete.
 
 Large-source work must use `scripts/wiki_batch.py`: freeze the source manifest, stage worker drafts under `state/wiki_batches/`, let exactly one writer apply canonical changes, run `scripts/pipeline_check.py --strict --batch ...`, and certify representative questions against the resulting corpus fingerprint.
 
@@ -961,11 +967,12 @@ It does not perform ontology-backed ingest by itself.
 
 ### 5. Run Ontology-Backed Ingest
 
-If you install `llm-wiki-ontology-ingest` later, use that skill after source registration so the repo can:
+Use `llm-wiki-loop` after source registration so the repo can:
 
 - update `warehouse/jsonl/...`
 - refresh affected wiki pages
 - keep provenance-aware structured truth aligned with human-facing synthesis
+- run ontology-integrity, source-procedure, and corpus-certification gates
 
 ### 6. Rebuild SQLite Or Refresh Wiki Analytics DuckDB
 
@@ -1135,7 +1142,7 @@ This does three things:
 
 This is source registration only.
 It does not auto-summarize the source or perform ontology-backed ingest.
-That is deliberate: the LLM or a higher-level ingest skill should read the source and write the synthesis with context.
+That is deliberate: the LLM through `llm-wiki-loop` should read the source and write the synthesis with context.
 
 ### 5. Ask Me To Maintain The Wiki
 
@@ -1155,7 +1162,7 @@ The operating rules I should follow are in `AGENTS.md`.
 
 1. Put a source into `raw/inbox/`
 2. Register it with the CLI
-3. Ask me or an ontology-backed ingest skill to process it into the wiki
+3. Ask me to use `llm-wiki-loop` to process it into the wiki
 4. Review the changed pages in Obsidian
 5. Move the raw file into `raw/processed/` when you are happy
 
@@ -1163,7 +1170,7 @@ The operating rules I should follow are in `AGENTS.md`.
 
 1. Put many files into `raw/inbox/`
 2. Register each source with the CLI
-3. Ask me or an ontology-backed ingest skill to process them one by one
+3. Ask me to use `llm-wiki-loop` to process them through the batch workflow
 4. Ask me to run `lint` and clean up gaps afterward
 
 The completion path is stricter than lint: use `wiki_batch.py plan`, source procedure runs, staged drafts, one writer `apply`, `pipeline_check.py --strict --batch`, representative-question receipts, and `wiki_batch.py certify`.
@@ -1406,7 +1413,7 @@ def actions_yaml() -> str:
       - wiki/_meta/index.md
       - wiki/_meta/log.md
     notes:
-      - This is the intended repeated user-facing ingest workflow once the ontology-backed ingest skill exists.
+      - This is the intended repeated user-facing workflow driven by `llm-wiki-loop`.
   - id: answer_query
     description: Answer using wiki pages first, with ontology-backed verification when provenance or contradictions matter.
     inputs:

@@ -1,6 +1,6 @@
 # Closed Ingest Pipeline
 
-Updated: 2026-05-08
+Updated: 2026-08-25
 
 ## Purpose
 
@@ -11,14 +11,19 @@ registration.
 creates or updates the source page stub and meta surfaces, but it is not the
 whole ontology-backed ingest loop.
 
+The user-facing entrypoint for the complete workflow is `llm-wiki-loop`. It
+selects the repository's available execution lane and drives the existing
+procedure and batch runtime; it does not depend on a second ontology skill.
+
 A full ingest should close the artifact lifecycle:
 
 1. register the source identity
 2. append proposed JSONL records when ontology-backed ingest applies
 3. project source-backed updates into the human-facing wiki
 4. refresh meta pages
-5. run structural validation
-6. report what changed, what was skipped, and what remains uncertain
+5. run profile-aware ontology integrity and structural validation
+6. bind final review to the latest mutation state
+7. report what changed, what was skipped, and what remains uncertain
 
 The current configured automation path is:
 
@@ -195,6 +200,12 @@ make that state explicit.
 Derived edges may be materialized from canonical records, but the projection is
 not the authority. When a projection conflicts with canonical JSONL, canonical
 JSONL wins.
+
+For ontology-capable profiles, `pipeline_check.py` must emit a passing
+`ontology_integrity` check. Malformed registries, broken references, invalid
+claim lifecycle pairs, accepted claims without human review/evidence, or
+derived edges sourced from non-accepted claims block completion. Wiki-only
+profiles report this check as `not_applicable`.
 
 ## Reporting contract
 

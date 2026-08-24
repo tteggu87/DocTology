@@ -16,8 +16,8 @@ That means:
 
 - `.agents/skills/repo-docs-intelligence-bootstrap`
   - use for repository-level docs and intelligence alignment
-- `.agents/skills/llm-wiki-ontology-ingest`
-  - use when processing new sources into canonical registries plus wiki pages
+- `.agents/skills/llm-wiki-loop`
+  - use for source planning, ontology-aware synthesis, wiki growth, repair, and source/corpus certification
 - `.agents/skills/ontology-pipeline-operator`
   - use when refreshing existing ontology artifacts and repeated maintenance flows
 
@@ -34,9 +34,9 @@ checked-in skill surface for this repository.
 - `scripts/workbench_api.py` is the compatibility shell for the local workbench adapter
 - reusable skills should align to these live paths instead of inventing new ones
 
-## Closed ingest skill contract
+## Closed wiki loop contract
 
-When a skill processes a new source for this repository, it should close the
+When the wiki loop processes a new source for this repository, it should close the
 artifact lifecycle instead of stopping at registration:
 
 1. register or update the source page
@@ -54,6 +54,11 @@ truth.
 Automatic source processing must not promote proposed records to accepted
 canonical truth. Accepted claim/entity/evidence promotion requires a separate
 review gate with explicit metadata.
+
+The former `lightweight-ontology-core` and `lg-ontology` packages are preserved
+under `archive/skills/` and are no longer active workflow choices. Minimum
+ontology lifecycle and integrity rules now live inside `llm-wiki-loop`; graph
+projection is outside the default product flow.
 
 ## What skills should not do here
 

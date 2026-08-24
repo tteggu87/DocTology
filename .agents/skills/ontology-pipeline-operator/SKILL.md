@@ -1,6 +1,6 @@
 ---
 name: ontology-pipeline-operator
-description: Operate and maintain a repository that already uses the DocTology stack. Use this skill whenever the user asks to refresh ontology artifacts, rebuild reports, compare raw vs jsonl quality, check graph projection regressions, sync CURRENT_STATE or IMPACT docs, refresh ontology-backed LLM Wiki maintenance paths, or add a single-entry pipeline on top of existing `repo-docs-intelligence-bootstrap`, `lightweight-ontology-core`, `lg-ontology`, or `llm-wiki-ontology-ingest` outputs. Prefer this skill when the repo already has canonical JSONL, repeated ingest or refresh workflows, and multiple scripts that operators are manually running in sequence.
+description: Operate and maintain a repository that already uses the DocTology stack. Use when refreshing canonical JSONL, wiki projections, reports, graph artifacts, current-state docs, or validators, or when consolidating repeated maintenance commands after `llm-wiki-loop` or repo-docs bootstrap has already produced a working repository. Do not use for new source growth that belongs in the wiki loop.
 ---
 
 # Ontology Pipeline Operator
@@ -9,8 +9,8 @@ Use this skill after a repository already has a DocTology-style structure.
 This skill is for operating, refreshing, and regression-checking that structure, not for inventing the ontology from scratch.
 It may operate either:
 
-- a repo-docs/core/lg style repository
-- an Obsidian-first LLM Wiki repository that already uses `llm-wiki-ontology-ingest`
+- a repository with existing canonical JSONL, reports, or graph projections
+- an Obsidian-first LLM Wiki repository that already uses `llm-wiki-loop`
 
 ## Use This Skill For
 
@@ -26,8 +26,8 @@ It may operate either:
 ## Do Not Use This Skill For
 
 - greenfield repo bootstrap with no ontology layer yet
-- replacing `repo-docs-intelligence-bootstrap`, `lightweight-ontology-core`, or `lg-ontology`
-- replacing `llm-wiki-bootstrap` or `llm-wiki-ontology-ingest`
+- new source growth that belongs in `llm-wiki-loop`
+- replacing `repo-docs-intelligence-bootstrap` or `llm-wiki-bootstrap`
 - turning YAML into a full runtime executor
 - promoting graph projection artifacts to canonical truth
 - treating source-registration-only CLI commands as if they already perform full ontology-backed ingest
@@ -83,7 +83,7 @@ Use the repo's existing extraction script or entrypoint first.
 ### 2. Rebuild wiki projection when applicable
 
 If the repo is an LLM Wiki, run the existing ingest adapter or projection step after canonical outputs update.
-Prefer strengthening the repo's existing `llm-wiki-ontology-ingest` path over inventing a parallel wiki exporter.
+Prefer strengthening the repo's existing `llm-wiki-loop` path over inventing a parallel wiki exporter.
 
 ### 3. Rebuild derived graph artifacts
 

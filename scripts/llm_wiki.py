@@ -277,7 +277,7 @@ def ingest_source(raw_path_str: str, title: str | None) -> int:
     rebuild_index()
     print("Source registration complete.")
     print("Full LLM synthesis or ontology-backed ingest is still pending.")
-    print("Next: use agent-guided ingest or the llm-wiki-ontology-ingest skill to complete the closed ingest pipeline.")
+    print("Next: use agent-guided work or the llm-wiki-loop skill to complete the gated wiki growth loop.")
     return 0
 
 

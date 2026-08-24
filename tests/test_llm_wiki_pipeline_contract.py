@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP_PATH = ROOT / ".agents" / "skills" / "llm-wiki-bootstrap" / "scripts" / "bootstrap_llm_wiki.py"
 ROOT_LLM_WIKI_SCRIPT = ROOT / "scripts" / "llm_wiki.py"
+WIKI_LOOP_SKILL = ".agents/skills/llm-wiki-loop/SKILL.md"
 
 
 def read_repo_text(relative_path: str) -> str:
@@ -55,57 +56,56 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
         self.assertIn("list every page read in traversal order", text)
         self.assertIn("semantic fallback that changes the judgment owner is not", text)
 
-    def test_ingest_skill_has_closed_contract_and_report_format(self) -> None:
-        text = read_repo_text(".agents/skills/llm-wiki-ontology-ingest/SKILL.md")
-        self.assertIn("## Closed Pipeline Contract", text)
-        self.assertIn("This pipeline closes the lifecycle, not semantic judgment.", text)
-        self.assertIn("## Completion Report", text)
-        self.assertIn("Proposed JSONL records emitted, appended, and skipped_existing", text)
-        self.assertIn("do not report the result as completed ontology-backed ingest", text)
+    def test_wiki_loop_is_the_single_active_source_growth_skill(self) -> None:
+        text = read_repo_text(WIKI_LOOP_SKILL)
+        self.assertIn("name: llm-wiki-loop", text)
+        self.assertIn("single public workflow", text)
         self.assertIn("Semantic no-fallback rule", text)
+        self.assertIn("## Completion Posture", text)
+        self.assertFalse((ROOT / ".agents/skills/llm-wiki-ontology-ingest").exists())
+        self.assertFalse((ROOT / ".agents/skills/lightweight-ontology-core").exists())
+        self.assertFalse((ROOT / ".agents/skills/lg-ontology").exists())
+        self.assertTrue((ROOT / "archive/skills/lightweight-ontology-core/SKILL.md").exists())
+        self.assertTrue((ROOT / "archive/skills/lg-ontology/SKILL.md").exists())
 
-    def test_ingest_skill_is_a_capability_aware_operator(self) -> None:
-        text = read_repo_text(".agents/skills/llm-wiki-ontology-ingest/SKILL.md")
-        self.assertIn("workspace contracts and runtime files", text)
-        self.assertIn("this skill inspects those capabilities", text)
-        self.assertIn("owns reusable ontology truth and provenance conventions", text)
+    def test_wiki_loop_is_capability_aware_and_self_contained(self) -> None:
+        text = read_repo_text(WIKI_LOOP_SKILL)
+        ontology_contract = read_repo_text(".agents/skills/llm-wiki-loop/references/ontology-contract.md")
+        self.assertIn("The target repository owns its contracts and runtime", text)
         self.assertIn("**`llm-first-ontology`**", text)
         self.assertIn("**`wiki-plus-ontology`**", text)
         self.assertIn("**`wiki-only`**", text)
-        self.assertIn("Do not classify a lane from source filenames, keywords", text)
-        self.assertIn("select only commands whose files exist", text)
-        self.assertIn("do not assume `scripts/llm_full_ingest.py`", text)
-        self.assertNotIn(
-            "run `python scripts/llm_full_ingest.py raw/inbox/source.md --apply`",
-            text,
-        )
+        self.assertIn("Select only commands whose files exist", text)
+        self.assertIn("references/ontology-contract.md", text)
+        self.assertIn("accepted claim requires", ontology_contract)
+        self.assertIn("certified derived edges reference accepted claims", ontology_contract)
+        self.assertNotIn("lightweight-ontology-core", text)
+        self.assertNotIn("lg-ontology", text)
 
-    def test_ingest_skill_reuses_repo_owned_procedure_and_batch_gates(self) -> None:
-        text = read_repo_text(".agents/skills/llm-wiki-ontology-ingest/SKILL.md")
+    def test_wiki_loop_reuses_repo_owned_procedure_and_batch_gates(self) -> None:
+        text = read_repo_text(WIKI_LOOP_SKILL)
         self.assertIn("## Completion Posture", text)
-        self.assertIn("Reuse `state/wiki_runs/`", text)
+        self.assertIn("`state/wiki_runs/`", text)
         self.assertIn("`state/wiki_batches/`", text)
-        self.assertIn("start a run with `scripts/wiki_workflow.py`", text)
-        self.assertIn("Exactly one writer", text)
+        self.assertIn("start `scripts/wiki_workflow.py`", text)
+        self.assertIn("exactly one", text)
         self.assertIn("`scripts/pipeline_check.py --strict --batch <manifest>`", text)
         self.assertIn("representative-question receipts", text)
-        self.assertIn("final corpus fingerprint", text)
-        self.assertIn("bounded to three attempts per stable blocker", text)
+        self.assertIn("final corpus fingerprint", text.lower())
+        self.assertIn("three attempts per stable blocker", text)
+        self.assertIn("`ontology_integrity`", text)
         for posture in ("`ready`", "`partial`", "`not_ready`", "`blocked`"):
             self.assertIn(posture, text)
 
-    def test_ingest_skill_improvement_loop_is_proposal_only(self) -> None:
-        text = read_repo_text(".agents/skills/llm-wiki-ontology-ingest/SKILL.md")
-        self.assertIn("### 9. Learn By Proposal, Never By Self-Modification", text)
-        self.assertIn("at least three independent runs", text)
-        self.assertIn("same procedure contract digest", text)
-        self.assertIn("repeated retries inside one run count once", text)
-        self.assertIn("symptom stated without raw/private source excerpts", text)
-        self.assertIn("expected tests, scope, risk, and `status: proposed`", text)
-        self.assertIn("A human must review and approve", text)
-        self.assertIn("Do not add automatic canary deployment", text)
-        self.assertIn("runtime self-modification", text)
-        self.assertIn("automatic truth", text)
+    def test_wiki_loop_improvement_is_proposal_only(self) -> None:
+        text = read_repo_text(WIKI_LOOP_SKILL)
+        self.assertIn("### 9. Learn By Proposal Only", text)
+        self.assertIn("at least three independent", text)
+        self.assertIn("Retries inside one run count once", text)
+        self.assertIn("Human review is", text)
+        self.assertIn("Do not add automatic canaries", text)
+        self.assertIn("self-modification", text)
+        self.assertIn("truth promotion", text)
 
     def test_operator_skill_does_not_accept_missing_validation_as_success(self) -> None:
         text = read_repo_text(".agents/skills/ontology-pipeline-operator/SKILL.md")
@@ -130,12 +130,15 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
             self.assertIn("exactly one writer", contract)
 
         self.assertIn("## Strict LLM-First Semantic Rule", strict_agents)
+        self.assertIn("`ontology_integrity: ok`", strict_agents)
         self.assertIn("Deterministic code must not generate semantic answer drafts", strict_agents)
         self.assertIn("## Wiki Page Roles And Promotion Thresholds", strict_agents)
         self.assertIn("## Source Registration And Semantic Promotion Workflow", strict_agents)
         for contract in (ontology_agents, wiki_only_agents):
             self.assertIn("## Page Creation And Promotion Thresholds", contract)
             self.assertIn("## Source Ingest Workflow", contract)
+        self.assertIn("`ontology_integrity: ok`", ontology_agents)
+        self.assertIn("`ontology_integrity: not_applicable`", wiki_only_agents)
 
     def test_bootstrap_llm_wiki_script_is_self_contained(self) -> None:
         generated_script = self.bootstrap.llm_wiki_py()
