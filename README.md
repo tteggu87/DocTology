@@ -89,6 +89,35 @@ Most users should begin with:
 Ontology integrity is part of the wiki loop. The former standalone ontology and
 graph skills are archived rather than exposed as parallel user workflows.
 
+## One loop, two scales
+
+`llm-wiki-loop` keeps the user-facing workflow the same whether you are adding
+one document or building from a large raw corpus.
+
+- **One source or a small update:** freeze the source scope, open a procedure
+  run before semantic writes, update canonical truth and wiki pages, then bind
+  validation and final review to the latest mutation.
+- **A large corpus:** freeze a batch manifest, keep parallel work in drafts,
+  allow one writer to update canonical files, then require strict pipeline
+  validation, representative-question receipts, and a certified corpus
+  fingerprint.
+
+In normal use, you do not have to operate each script by hand. Give the agent
+the source scope and ask it to use `llm-wiki-loop`; the skill selects the
+available repo-local lane, presents the plan, runs the gates, makes bounded
+repairs, and reports `ready`, `partial`, `not_ready`, or `blocked`.
+
+```text
+Use llm-wiki-loop to ingest raw/inbox/interview.md and update the wiki.
+Use llm-wiki-loop to build and certify the sources under raw/inbox/ as a batch.
+```
+
+The gates certify process evidence: planned sources were handled, canonical
+writes came through one writer, validation and review are fresh, and the tested
+corpus has not changed. They do not replace LLM judgment or human review of
+meaning. A failed semantic step stays incomplete instead of being hidden by a
+keyword, YAML, retrieval, or graph fallback.
+
 ## If you are already operating a DocTology repo
 
 1. Read `AGENTS.md` first.

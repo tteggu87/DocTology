@@ -89,6 +89,34 @@ DocTology의 기본 약속은 다음입니다.
 Ontology integrity는 wiki loop 안에서 처리합니다. 기존 ontology core와
 graph skill은 병렬 사용자 workflow로 노출하지 않고 archive에 보존합니다.
 
+## 하나의 루프, 두 가지 규모
+
+`llm-wiki-loop`는 문서 하나를 추가할 때와 대량 raw corpus를 만들 때의
+사용자 진입점을 하나로 유지합니다.
+
+- **단일 source 또는 작은 갱신:** source 범위를 고정하고 semantic write 전에
+  procedure run을 시작합니다. canonical truth와 wiki page를 갱신한 뒤, 최신
+  mutation에 validation과 final review를 묶습니다.
+- **대량 corpus:** batch manifest를 고정하고 병렬 작업은 draft에만 둡니다.
+  단일 writer만 canonical file을 수정하며, strict pipeline validation,
+  대표 질문 receipt, corpus fingerprint 인증까지 통과해야 합니다.
+
+평소에는 사용자가 각 script를 직접 조작할 필요가 없습니다. Agent에게 source
+범위와 함께 `llm-wiki-loop` 사용을 요청하면, skill이 repo-local 실행 경로를
+선택하고 계획을 먼저 보여준 뒤 gate 실행, 제한된 repair, 최종 상태 보고까지
+진행합니다. 최종 상태는 `ready`, `partial`, `not_ready`, `blocked` 중 하나입니다.
+
+```text
+llm-wiki-loop로 raw/inbox/interview.md를 ingest하고 wiki를 갱신해줘.
+llm-wiki-loop로 raw/inbox/ 아래 source를 batch로 구축하고 인증해줘.
+```
+
+Gate가 인증하는 것은 절차의 증거입니다. 계획한 source가 처리됐는지, canonical
+write가 단일 writer를 거쳤는지, validation과 review가 최신인지, 질문으로
+검증한 corpus가 이후 바뀌지 않았는지를 확인합니다. 의미 판단 자체를 script나
+gate가 대신하지는 않습니다. Semantic step이 실패하면 keyword, YAML,
+retrieval, graph fallback으로 감추지 않고 미완료 상태로 남깁니다.
+
 ## 이미 DocTology repo를 운영 중이라면
 
 1. 먼저 `AGENTS.md`를 읽습니다.
