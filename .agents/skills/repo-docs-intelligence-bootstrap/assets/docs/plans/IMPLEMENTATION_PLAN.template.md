@@ -1,6 +1,7 @@
 ---
 title: Implementation plan title
 type: implementation-plan
+lifecycle_schema: repo-docs-v1
 plan_id: PLAN-XXXX
 status: active
 last_updated: YYYY-MM-DD

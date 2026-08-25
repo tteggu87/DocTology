@@ -1,6 +1,7 @@
 ---
 title: Decision summary title
 type: decision
+lifecycle_schema: repo-docs-v1
 status: active
 source_of_truth: false
 last_updated: YYYY-MM-DD

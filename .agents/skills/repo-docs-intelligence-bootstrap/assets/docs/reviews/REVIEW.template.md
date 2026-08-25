@@ -1,6 +1,7 @@
 ---
 title: Review title
 type: review
+lifecycle_schema: repo-docs-v1
 review_id: REVIEW-XXXX
 status: open
 date: YYYY-MM-DD

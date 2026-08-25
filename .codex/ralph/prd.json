@@ -65,7 +65,7 @@
       "title": "Certify mature and minimal repository compatibility",
       "description": "As a skill maintainer, I want final dogfood evidence that the evolved profile fits DuckCrab-like mature repositories without burdening minimal or legacy repositories.",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Read-only DuckCrab dogfood inventories and validates its canonical docs, flat ADRs, plans, evidence, reviews, repo-map, and wiki decisions without requiring relocation or domain-specific vocabulary.",
         "Minimal and transitional fixtures prove optional-surface absence, existing manifest keys, flat ADR paths, and legacy wikilinks remain supported.",

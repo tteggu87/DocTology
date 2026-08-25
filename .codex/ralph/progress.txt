@@ -118,3 +118,22 @@ Started: 2026-08-25T00:00:00+09:00
   - Independent read-only review after the final doctor/test repair -> pass: Critical 0, Important 0, Minor 0; CLEAN.
 - Learnings for future iterations: derived document search can remain dependency-light and disposable when status is cheap, doctor recomputes exact source-derived rows, and code navigation stays with code-aware tools.
 ---
+## 2026-08-25T16:27:12+09:00 - US-005
+- Certified mature and minimal compatibility with explicit `repo-docs-v1` lifecycle promotion, compatibility-safe legacy inventory validation, actual Markdown-link checking, and a repository-wide content-bound read-only dogfood runner.
+- DuckCrab read-only dogfood validated 7 canonical docs, 7 flat ADRs, 17 plans, 69 evidence docs, 25 reviews, 5 repo-map docs, and 34 wiki decisions; no required surface or compatibility issue was missing, and all repository content fingerprints remained unchanged.
+- Kept 34 real `wiki.broken_markdown_link` findings as an explicitly allowed target-drift caution; any unlisted validator error still fails dogfood. Recorded the 3 repo-map entrypoint warnings and limited changed-file warning without modifying DuckCrab.
+- Added the final impact report distinguishing absorbed patterns, excluded domain-specific behavior, checked-but-unchanged surfaces, remaining cautions, and exact checks. Synchronized the repository skill to the installed global skill at digest `d1586d84c765b899468b238d390f73b2b897b77078a7934d9167cf2073356683`.
+- Files changed: repo-docs `SKILL.md`, five lifecycle templates, validator, read-only dogfood runner, focused validator/dogfood tests, final impact report, `.codex/ralph/prd.json`, and `.codex/ralph/progress.txt`.
+- Quality checks run and result:
+  - `python3 -m pytest -q tests/test_repo_docs_dogfood.py tests/test_repo_docs_intelligence_validator.py tests/test_repo_docs_retrieval.py` -> pass: 46 tests.
+  - `python3 -m pytest -q` -> pass: 194 tests and 26 subtests.
+  - `python3 -S tests/test_repo_docs_intelligence_validator.py -q && python3 -S tests/test_repo_docs_dogfood.py -q && python3 -S tests/test_repo_docs_retrieval.py -q` -> pass: 34 validator, 4 dogfood, and 8 retrieval tests.
+  - `/Users/hoyasung007hotmail.com/.local/bin/ruff check .agents/skills/repo-docs-intelligence-bootstrap tests/test_repo_docs_intelligence_validator.py tests/test_repo_docs_dogfood.py tests/test_repo_docs_retrieval.py` -> pass: all checks passed.
+  - local and installed-global `quick_validate.py` -> pass: both skill copies are valid.
+  - `python3 -m py_compile ...` -> pass for validator, dogfood runner, and focused tests.
+  - mature eval fixture validation with the normal interpreter -> pass: errors 0, advisory changed-files warning 1. An earlier `python -S` attempt against the YAML-bearing fixture failed explicitly because PyYAML is intentionally unavailable; YAML-free dependency-light suites passed separately.
+  - DuckCrab content-bound read-only dogfood with all seven required surfaces -> pass with cautions: surface issues 0, `read_only=true`, only the explicitly allowed 34 broken-link errors, plus 4 reported warnings.
+  - `git diff --check` and staged diff check -> pass: no whitespace errors.
+  - Independent final read-only review after three rounds -> pass: Critical 0, Important 0; ready to merge.
+- Learnings for future iterations: compatibility certification must separate strict new-contract validation, legacy structural checks, and explicitly accepted target drift; read-only claims need content-bound whole-repository evidence rather than documentation-only fingerprints.
+---

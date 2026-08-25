@@ -114,6 +114,13 @@ Use the bundled lifecycle templates only when a promotion condition is met:
 
 Adapt identifiers and relative links to the target repository. ADRs are canonical decision records. Plans are change-control aids. Evidence records reproducible observations without copying large logs. Reviews record scoped findings. Wiki decisions must keep `source_of_truth: false`, resolve their canonical decision source, and clearly label mirrored implementation state as non-canonical.
 
+`lifecycle_schema: repo-docs-v1` marks artifacts created from these templates. Treat
+older flat ADRs and pre-existing plan, evidence, review, or wiki-decision collections
+without that marker as compatible legacy inventory; do not force relocation, field
+renaming, or mass frontmatter migration. Validate marked artifacts strictly, and add
+the marker plus required portable fields when a legacy artifact is materially
+promoted into this lifecycle rather than merely read or indexed.
+
 The validator activates lifecycle checks only for document roles that actually exist. It checks unique ADR identities, decision and implementation status vocabularies, resolvable supersession/plan/evidence links, implementation plus verification support for `implemented` claims, non-canonical wiki decisions with canonical sources, portal visibility for activated indexes, and stale plan next actions. Repositories without these optional roles remain valid without creating empty directories.
 
 ## Optional Derived Repo Docs Retrieval
@@ -693,6 +700,7 @@ Use these bundled files when useful:
 
 - `scripts/validate_repo_docs_intelligence.py`
 - `scripts/repo_docs_retrieval.py` (optional derived Markdown retrieval only)
+- `scripts/repo_docs_dogfood.py` (read-only compatibility inventory plus validator run)
 
 Adapt the templates to the repo. Do not paste them blindly.
 Use the validator as a guardrail, not as a substitute for impact analysis.

@@ -96,6 +96,7 @@ IMPLEMENTATION_STATUSES: Final = {
     "partial",
 }
 PLAN_STATUSES: Final = {"active", "completed", "superseded", "deferred"}
+LIFECYCLE_SCHEMA: Final = "repo-docs-v1"
 
 
 class ValidationReport:
@@ -649,15 +650,28 @@ def validate_doc_metadata(path: Path, report: ValidationReport) -> None:
 def validate_markdown_refs(
     path: Path, repo_root: Path, report: ValidationReport
 ) -> None:
-    for ref in scan_markdown_refs(path.read_text(encoding="utf-8")):
-        if ":" in ref and not ref.startswith(
-            ("docs/", "intelligence/", "scripts/", "AGENTS.md")
-        ):
+    """Validate navigational Markdown links, not path-shaped inline code."""
+    resolved_root = repo_root.resolve()
+    for ref in scan_local_markdown_links(path.read_text(encoding="utf-8")):
+        candidate = (
+            resolved_root / ref.lstrip("/")
+            if ref.startswith("/")
+            else path.parent / ref
+        ).resolve()
+        try:
+            candidate.relative_to(resolved_root)
+        except ValueError:
+            report.add_error(
+                "docs.reference_outside_repo",
+                f"Local Markdown link `{ref}` resolves outside the repository.",
+                path,
+            )
             continue
-        if not (repo_root / ref).exists():
+        if not candidate.exists():
             report.add_error(
                 "docs.broken_reference",
-                f"Referenced path `{ref}` does not exist.",
+                f"Local Markdown link `{ref}` does not resolve from "
+                f"`{path.relative_to(repo_root)}`.",
                 path,
             )
 
@@ -1068,34 +1082,27 @@ def collect_lifecycle_documents(
                 continue
             metadata = parse_lifecycle_metadata(path.read_text(encoding="utf-8"))
             document_type = normalize_key(str(metadata.get("type", "")))
+            lifecycle_schema = normalize_key(str(metadata.get("lifecycle_schema", "")))
             directory_role = relative_parts[0].lower() if len(relative_parts) > 1 else ""
             is_index = path.name.lower() in {"readme.md", "index.md"}
-            flat_adr = len(relative_parts) == 1 and bool(
-                re.match(r"^ADR(?:[-_]|\d)", path.stem.upper())
-            )
             if (
-                metadata.get("decision_id")
-                or document_type == "adr"
-                or flat_adr
+                document_type == "adr"
                 or (directory_role == "adr" and not is_index)
             ):
                 documents["adr"].append((path, metadata))
             elif (
                 metadata.get("plan_id")
                 or document_type == "implementation_plan"
-                or (directory_role == "plans" and not is_index)
             ):
                 documents["plan"].append((path, metadata))
             elif (
                 metadata.get("evidence_id")
-                or document_type == "evidence"
-                or (directory_role == "evidence" and not is_index)
+                or (document_type == "evidence" and lifecycle_schema == LIFECYCLE_SCHEMA)
             ):
                 documents["evidence"].append((path, metadata))
             elif (
                 metadata.get("review_id")
-                or document_type == "review"
-                or (directory_role == "reviews" and not is_index)
+                or (document_type == "review" and lifecycle_schema == LIFECYCLE_SCHEMA)
             ):
                 documents["review"].append((path, metadata))
 
@@ -1104,9 +1111,7 @@ def collect_lifecycle_documents(
         for path in decisions_dir.rglob("*.md"):
             metadata = parse_lifecycle_metadata(path.read_text(encoding="utf-8"))
             document_type = normalize_key(str(metadata.get("type", "")))
-            if path.name.lower() not in {"readme.md", "index.md"} or (
-                metadata.get("canonical_decision") or document_type == "decision"
-            ):
+            if document_type == "decision":
                 documents["wiki_decision"].append((path, metadata))
     return documents
 

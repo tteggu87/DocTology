@@ -290,6 +290,7 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
         adr_text = template_paths["adr"].read_text(encoding="utf-8")
         for field in (
             "source_of_truth: true",
+            "lifecycle_schema: repo-docs-v1",
             "decision_id:",
             "decision_status:",
             "implementation_status:",
@@ -332,6 +333,7 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
         self.assertIn("derived and non-canonical", decision_text)
         self.assertIn("authority order", agents_text)
         self.assertIn("Do not pre-create optional", agents_text)
+        self.assertIn("compatible legacy inventory", skill_text)
 
         lifecycle_section = skill_text.split(
             "## Adaptive Documentation Authority Lifecycle", 1
@@ -535,6 +537,57 @@ implementation_evidence: []
             self.validator.validate_document_lifecycle(root, report)
 
         self.assertEqual(report.errors, [])
+
+    def test_mature_legacy_lifecycle_surfaces_are_inventory_not_implicit_migration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "docs" / "evidence").mkdir(parents=True)
+            (root / "docs" / "reviews").mkdir(parents=True)
+            (root / "wiki" / "decisions").mkdir(parents=True)
+            (root / "docs" / "ADR_LEGACY.md").write_text(
+                "---\nstatus: Accepted\ndecision_id: ADR-LEGACY\n"
+                "decision_status: accepted_with_local_suffix\n---\n# Legacy ADR\n",
+                encoding="utf-8",
+            )
+            (root / "docs" / "evidence" / "legacy.md").write_text(
+                "# Historical evidence\n", encoding="utf-8"
+            )
+            (root / "docs" / "reviews" / "legacy.md").write_text(
+                "# Historical review\n", encoding="utf-8"
+            )
+            (root / "wiki" / "decisions" / "legacy.md").write_text(
+                "---\nsource_of_truth: false\n---\n# Historical decision memory\n",
+                encoding="utf-8",
+            )
+
+            report = self.validator.ValidationReport(root)
+            documents = self.validator.collect_lifecycle_documents(root)
+            self.validator.validate_document_lifecycle(root, report)
+
+        self.assertTrue(all(not values for values in documents.values()))
+        self.assertEqual(report.errors, [])
+
+    def test_current_docs_validate_markdown_links_without_treating_code_as_links(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_doc(root / "docs" / "TARGET.md", "Target")
+            write_doc(
+                root / "docs" / "CURRENT_STATE.md",
+                "Current State",
+                "`application/pdf` and `/api/items` are code-like facts.\n"
+                "[Target](TARGET.md)\n[Missing](MISSING.md)",
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_markdown_refs(
+                root / "docs" / "CURRENT_STATE.md", root, report
+            )
+
+        broken = [
+            issue for issue in report.errors if issue["code"] == "docs.broken_reference"
+        ]
+        self.assertEqual(len(broken), 1)
+        self.assertIn("MISSING.md", broken[0]["message"])
 
     def test_lifecycle_drift_rejects_false_completion_and_stale_next_action(
         self,

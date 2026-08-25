@@ -1,6 +1,7 @@
 ---
 title: Decision title
 type: adr
+lifecycle_schema: repo-docs-v1
 source_of_truth: true
 decision_id: ADR-XXXX
 decision_status: proposed
