@@ -1322,10 +1322,16 @@ Recreates `wiki/_meta/index.md` from the current wiki pages.
 python scripts/llm_wiki.py lint
 ```
 
+Orphan pages are advisory by default. To make them fail the command, run:
+
+```bash
+python scripts/llm_wiki.py lint --strict-orphans
+```
+
 Checks for:
 
 - broken wikilinks
-- orphan pages
+- orphan pages not referenced by another non-meta page (`wiki/_meta/` navigation and self-links do not count)
 - pages without YAML frontmatter
 
 ### Append A Log Entry
@@ -1896,7 +1902,7 @@ def ingest_source(raw_path_str: str, title: str | None) -> int:
     return 0
 
 
-def lint_wiki() -> int:
+def lint_wiki(strict_orphans: bool = False) -> int:
     lookup = page_lookup()
     broken: list[tuple[Path, str]] = []
     orphans: list[Path] = []
@@ -1905,11 +1911,14 @@ def lint_wiki() -> int:
 
     for path in iter_markdown_pages():
         content = read_text(path)
+        rel = path.relative_to(WIKI_DIR)
+        is_meta_page = rel.parts[0] == "_meta"
         if not has_frontmatter(content):
             no_frontmatter.append(path)
         for link in wikilinks(content):
             if link in lookup:
-                inbound[link] += 1
+                if not is_meta_page and lookup[link] != path:
+                    inbound[link] += 1
             else:
                 broken.append((path, link))
 
@@ -1944,7 +1953,7 @@ def lint_wiki() -> int:
             print(f"- {path.relative_to(ROOT)}")
         print("")
 
-    return 1 if broken or no_frontmatter else 0
+    return 1 if broken or no_frontmatter or (strict_orphans and orphans) else 0
 
 
 def status() -> int:
@@ -1989,7 +1998,14 @@ def build_parser() -> argparse.ArgumentParser:
     ingest.add_argument("--title", help="Human-readable title for the source page.")
 
     sub.add_parser("reindex", help="Rebuild wiki/_meta/index.md")
-    sub.add_parser("lint", help="Check for broken links, orphans, and missing frontmatter.")
+    lint_parser = sub.add_parser(
+        "lint", help="Check for broken links, orphans, and missing frontmatter."
+    )
+    lint_parser.add_argument(
+        "--strict-orphans",
+        action="store_true",
+        help="Return nonzero when orphan pages are found; by default they are advisory.",
+    )
     sub.add_parser("status", help="Show counts and basic wiki health metrics.")
 
     log_parser = sub.add_parser("log", help="Append a structured log entry.")
@@ -2015,7 +2031,7 @@ def main() -> int:
         print(f"Rebuilt {out.relative_to(ROOT)}")
         return 0
     if args.command == "lint":
-        return lint_wiki()
+        return lint_wiki(strict_orphans=args.strict_orphans)
     if args.command == "status":
         return status()
     if args.command == "log":

@@ -14,3 +14,5 @@ The canonical management entrypoint is `python3 scripts/manage_skills.py`. `chec
 The repository has no active ontology operator, root ontology pipeline, workbench, canonical corpus, or tracked archive. Optional SQLite in generated wiki vaults is derived retrieval state owned by `llm-wiki-bootstrap`.
 
 Verification uses `python3 -m unittest discover -s tests` and the validator bundled in `repo-docs-intelligence-bootstrap`.
+
+Generated wiki lint treats `_meta` navigation links and self-links as non-semantic for orphan detection. Orphans are advisory unless `lint --strict-orphans` is requested.

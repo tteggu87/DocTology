@@ -9,6 +9,7 @@ superseded_by: N/A
 
 ## Changed
 
+- Corrected generated wiki orphan detection so automatic `_meta` index links and self-links cannot hide disconnected pages; added optional strict failure behavior and regression coverage.
 - Replaced the mixed ontology/wiki/workbench repository surface with exactly three self-contained skills under `.agents/skills/`.
 - Added `scripts/manage_skills.py`, focused tests, CI, current Repo Docs, minimal intelligence contracts, and small repository memory.
 - Removed the active ontology operator, root pipeline copies, workbench, tracked archive, and obsolete launchers and tests.
