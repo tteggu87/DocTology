@@ -17,13 +17,13 @@ Start here.
 
 ## Current References
 
-- `docs/CURRENT_STATE.md`
-- `docs/ARCHITECTURE.md`
-- `docs/LAYERS.md`
-- `docs/repo-map/README.md` when present
-- `docs/SKILLS_INTEGRATION.md`
-- `docs/ROADMAP.md`
-- `docs/IMPACT_SUMMARY.md`
+- [Current repository state](CURRENT_STATE.md)
+- [Architecture](ARCHITECTURE.md)
+- [Layer boundaries](LAYERS.md)
+- Add a descriptive link to the repo-map index when it is activated.
+- [Skill integration](SKILLS_INTEGRATION.md)
+- [Roadmap](ROADMAP.md)
+- [Impact summary](IMPACT_SUMMARY.md)
 
 ## Activated Lifecycle Indexes
 

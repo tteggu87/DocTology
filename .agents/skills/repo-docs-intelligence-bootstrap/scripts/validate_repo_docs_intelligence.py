@@ -81,6 +81,21 @@ FINALIZE_RECEIPT_VERSION: Final = 1
 DEFAULT_FINALIZE_RECEIPT: Final = "state/repo_docs_finalize.json"
 PLACEHOLDER_PREFIXES: Final = ("list ", "record ", "describe ", "replace ")
 PLACEHOLDER_VALUES: Final = {"todo", "tbd", "n/a", "na", "placeholder", "replace me"}
+DECISION_STATUSES: Final = {
+    "proposed",
+    "accepted",
+    "implemented",
+    "superseded",
+    "rejected",
+    "deferred",
+}
+IMPLEMENTATION_STATUSES: Final = {
+    "not_started",
+    "in_progress",
+    "verified",
+    "partial",
+}
+PLAN_STATUSES: Final = {"active", "completed", "superseded", "deferred"}
 
 
 class ValidationReport:
@@ -183,6 +198,139 @@ def parse_doc_metadata(text: str) -> dict[str, str]:
         if match:
             metadata[normalize_key(match.group(1))] = match.group(2).strip()
     return metadata
+
+
+def parse_lifecycle_metadata(text: str) -> dict[str, object]:
+    """Parse lifecycle frontmatter without requiring PyYAML."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}
+    frontmatter: list[str] = []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        frontmatter.append(line)
+    else:
+        return {}
+
+    if yaml is not None:
+        try:
+            loaded = yaml.safe_load("\n".join(frontmatter)) or {}
+            if isinstance(loaded, dict):
+                return {normalize_key(str(key)): value for key, value in loaded.items()}
+        except Exception:
+            pass
+
+    def strip_comment(value: str) -> str:
+        quote: str | None = None
+        escaped = False
+        for index, character in enumerate(value):
+            if escaped:
+                escaped = False
+                continue
+            if character == "\\" and quote == '"':
+                escaped = True
+                continue
+            if character in {"'", '"'}:
+                quote = None if quote == character else character if quote is None else quote
+            elif character == "#" and quote is None and (
+                index == 0 or value[index - 1].isspace()
+            ):
+                return value[:index].rstrip()
+        return value.strip()
+
+    def split_inline_list(value: str) -> list[str]:
+        items: list[str] = []
+        start = 0
+        quote: str | None = None
+        for index, character in enumerate(value):
+            if character in {"'", '"'}:
+                quote = None if quote == character else character if quote is None else quote
+            elif character == "," and quote is None:
+                items.append(value[start:index])
+                start = index + 1
+        items.append(value[start:])
+        return [strip_comment(item).strip().strip("\"'") for item in items if strip_comment(item).strip()]
+
+    metadata: dict[str, object] = {}
+    active_list: str | None = None
+    for line in frontmatter:
+        list_item = re.match(r"^\s+-\s+(.+?)\s*$", line)
+        if list_item and active_list is not None:
+            value = strip_comment(list_item.group(1)).strip().strip("\"'")
+            current = metadata.setdefault(active_list, [])
+            if isinstance(current, list):
+                current.append(value)
+            continue
+        match = re.match(r"^([^\s][^:]*):\s*(.*?)\s*$", line)
+        if not match:
+            continue
+        key = normalize_key(match.group(1))
+        raw_value = strip_comment(match.group(2))
+        active_list = None
+        if not raw_value:
+            metadata[key] = []
+            active_list = key
+        elif raw_value.startswith("[") and raw_value.endswith("]"):
+            inner = raw_value[1:-1].strip()
+            metadata[key] = split_inline_list(inner) if inner else []
+        elif raw_value.lower() in {"null", "none", "~"}:
+            metadata[key] = None
+        elif raw_value.lower() in {"true", "false"}:
+            metadata[key] = raw_value.lower() == "true"
+        else:
+            metadata[key] = raw_value.strip("\"'")
+    return metadata
+
+
+def metadata_values(value: object) -> list[str]:
+    if value is None or value is False:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value).strip()
+    if not text or text.lower() in {"null", "none", "n/a", "na", "[]"}:
+        return []
+    return [text]
+
+
+def resolve_lifecycle_reference(
+    repo_root: Path, source_path: Path, raw_reference: str
+) -> Path | None:
+    reference = raw_reference.strip().strip("`")
+    markdown_link = re.fullmatch(r"\[[^]]*]\((.+)\)", reference)
+    if markdown_link:
+        reference = markdown_link.group(1).strip()
+    wikilink = re.fullmatch(r"\[\[([^]|]+)(?:\|[^]]+)?]]", reference)
+    if wikilink:
+        stem = Path(wikilink.group(1)).stem
+        matches = [
+            candidate.resolve()
+            for root_name in ("docs", "wiki")
+            for candidate in (repo_root / root_name).rglob("*.md")
+            if candidate.stem == stem
+        ]
+        return matches[0] if len(matches) == 1 else None
+    if reference.startswith(("http://", "https://", "mailto:")):
+        return None
+    reference = urllib.parse.unquote(reference.split("#", 1)[0].split("?", 1)[0])
+    if not reference:
+        return None
+    candidate = Path(reference)
+    candidates = (
+        [candidate.resolve()]
+        if candidate.is_absolute()
+        else [(source_path.parent / candidate).resolve(), (repo_root / candidate).resolve()]
+    )
+    resolved_root = repo_root.resolve()
+    for resolved in candidates:
+        try:
+            resolved.relative_to(resolved_root)
+        except ValueError:
+            continue
+        if resolved.exists():
+            return resolved
+    return None
 
 
 def scan_markdown_refs(text: str) -> list[str]:
@@ -900,6 +1048,436 @@ def validate_docs(repo_root: Path, report: ValidationReport) -> None:
         validate_archive_banners(archive_dir, report)
     validate_repo_map(repo_root, report)
     validate_registered_entrypoints(repo_root, report)
+
+
+def collect_lifecycle_documents(
+    repo_root: Path,
+) -> dict[str, list[tuple[Path, dict[str, object]]]]:
+    documents: dict[str, list[tuple[Path, dict[str, object]]]] = {
+        "adr": [],
+        "plan": [],
+        "evidence": [],
+        "review": [],
+        "wiki_decision": [],
+    }
+    docs_dir = repo_root / "docs"
+    if docs_dir.exists():
+        for path in docs_dir.rglob("*.md"):
+            relative_parts = path.relative_to(docs_dir).parts
+            if "archive" in relative_parts:
+                continue
+            metadata = parse_lifecycle_metadata(path.read_text(encoding="utf-8"))
+            document_type = normalize_key(str(metadata.get("type", "")))
+            directory_role = relative_parts[0].lower() if len(relative_parts) > 1 else ""
+            is_index = path.name.lower() in {"readme.md", "index.md"}
+            flat_adr = len(relative_parts) == 1 and bool(
+                re.match(r"^ADR(?:[-_]|\d)", path.stem.upper())
+            )
+            if (
+                metadata.get("decision_id")
+                or document_type == "adr"
+                or flat_adr
+                or (directory_role == "adr" and not is_index)
+            ):
+                documents["adr"].append((path, metadata))
+            elif (
+                metadata.get("plan_id")
+                or document_type == "implementation_plan"
+                or (directory_role == "plans" and not is_index)
+            ):
+                documents["plan"].append((path, metadata))
+            elif (
+                metadata.get("evidence_id")
+                or document_type == "evidence"
+                or (directory_role == "evidence" and not is_index)
+            ):
+                documents["evidence"].append((path, metadata))
+            elif (
+                metadata.get("review_id")
+                or document_type == "review"
+                or (directory_role == "reviews" and not is_index)
+            ):
+                documents["review"].append((path, metadata))
+
+    decisions_dir = repo_root / "wiki" / "decisions"
+    if decisions_dir.exists():
+        for path in decisions_dir.rglob("*.md"):
+            metadata = parse_lifecycle_metadata(path.read_text(encoding="utf-8"))
+            document_type = normalize_key(str(metadata.get("type", "")))
+            if path.name.lower() not in {"readme.md", "index.md"} or (
+                metadata.get("canonical_decision") or document_type == "decision"
+            ):
+                documents["wiki_decision"].append((path, metadata))
+    return documents
+
+
+def validate_unique_lifecycle_ids(
+    documents: list[tuple[Path, dict[str, object]]],
+    field: str,
+    kind: str,
+    report: ValidationReport,
+) -> None:
+    observed: dict[str, Path] = {}
+    for path, metadata in documents:
+        values = metadata_values(metadata.get(field))
+        if not values:
+            report.add_error(
+                f"lifecycle.{kind}_id_missing",
+                f"Activated {kind} document is missing `{field}`.",
+                path,
+            )
+            continue
+        identity = values[0]
+        if identity in observed:
+            report.add_error(
+                f"lifecycle.{kind}_id_duplicate",
+                f"Duplicate {kind} identity `{identity}` also appears in "
+                f"`{observed[identity].relative_to(report.repo_root)}`.",
+                path,
+            )
+        else:
+            observed[identity] = path
+
+
+def validate_lifecycle_references(
+    repo_root: Path,
+    source_path: Path,
+    field: str,
+    value: object,
+    report: ValidationReport,
+    *,
+    allowed_targets: set[Path] | None = None,
+) -> list[Path]:
+    resolved: list[Path] = []
+    for reference in metadata_values(value):
+        target = resolve_lifecycle_reference(repo_root, source_path, reference)
+        if target is None:
+            report.add_error(
+                "lifecycle.reference_unresolved",
+                f"`{field}` reference `{reference}` does not resolve inside the repository.",
+                source_path,
+            )
+            continue
+        if allowed_targets is not None and target not in allowed_targets:
+            report.add_error(
+                "lifecycle.reference_wrong_kind",
+                f"`{field}` reference `{reference}` does not target an activated lifecycle document of the required kind.",
+                source_path,
+            )
+            continue
+        resolved.append(target)
+    return resolved
+
+
+def validate_adr_lifecycle(
+    repo_root: Path,
+    documents: dict[str, list[tuple[Path, dict[str, object]]]],
+    report: ValidationReport,
+) -> None:
+    adrs = documents["adr"]
+    validate_unique_lifecycle_ids(adrs, "decision_id", "decision", report)
+    adr_paths = {path.resolve() for path, _ in adrs}
+    plan_paths = {path.resolve() for path, _ in documents["plan"]}
+    evidence_paths = {path.resolve() for path, _ in documents["evidence"]}
+
+    for path, metadata in adrs:
+        decision_status = normalize_key(str(metadata.get("decision_status", "")))
+        implementation_status = normalize_key(
+            str(metadata.get("implementation_status", ""))
+        )
+        if decision_status not in DECISION_STATUSES:
+            report.add_error(
+                "lifecycle.decision_status_invalid",
+                "ADR `decision_status` must be one of: "
+                + ", ".join(sorted(DECISION_STATUSES))
+                + ".",
+                path,
+            )
+        if implementation_status not in IMPLEMENTATION_STATUSES:
+            report.add_error(
+                "lifecycle.implementation_status_invalid",
+                "ADR `implementation_status` must be one of: "
+                + ", ".join(sorted(IMPLEMENTATION_STATUSES))
+                + ".",
+                path,
+            )
+        if normalize_truth_value(metadata.get("source_of_truth", False)) not in {
+            "yes",
+            "true",
+        }:
+            report.add_error(
+                "lifecycle.adr_not_canonical",
+                "Activated ADRs must declare `source_of_truth: true`.",
+                path,
+            )
+
+        supersession_refs = metadata_values(metadata.get("superseded_by"))
+        if decision_status == "superseded" and not supersession_refs:
+            report.add_error(
+                "lifecycle.supersession_missing",
+                "A superseded ADR must resolve `superseded_by` to another ADR.",
+                path,
+            )
+        superseded_targets = validate_lifecycle_references(
+            repo_root,
+            path,
+            "superseded_by",
+            metadata.get("superseded_by"),
+            report,
+            allowed_targets=adr_paths,
+        )
+        if path.resolve() in superseded_targets:
+            report.add_error(
+                "lifecycle.supersession_self_reference",
+                "An ADR cannot supersede itself.",
+                path,
+            )
+
+        validate_lifecycle_references(
+            repo_root,
+            path,
+            "implementation_plan",
+            metadata.get("implementation_plan"),
+            report,
+            allowed_targets=plan_paths,
+        )
+        evidence_targets = validate_lifecycle_references(
+            repo_root,
+            path,
+            "implementation_evidence",
+            metadata.get("implementation_evidence"),
+            report,
+            allowed_targets=evidence_paths,
+        )
+        implementation_targets = validate_lifecycle_references(
+            repo_root,
+            path,
+            "implementation_refs",
+            metadata.get("implementation_refs"),
+            report,
+        )
+        if decision_status == "implemented":
+            if not implementation_targets:
+                report.add_error(
+                    "lifecycle.implemented_without_implementation",
+                    "An implemented ADR must link implementation code or canonical docs; a plan alone is not proof.",
+                    path,
+                )
+            if implementation_status != "verified" or not evidence_targets:
+                report.add_error(
+                    "lifecycle.implemented_without_verification",
+                    "An implemented ADR must use `implementation_status: verified` and link verification evidence.",
+                    path,
+                )
+        elif implementation_status == "verified" and not evidence_targets:
+            report.add_error(
+                "lifecycle.verified_without_evidence",
+                "A verified implementation status requires linked implementation evidence.",
+                path,
+            )
+
+
+def validate_plan_lifecycle(
+    documents: list[tuple[Path, dict[str, object]]], report: ValidationReport
+) -> None:
+    validate_unique_lifecycle_ids(documents, "plan_id", "plan", report)
+    stale_statuses = {"completed", "superseded", "deferred"}
+    for path, metadata in documents:
+        status = normalize_key(str(metadata.get("status", "")))
+        if status not in PLAN_STATUSES:
+            report.add_error(
+                "lifecycle.plan_status_invalid",
+                "Plan `status` must be one of: "
+                + ", ".join(sorted(PLAN_STATUSES))
+                + ".",
+                path,
+            )
+        next_action = extract_markdown_section(
+            path.read_text(encoding="utf-8"), "Current Next Action"
+        )
+        normalized_action = re.sub(r"^[\s>*-]+", "", next_action).strip().lower()
+        has_action = bool(normalized_action) and normalized_action.rstrip(".") not in {
+            "none",
+            "none recorded",
+            "not applicable",
+            "n/a",
+        }
+        if status == "active" and not has_action:
+            report.add_error(
+                "lifecycle.active_plan_next_action_missing",
+                "An active plan must name exactly one current next action.",
+                path,
+            )
+        actionable_items = re.findall(
+            r"^\s*(?:[-*+]|\d+[.)])[ \t]+\S", next_action, re.MULTILINE
+        )
+        if status == "active" and len(actionable_items) > 1:
+            report.add_error(
+                "lifecycle.active_plan_multiple_next_actions",
+                "An active plan must name exactly one current next action.",
+                path,
+            )
+        if status in stale_statuses and has_action:
+            report.add_error(
+                "lifecycle.stale_plan_has_next_action",
+                f"A {status} plan cannot present a current next action.",
+                path,
+            )
+
+
+def validate_wiki_decision_lifecycle(
+    repo_root: Path,
+    documents: dict[str, list[tuple[Path, dict[str, object]]]],
+    report: ValidationReport,
+) -> None:
+    evidence_paths = {path.resolve() for path, _ in documents["evidence"]}
+    canonical_docs = {
+        path.resolve()
+        for path in (repo_root / "docs").rglob("*.md")
+        if normalize_truth_value(
+            parse_lifecycle_metadata(path.read_text(encoding="utf-8")).get(
+                "source_of_truth", False
+            )
+        )
+        in {"yes", "true"}
+    } if (repo_root / "docs").exists() else set()
+    canonical_docs.update(path.resolve() for path, _ in documents["adr"])
+
+    for path, metadata in documents["wiki_decision"]:
+        if normalize_truth_value(metadata.get("source_of_truth", False)) not in {
+            "no",
+            "false",
+        }:
+            report.add_error(
+                "lifecycle.wiki_decision_canonical",
+                "Wiki decisions must declare `source_of_truth: false`.",
+                path,
+            )
+        canonical_targets = validate_lifecycle_references(
+            repo_root,
+            path,
+            "canonical_decision",
+            metadata.get("canonical_decision"),
+            report,
+            allowed_targets=canonical_docs,
+        )
+        if not canonical_targets:
+            report.add_error(
+                "lifecycle.wiki_decision_source_missing",
+                "A wiki decision must resolve its canonical ADR or decision source.",
+                path,
+            )
+        implementation_status = normalize_key(
+            str(metadata.get("implementation_status_mirror", "not_started"))
+        )
+        if implementation_status not in IMPLEMENTATION_STATUSES:
+            report.add_error(
+                "lifecycle.wiki_decision_status_invalid",
+                "Wiki decision `implementation_status_mirror` is invalid.",
+                path,
+            )
+        evidence_targets = validate_lifecycle_references(
+            repo_root,
+            path,
+            "evidence_refs",
+            metadata.get("evidence_refs"),
+            report,
+            allowed_targets=evidence_paths,
+        )
+        if implementation_status != "not_started" and not evidence_targets:
+            report.add_error(
+                "lifecycle.wiki_decision_evidence_missing",
+                "A wiki decision that claims implementation progress must link relevant evidence.",
+                path,
+            )
+
+
+def validate_lifecycle_portal(
+    repo_root: Path,
+    documents: dict[str, list[tuple[Path, dict[str, object]]]],
+    report: ValidationReport,
+) -> None:
+    portal = repo_root / "docs" / "README.md"
+    current_canonical_docs = [
+        (path, parse_lifecycle_metadata(path.read_text(encoding="utf-8")))
+        for name in CURRENT_DOCS
+        if name != "README.md"
+        and (path := repo_root / "docs" / name).exists()
+        and normalize_truth_value(
+            parse_lifecycle_metadata(path.read_text(encoding="utf-8")).get(
+                "source_of_truth", False
+            )
+        )
+        in {"yes", "true"}
+    ]
+    categories = {
+        "decision": documents["adr"],
+        "evidence": documents["evidence"],
+        "review": documents["review"],
+        "wiki_decision": documents["wiki_decision"],
+    }
+    active_categories = {name: docs for name, docs in categories.items() if docs}
+    if not active_categories and not current_canonical_docs:
+        return
+    if not portal.exists():
+        report.add_error(
+            "lifecycle.portal_missing",
+            "Activated lifecycle documents require `docs/README.md` as their portal.",
+            portal,
+        )
+        return
+    portal_targets = {
+        target
+        for reference in scan_local_markdown_links(portal.read_text(encoding="utf-8"))
+        if (target := resolve_lifecycle_reference(repo_root, portal, reference))
+        is not None
+    }
+    missing_current_docs = [
+        path
+        for path, _ in current_canonical_docs
+        if path.resolve() not in portal_targets
+    ]
+    if missing_current_docs:
+        report.add_error(
+            "lifecycle.portal_current_docs_missing",
+            "The docs portal must link active canonical current docs: "
+            + ", ".join(path.name for path in missing_current_docs)
+            + ".",
+            portal,
+        )
+    for name, category_documents in active_categories.items():
+        document_paths = {path.resolve() for path, _ in category_documents}
+        document_parents = {path.resolve().parent for path, _ in category_documents}
+        exposed = any(
+            target in document_paths
+            or (
+                target in document_parents
+                and target != portal.parent.resolve()
+            )
+            or (
+                target.parent in document_parents
+                and target.parent != portal.parent.resolve()
+            )
+            for target in portal_targets
+        )
+        if not exposed:
+            report.add_error(
+                f"lifecycle.portal_{name}_index_missing",
+                f"The docs portal must link the activated {name.replace('_', ' ')} index or location.",
+                portal,
+            )
+
+
+def validate_document_lifecycle(repo_root: Path, report: ValidationReport) -> None:
+    documents = collect_lifecycle_documents(repo_root)
+    validate_adr_lifecycle(repo_root, documents, report)
+    validate_plan_lifecycle(documents["plan"], report)
+    validate_unique_lifecycle_ids(
+        documents["evidence"], "evidence_id", "evidence", report
+    )
+    validate_unique_lifecycle_ids(documents["review"], "review_id", "review", report)
+    validate_wiki_decision_lifecycle(repo_root, documents, report)
+    validate_lifecycle_portal(repo_root, documents, report)
 
 
 def validate_glossary(glossary_path: Path, report: ValidationReport) -> set[str]:
@@ -1721,6 +2299,7 @@ def main(argv: list[str] | None = None) -> int:
         validate_docs(repo_root, report)
         validate_intelligence(repo_root, report)
         validate_wiki_memory(repo_root, report)
+        validate_document_lifecycle(repo_root, report)
         if final_gate:
             receipt_argument = Path(args.receipt)
             receipt_path = (repo_root / receipt_argument).resolve()

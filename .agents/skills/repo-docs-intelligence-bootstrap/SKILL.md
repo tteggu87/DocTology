@@ -114,6 +114,8 @@ Use the bundled lifecycle templates only when a promotion condition is met:
 
 Adapt identifiers and relative links to the target repository. ADRs are canonical decision records. Plans are change-control aids. Evidence records reproducible observations without copying large logs. Reviews record scoped findings. Wiki decisions must keep `source_of_truth: false`, resolve their canonical decision source, and clearly label mirrored implementation state as non-canonical.
 
+The validator activates lifecycle checks only for document roles that actually exist. It checks unique ADR identities, decision and implementation status vocabularies, resolvable supersession/plan/evidence links, implementation plus verification support for `implemented` claims, non-canonical wiki decisions with canonical sources, portal visibility for activated indexes, and stale plan next actions. Repositories without these optional roles remain valid without creating empty directories.
+
 ## Repo Memory Link Contract
 
 Use portable Markdown links as the default link syntax in both `docs/` and the
@@ -137,12 +139,18 @@ because historical pages still contain wikilinks. New or materially rewritten
 Repo Docs memory pages should use Markdown links. This differs intentionally
 from the Obsidian-first `llm-wiki-bootstrap`, where wikilinks remain the default.
 
-Before substantial repo-memory work, start at `wiki/_meta/index.md`, read the
-newest relevant entries in `wiki/_meta/log.md`, and follow relevant local
-Markdown links for at most 2 additional hops and at most 12 pages total. Stop
-when the linked material becomes historical, unrelated, or duplicate evidence.
-Record the bounded reading path in the handoff or maintenance log. Always check
-the linked canonical file before treating a wiki claim as current truth.
+Before substantial repo-memory work, read the target repository's `AGENTS.md`,
+then `docs/README.md`, `docs/CURRENT_STATE.md`, `wiki/_meta/index.md`, and the
+newest relevant entries in `wiki/_meta/log.md`, in that order. From there,
+follow relevant local Markdown links for at most 2 additional hops, with at most 12 pages total.
+Stop when the linked material becomes historical, unrelated,
+or duplicate evidence. Record the bounded reading path in the handoff or
+maintenance log. Always check the linked canonical file before treating a wiki
+claim as current truth.
+
+For a promoted change, update the smallest canonical truth first, then its ADR
+or plan when activated, implementation, evidence, current docs, derived wiki
+decision or analysis, and finally the impact summary and maintenance log.
 
 ## Core Rules
 

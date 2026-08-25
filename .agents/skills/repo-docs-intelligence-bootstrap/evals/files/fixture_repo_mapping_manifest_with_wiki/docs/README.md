@@ -9,13 +9,14 @@ superseded_by: N/A
 
 ## Current References
 
-- `docs/CURRENT_STATE.md`
-- `docs/ARCHITECTURE.md`
-- `docs/LAYERS.md`
-- `docs/repo-map/README.md`
-- `docs/IMPACT_SUMMARY.md`
+- [Current repository state](CURRENT_STATE.md)
+- [Architecture](ARCHITECTURE.md)
+- [Layer boundaries](LAYERS.md)
+- [Skill integration](SKILLS_INTEGRATION.md)
+- [Repo map](repo-map/README.md)
+- [Impact summary](IMPACT_SUMMARY.md)
 
 ## Memory References
 
-- `wiki/_meta/index.md`
-- `wiki/_meta/log.md`
+- [Repo memory index](../wiki/_meta/index.md)
+- [Repo memory log](../wiki/_meta/log.md)

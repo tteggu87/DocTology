@@ -9,6 +9,7 @@ date: YYYY-MM-DD
 last_updated: YYYY-MM-DD
 superseded_by: null
 implementation_plan: null
+implementation_refs: []
 implementation_evidence: []
 related: []
 ---
@@ -33,7 +34,7 @@ Record the chosen rule and its boundary. This ADR is the canonical decision reco
 
 ## Implementation
 
-Link an implementation plan only when the work is multi-stage. Keep `decision_status` (`proposed`, `accepted`, `implemented`, `superseded`, `rejected`, or `deferred`) separate from `implementation_status` (`not_started`, `in_progress`, `verified`, or `partial`).
+Link an implementation plan only when the work is multi-stage. Use `implementation_refs` for the code or canonical docs that establish implementation. Keep `decision_status` (`proposed`, `accepted`, `implemented`, `superseded`, `rejected`, or `deferred`) separate from `implementation_status` (`not_started`, `in_progress`, `verified`, or `partial`).
 
 ## Verification
 

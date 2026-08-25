@@ -9,8 +9,8 @@ superseded_by: N/A
 
 ## Current References
 
-- `docs/CURRENT_STATE.md`
-- `docs/IMPACT_SUMMARY.md`
+- [Current repository state](CURRENT_STATE.md)
+- [Impact summary](IMPACT_SUMMARY.md)
 
 ## Operating Intent
 

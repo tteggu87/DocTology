@@ -84,3 +84,20 @@ Started: 2026-08-25T00:00:00+09:00
   - Independent read-only re-review -> pass: Critical 0, Important 0, Minor 0.
 - Learnings for future iterations: optional lifecycle surfaces must be conditional in both workflow prose and generated portals; contract tests should reject conflicting unconditional paths, not only assert that preferred guidance exists.
 ---
+## 2026-08-25T15:42:36+09:00 - US-003
+- Added optional-surface lifecycle validation for conventional, flat, and metadata-declared ADRs, plans, evidence, reviews, and wiki decisions without requiring those directories in small repositories.
+- Enforced unique lifecycle identities, decision/implementation/plan statuses, resolvable supersession/plan/evidence/canonical references, implementation plus verification backing for implemented ADRs, non-canonical wiki decisions, canonical-doc and activated-index portal exposure, and non-stale single current next actions.
+- Kept dependency-light validation compatible with YAML comments, lists, and legacy wikilinks; aligned startup/change synchronization guidance and portal templates with portable Markdown links.
+- Added focused minimal, mature, transitional, malformed-activation, flat-layout, portal-drift, false-completion, stale-plan, and dependency-light regression coverage; refreshed existing eval fixture portals.
+- Files changed: repo-docs `SKILL.md`, AGENTS/docs portal/ADR templates, validator, three eval fixture portals, focused validator tests, `.codex/ralph/prd.json`, and `.codex/ralph/progress.txt`.
+- Quality checks run and result:
+  - `python3 -m pytest -q tests/test_repo_docs_intelligence_validator.py` -> pass: 32 tests.
+  - `python3 -m pytest -q` -> pass: 180 tests and 26 subtests.
+  - `python3 -S tests/test_repo_docs_intelligence_validator.py -q` -> pass: 32 dependency-light tests.
+  - `/Users/hoyasung007hotmail.com/.local/bin/ruff check .agents/skills/repo-docs-intelligence-bootstrap tests/test_repo_docs_intelligence_validator.py` -> pass: all checks passed.
+  - `python3 /Users/hoyasung007hotmail.com/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/repo-docs-intelligence-bootstrap` -> pass: skill is valid.
+  - `python3 -m py_compile .agents/skills/repo-docs-intelligence-bootstrap/scripts/validate_repo_docs_intelligence.py tests/test_repo_docs_intelligence_validator.py` -> pass.
+  - `git diff --check` -> pass: no whitespace errors.
+  - Independent read-only review after two repair rounds -> pass: Critical 0, Important 0, Minor 0; ready to merge.
+- Learnings for future iterations: optional validation must activate from both recognized locations and metadata, while index files and ambiguous names remain excluded; plans never count as proof of implementation.
+---

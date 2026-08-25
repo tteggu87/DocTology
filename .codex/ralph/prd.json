@@ -37,7 +37,7 @@
       "title": "Validate activated decision and evidence chains",
       "description": "As a repository maintainer, I want the validator to catch broken lifecycle claims only when those optional document surfaces are actually activated.",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "The validator accepts small repositories with no ADR, plan, evidence, review, decision, repo-map, intelligence, or retrieval directories.",
         "Activated ADRs have unique decision identities, valid decision and implementation statuses, resolvable supersession/plan/evidence references, and implemented claims backed by implementation and verification evidence.",

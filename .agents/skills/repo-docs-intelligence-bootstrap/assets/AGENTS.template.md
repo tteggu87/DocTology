@@ -3,7 +3,7 @@
 ## Working style
 - Plan first for non-trivial tasks.
 - Search before code.
-- Read durable repo memory before substantial work: `wiki/_meta/index.md`, `wiki/_meta/log.md`, and relevant `wiki/analyses/*`.
+- Before substantial work, read `AGENTS.md`, `docs/README.md`, `docs/CURRENT_STATE.md`, `wiki/_meta/index.md`, and the newest relevant entries in `wiki/_meta/log.md`, in that order; then read relevant `wiki/analyses/*` pages.
 - From the memory index and recent log, follow relevant local Markdown links for at most 2 additional hops and at most 12 pages total; record the bounded reading path and verify linked canonical files before relying on wiki claims.
 - Do impact analysis before modifying schemas, manifests, handlers, or graph/materialization code.
 - Follow schema-first: define glossary/action/schema before adding implementation.
@@ -37,10 +37,13 @@
 - Promote documentation only when warranted: use canonical docs plus impact/log for small changes, `wiki/analyses/` for reusable analysis, an ADR for durable structural or compatibility decisions, a plan for multi-stage work, evidence for verification claims, and a review for scoped review findings.
 - Do not pre-create optional ADR, plan, evidence, review, decision, or repo-map directories. New repositories may default to `docs/adr/`; preserve existing flat or custom ADR locations without migration or key renaming.
 - Keep wiki decisions explicitly `source_of_truth: false` and link each one to its canonical ADR or canonical decision source.
+- Once ADR, plan, evidence, review, or wiki-decision surfaces exist, keep their identities unique, statuses valid, references resolvable, implemented claims evidence-backed, activated indexes visible from the docs portal, and completed or superseded plans free of a current next action.
 
 ## Change synchronization rules
 
 When code changes, update the corresponding docs and intelligence artifacts in the same task.
+
+For promoted work, synchronize in this order: smallest canonical truth, activated ADR or plan, implementation, evidence, current docs, derived wiki decision or analysis, then impact summary and maintenance log.
 
 You must check whether these files need updates:
 - `docs/CURRENT_STATE.md` when behavior, entrypoints, providers, defaults, or runtime flow changes

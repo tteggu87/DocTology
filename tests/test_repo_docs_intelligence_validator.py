@@ -51,6 +51,16 @@ def write_doc(path: Path, title: str, body: str = "") -> None:
     )
 
 
+def write_lifecycle_doc(
+    path: Path, frontmatter: str, title: str, body: str = ""
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"---\n{frontmatter.strip()}\n---\n\n# {title}\n\n{body}\n",
+        encoding="utf-8",
+    )
+
+
 class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -195,17 +205,22 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
         log_text = (
             skill_root / "assets" / "wiki" / "_meta" / "log.template.md"
         ).read_text(encoding="utf-8")
+        portal_text = (skill_root / "assets" / "docs" / "README.template.md").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("Use portable Markdown links as the default", skill_text)
         self.assertIn("supported legacy input", skill_text)
         self.assertIn("at most 2 additional hops", skill_text)
         self.assertIn("at most 12 pages total", skill_text)
+        self.assertIn("then `docs/README.md`, `docs/CURRENT_STATE.md`", skill_text)
         self.assertIn("descriptive relative Markdown links", agents_text)
         self.assertIn("[Current repository state]", index_text)
         self.assertNotIn("- `docs/CURRENT_STATE.md`", index_text)
         self.assertNotIn("](../../docs/repo-map/README.md)", index_text)
         self.assertNotIn("](../../intelligence/)", index_text)
         self.assertNotIn("](../../intelligence/)", log_text)
+        self.assertIn("[Current repository state](CURRENT_STATE.md)", portal_text)
 
     def test_adaptive_document_authority_lifecycle_and_templates(self) -> None:
         skill_root = (
@@ -331,6 +346,345 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
         )
         for domain_term in ("BUILD", "ASK", "CHECK", "Pack", "MCP", "ontology"):
             self.assertNotIn(domain_term, lifecycle_contract)
+
+    def test_minimal_repo_does_not_activate_optional_lifecycle_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = self.validator.ValidationReport(root)
+
+            self.validator.validate_document_lifecycle(root, report)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-S",
+                    str(VALIDATOR_PATH),
+                    "--repo-root",
+                    str(root),
+                    "--format",
+                    "json",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(report.errors, [])
+        self.assertEqual(report.warnings, [])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_mature_lifecycle_chain_and_portal_are_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            implementation = root / "src" / "runtime.py"
+            implementation.parent.mkdir(parents=True)
+            implementation.write_text("def run():\n    return True\n", encoding="utf-8")
+            write_lifecycle_doc(
+                root / "docs" / "plans" / "PLAN-0001.md",
+                """
+type: implementation-plan
+plan_id: PLAN-0001
+status: active
+""",
+                "Plan",
+                "## Current Next Action\n\nRun the release verification.",
+            )
+            write_lifecycle_doc(
+                root / "docs" / "evidence" / "EVIDENCE-0001.md",
+                """
+type: evidence
+evidence_id: EVIDENCE-0001
+target_fingerprint: abc123
+""",
+                "Evidence",
+            )
+            write_lifecycle_doc(
+                root / "docs" / "reviews" / "REVIEW-0001.md",
+                """
+type: review
+review_id: REVIEW-0001
+status: resolved
+""",
+                "Review",
+            )
+            write_lifecycle_doc(
+                root / "docs" / "adr" / "ADR-0001.md",
+                """
+type: adr
+source_of_truth: true # canonical decision
+decision_id: ADR-0001
+decision_status: implemented
+implementation_status: verified
+superseded_by: null
+implementation_plan: ../plans/PLAN-0001.md
+implementation_refs:
+  - ../../src/runtime.py
+implementation_evidence:
+  - ../evidence/EVIDENCE-0001.md
+""",
+                "Decision",
+            )
+            write_lifecycle_doc(
+                root / "wiki" / "decisions" / "runtime.md",
+                """
+type: decision
+source_of_truth: false
+canonical_decision: ../../docs/adr/ADR-0001.md
+implementation_status_mirror: verified
+evidence_refs:
+  - ../../docs/evidence/EVIDENCE-0001.md
+""",
+                "Decision summary",
+            )
+            write_doc(
+                root / "wiki" / "decisions" / "index.md",
+                "Decision Index",
+                "[Runtime decision](runtime.md)",
+            )
+            write_doc(
+                root / "docs" / "README.md",
+                "Documentation Portal",
+                "\n".join(
+                    [
+                        "- [ADRs](adr/ADR-0001.md)",
+                        "- [Evidence](evidence/EVIDENCE-0001.md)",
+                        "- [Reviews](reviews/REVIEW-0001.md)",
+                        "- [Decision memory](../wiki/decisions/runtime.md)",
+                    ]
+                ),
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_document_lifecycle(root, report)
+
+            dependency_light = subprocess.run(
+                [
+                    sys.executable,
+                    "-S",
+                    str(VALIDATOR_PATH),
+                    "--repo-root",
+                    str(root),
+                    "--format",
+                    "json",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            adr_path = root / "docs" / "adr" / "ADR-0001.md"
+            adr_path.write_text(
+                adr_path.read_text(encoding="utf-8").replace(
+                    "implementation_refs:\n  - ../../src/runtime.py",
+                    "implementation_refs: []",
+                ),
+                encoding="utf-8",
+            )
+            plan_only_report = self.validator.ValidationReport(root)
+            self.validator.validate_document_lifecycle(root, plan_only_report)
+
+        self.assertEqual(report.errors, [])
+        self.assertEqual(
+            dependency_light.returncode,
+            0,
+            dependency_light.stdout + dependency_light.stderr,
+        )
+        self.assertIn(
+            "lifecycle.implemented_without_implementation",
+            {issue["code"] for issue in plan_only_report.errors},
+        )
+
+    def test_transitional_flat_adrs_and_legacy_wikilinks_remain_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_lifecycle_doc(
+                root / "docs" / "ADR_OLD.md",
+                """
+type: adr
+source_of_truth: true
+decision_id: ADR-OLD
+decision_status: superseded
+implementation_status: partial
+superseded_by: "[[ADR_NEW]]"
+implementation_plan: null
+implementation_evidence: []
+""",
+                "Old decision",
+            )
+            write_lifecycle_doc(
+                root / "docs" / "ADR_NEW.md",
+                """
+type: adr
+source_of_truth: true
+decision_id: ADR-NEW
+decision_status: accepted
+implementation_status: not_started
+superseded_by: null
+implementation_plan: null
+implementation_evidence: []
+""",
+                "New decision",
+            )
+            write_doc(
+                root / "docs" / "README.md",
+                "Documentation Portal",
+                "[Flat ADR index](ADR_NEW.md)",
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_document_lifecycle(root, report)
+
+        self.assertEqual(report.errors, [])
+
+    def test_lifecycle_drift_rejects_false_completion_and_stale_next_action(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ("ADR_ONE.md", "ADR_TWO.md"):
+                write_lifecycle_doc(
+                    root / "docs" / "adr" / name,
+                    """
+type: adr
+source_of_truth: true
+decision_id: ADR-DUPLICATE
+decision_status: implemented
+implementation_status: partial
+superseded_by: null
+implementation_plan: null
+implementation_evidence: []
+""",
+                    name,
+                )
+            write_lifecycle_doc(
+                root / "docs" / "plans" / "PLAN-STALE.md",
+                """
+type: implementation-plan
+plan_id: PLAN-STALE
+status: completed
+""",
+                "Stale plan",
+                "## Current Next Action\n\nShip the supposedly completed work.",
+            )
+            write_lifecycle_doc(
+                root / "docs" / "plans" / "PLAN-MULTI.md",
+                """
+type: implementation-plan
+plan_id: PLAN-MULTI
+status: active
+""",
+                "Multiple next actions",
+                "## Current Next Action\n\n-  First action.\n-  Second action.",
+            )
+            write_lifecycle_doc(
+                root / "wiki" / "decisions" / "broken.md",
+                """
+type: decision
+source_of_truth: true
+canonical_decision: ../../docs/adr/MISSING.md
+implementation_status_mirror: verified
+evidence_refs: []
+""",
+                "Broken decision",
+            )
+            write_doc(root / "docs" / "README.md", "Documentation Portal")
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_document_lifecycle(root, report)
+
+        codes = {issue["code"] for issue in report.errors}
+        self.assertIn("lifecycle.decision_id_duplicate", codes)
+        self.assertIn("lifecycle.implemented_without_implementation", codes)
+        self.assertIn("lifecycle.implemented_without_verification", codes)
+        self.assertIn("lifecycle.stale_plan_has_next_action", codes)
+        self.assertIn("lifecycle.active_plan_multiple_next_actions", codes)
+        self.assertIn("lifecycle.wiki_decision_canonical", codes)
+        self.assertIn("lifecycle.wiki_decision_source_missing", codes)
+        self.assertIn("lifecycle.wiki_decision_evidence_missing", codes)
+        self.assertIn("lifecycle.portal_decision_index_missing", codes)
+        self.assertIn("lifecycle.portal_wiki_decision_index_missing", codes)
+
+    def test_conventional_lifecycle_files_cannot_bypass_missing_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adr = root / "docs" / "adr" / "ADR-0001.md"
+            adr.parent.mkdir(parents=True)
+            adr.write_text("# Missing frontmatter\n", encoding="utf-8")
+            write_doc(
+                root / "docs" / "README.md",
+                "Documentation Portal",
+                "[ADR](adr/ADR-0001.md)",
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_document_lifecycle(root, report)
+
+        codes = {issue["code"] for issue in report.errors}
+        self.assertIn("lifecycle.decision_id_missing", codes)
+        self.assertIn("lifecycle.decision_status_invalid", codes)
+
+    def test_unrelated_flat_docs_do_not_activate_adr_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "ADRIAN.md").write_text("# Person named Adrian\n", encoding="utf-8")
+            (docs / "ADRIFT.md").write_text("# Adrift notes\n", encoding="utf-8")
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_document_lifecycle(root, report)
+
+        self.assertEqual(report.errors, [])
+
+    def test_flat_adr_requires_a_direct_portal_link(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_lifecycle_doc(
+                root / "docs" / "ADR_FLAT.md",
+                """
+type: adr
+source_of_truth: true
+decision_id: ADR-FLAT
+decision_status: accepted
+implementation_status: not_started
+""",
+                "Flat ADR",
+            )
+            write_doc(root / "docs" / "CURRENT_STATE.md", "Current State")
+            write_doc(
+                root / "docs" / "README.md",
+                "Documentation Portal",
+                "[Current state](CURRENT_STATE.md)",
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_document_lifecycle(root, report)
+
+        self.assertIn(
+            "lifecycle.portal_decision_index_missing",
+            {issue["code"] for issue in report.errors},
+        )
+
+    def test_portal_must_link_existing_canonical_current_docs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_lifecycle_doc(
+                root / "docs" / "CURRENT_STATE.md",
+                """
+status: active
+source_of_truth: true
+""",
+                "Current State",
+            )
+            write_doc(root / "docs" / "README.md", "Documentation Portal")
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_document_lifecycle(root, report)
+
+        self.assertIn(
+            "lifecycle.portal_current_docs_missing",
+            {issue["code"] for issue in report.errors},
+        )
 
     def test_wiki_markdown_links_resolve_relative_to_each_page(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
