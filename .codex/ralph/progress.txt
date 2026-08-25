@@ -69,3 +69,18 @@ Started: 2026-08-25T00:00:00+09:00
   - Independent review -> CLEAN, no Critical/Important/Minor findings.
 - Learnings: Markdown validation must understand optional targets and enough CommonMark container context to avoid turning examples into live links or hiding nested-list links.
 ---
+## 2026-08-25T15:19:29+09:00 - US-002
+- Added one adaptive authority chain from live code/tests through current docs and accepted ADRs, intelligence contracts, plans/evidence/reviews, derived wiki memory, and optional search indexes.
+- Added risk-based promotion rules that keep small changes lightweight and activate ADR, plan, evidence, review, wiki-decision, or repo-map surfaces only when warranted.
+- Added minimal ADR, implementation-plan, evidence, review, and wiki-decision templates; decision governance and implementation progress remain separate, and wiki decisions are explicitly non-canonical.
+- Preserved flat and custom ADR locations and existing manifest keys; `docs/adr/` is only the default for repositories without an established ADR location.
+- Files changed: repo-docs `SKILL.md`, AGENTS/docs-portal templates, five lifecycle templates, focused contract test, `.codex/ralph/prd.json`, and `.codex/ralph/progress.txt`.
+- Quality checks run and result:
+  - `python3 -m pytest -q tests/test_repo_docs_intelligence_validator.py` -> pass: 24 tests.
+  - `python3 -m pytest -q` -> pass: 172 tests and 26 subtests.
+  - `/Users/hoyasung007hotmail.com/.local/bin/ruff check .agents/skills/repo-docs-intelligence-bootstrap tests/test_repo_docs_intelligence_validator.py` -> pass: all checks passed.
+  - `python3 /Users/hoyasung007hotmail.com/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/repo-docs-intelligence-bootstrap` -> pass: skill is valid.
+  - `git diff --check` -> pass: no whitespace errors.
+  - Independent read-only re-review -> pass: Critical 0, Important 0, Minor 0.
+- Learnings for future iterations: optional lifecycle surfaces must be conditional in both workflow prose and generated portals; contract tests should reject conflicting unconditional paths, not only assert that preferred guidance exists.
+---

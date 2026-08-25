@@ -75,6 +75,45 @@ The layers are intentionally asymmetric:
 Do not offer a separate wiki-only mode from this skill.
 Create the small wiki memory layer as part of the normal repo-docs profile, but keep it lightweight and subordinate to current docs and intelligence.
 
+## Adaptive Documentation Authority Lifecycle
+
+Use this authority chain when two artifacts disagree:
+
+1. live code, registered entrypoints, and tests establish what currently runs
+2. current canonical docs and accepted ADRs explain current structure and durable decisions
+3. intelligence contracts define reusable machine-readable terms, actions, datasets, policies, schemas, and bindings when those surfaces exist
+4. implementation plans, evidence, and reviews record intended work, verification, and findings without replacing current truth
+5. wiki decisions, analyses, and sources preserve derived explanation and cross-session memory
+6. optional search indexes accelerate discovery but are disposable and never decide truth
+
+Report disagreement from a lower layer as drift and verify the higher authority before updating it. A plan is not proof that work shipped, evidence is not the sole definition of current behavior, a review does not silently change a decision, and a wiki summary does not replace its canonical ADR.
+
+Promote documentation by risk and reuse instead of pre-creating every surface:
+
+| Change or work shape | Minimum durable surface |
+| --- | --- |
+| Small behavior or wording change | Update the affected canonical doc plus the impact summary or maintenance log. |
+| Reusable investigation or comparison | Add a sourced `wiki/analyses/` page. |
+| Durable structural, authority, or compatibility decision | Add an ADR; add a `wiki/decisions/` summary only when it improves discovery or resumption. |
+| Multi-stage or multi-file implementation | Add an implementation plan with an explicit current next action. |
+| Performance, security, compatibility, or completion claim | Add bounded evidence containing commands, environment, results, scope, limitations, and a target fingerprint. |
+| Internal or external patch review | Add a review that identifies the reviewed target, findings, disposition, and supporting evidence. |
+| Hard-to-reconstruct entrypoints, modules, or data flow | Add or refresh the optional repo map. |
+
+Do not create `docs/adr/`, `docs/plans/`, `docs/evidence/`, `docs/reviews/`, `wiki/decisions/`, or `docs/repo-map/` until their promotion condition is met. New repositories may use `docs/adr/` as the default ADR location. Existing flat ADR files such as `docs/ADR_*.md` and stable custom ADR directories remain supported; do not migrate them or rename existing manifest keys for layout consistency.
+
+Keep decision governance separate from implementation progress. Decision status uses `proposed`, `accepted`, `implemented`, `superseded`, `rejected`, or `deferred`; implementation status uses `not_started`, `in_progress`, `verified`, or `partial`. Never infer one status from the other. Prefer `accepted` plus `verified` for a currently accepted decision whose implementation has been verified; preserve an existing `implemented` decision status when a mature repository already uses it.
+
+Use the bundled lifecycle templates only when a promotion condition is met:
+
+- `assets/docs/adr/ADR.template.md`
+- `assets/docs/plans/IMPLEMENTATION_PLAN.template.md`
+- `assets/docs/evidence/EVIDENCE.template.md`
+- `assets/docs/reviews/REVIEW.template.md`
+- `assets/wiki/decisions/decision.template.md`
+
+Adapt identifiers and relative links to the target repository. ADRs are canonical decision records. Plans are change-control aids. Evidence records reproducible observations without copying large logs. Reviews record scoped findings. Wiki decisions must keep `source_of_truth: false`, resolve their canonical decision source, and clearly label mirrored implementation state as non-canonical.
+
 ## Repo Memory Link Contract
 
 Use portable Markdown links as the default link syntax in both `docs/` and the
@@ -298,14 +337,16 @@ Create or refresh current docs from code, not memory:
 - `docs/ROADMAP.md`
 - `docs/IMPACT_SUMMARY.md`
 
-Then classify older material into:
+Then classify older material by role without moving it merely to match this skill's preferred layout:
 
-- `docs/adr/`
-- `docs/reviews/`
-- `docs/experiments/`
-- `docs/archive/`
+- keep durable decisions in the repository's existing active ADR location
+- keep promoted review records in their existing review location
+- keep experiments in their established location or use `docs/experiments/` when that surface is newly activated
+- move genuinely superseded material to `docs/archive/` only when archiving is warranted
 
 Do not delete old docs unless they are obviously duplicated and the user explicitly wants deletion.
+
+For new ADRs in a repository with no established ADR location, prefer `docs/adr/`; if the repository already uses flat or custom ADR locations, preserve and extend that location instead of migrating it. Create plan, evidence, review, and wiki-decision directories only after their promotion threshold is met.
 
 If a file goes to `docs/archive/`, prepend a status banner:
 
@@ -359,6 +400,8 @@ Create or refresh the small wiki memory scaffold:
 - `wiki/sources/`
 - `wiki/concepts/`
 - `wiki/projects/`
+
+Add `wiki/decisions/` only when a durable canonical decision benefits from a derived explanation or resumption page. A wiki decision must link to its canonical ADR or other canonical decision source and remain explicitly non-canonical.
 
 Use `wiki/_meta/index.md` as the durable reading map for future sessions.
 Use `wiki/_meta/log.md` for chronological maintenance notes.
@@ -449,6 +492,11 @@ You must always check whether these files need updates:
 - `wiki/_meta/index.md` when page inventory or durable reading routes change
 - `wiki/_meta/log.md` when meaningful repo-docs maintenance, drift resolution, or plan/review work occurs
 - `wiki/analyses/*.md` when the work produced reusable reasoning, decisions, rejected alternatives, unresolved conflicts, or source-backed findings
+- the repository's active ADR location when durable structural, authority, or compatibility decisions change
+- `docs/plans/*.md` when multi-stage implementation scope or the current next action changes
+- `docs/evidence/*.md` when a verification or completion claim changes
+- `docs/reviews/*.md` when a review target, finding, or disposition changes
+- `wiki/decisions/*.md` when a derived decision summary needs to track its canonical source
 
 Do not finish a refactor after updating code only.
 If a repo already has current docs or intelligence artifacts, explicitly note which files were checked and intentionally left unchanged so the reader can distinguish stable truth from missed work.
@@ -582,6 +630,11 @@ Use these bundled files when useful:
 - `assets/wiki/_meta/index.template.md`
 - `assets/wiki/_meta/log.template.md`
 - `assets/wiki/analyses/analysis.template.md`
+- `assets/docs/adr/ADR.template.md`
+- `assets/docs/plans/IMPLEMENTATION_PLAN.template.md`
+- `assets/docs/evidence/EVIDENCE.template.md`
+- `assets/docs/reviews/REVIEW.template.md`
+- `assets/wiki/decisions/decision.template.md`
 - `assets/intelligence/glossary.template.yaml`
 - `assets/intelligence/actions.template.yaml`
 - `assets/intelligence/entities.template.yaml`

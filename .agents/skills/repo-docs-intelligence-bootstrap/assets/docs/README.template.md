@@ -25,15 +25,16 @@ Start here.
 - `docs/ROADMAP.md`
 - `docs/IMPACT_SUMMARY.md`
 
-## Decisions
+## Activated Lifecycle Indexes
 
-- `docs/adr/`
+- When ADRs exist, add a descriptive relative Markdown link to the repository's active ADR index or location. Preserve flat or custom ADR layouts.
+- Add plan, evidence, and review index links only when those optional surfaces exist.
+- Add a derived wiki-decision index only when it exists, and label it non-canonical.
 
 ## Legacy And Non-Current Material
 
-- `docs/reviews/`
-- `docs/experiments/`
-- `docs/archive/`
+- Add experiment or archive links only when those locations exist.
+- Do not classify active reviews as legacy material.
 
 ## Review Questions
 

@@ -23,7 +23,7 @@
       "title": "Add an adaptive documentation authority lifecycle",
       "description": "As a repository maintainer, I want one lightweight Repo Docs profile that promotes only sufficiently important work into ADRs, plans, evidence, reviews, and wiki decisions.",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "The skill defines a reusable authority chain spanning live code and tests, current canonical docs, accepted ADRs, intelligence contracts, plans/evidence/reviews, derived wiki memory, and optional search indexes.",
         "Promotion rules distinguish small changes, reusable analyses, durable structural decisions, multi-stage implementation, verification claims, and reviews without pre-creating every optional directory.",

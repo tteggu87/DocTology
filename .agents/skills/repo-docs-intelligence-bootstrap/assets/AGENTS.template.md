@@ -18,9 +18,11 @@
 - Treat current docs as human-readable truth only when they match live code and registered contracts.
 - Treat intelligence manifests as reusable machine-readable contracts when present.
 - Treat generated indexes, search outputs, graph projections, and wiki memory as derived aids unless this repository explicitly defines them as canonical.
+- Use this authority order when artifacts disagree: live code and tests; current canonical docs and accepted ADRs; intelligence contracts; plans, evidence, and reviews; derived wiki memory; optional search indexes.
 - Prefer thin wrappers and a thick core package.
 - Keep repository memory lightweight; add docs, contracts, or wiki pages only when they reduce ambiguity, drift, or repeated mistakes.
 - Keep `wiki/` as derived memory for analyses, source notes, plans, reviews, and cross-session context; do not treat wiki pages as runtime truth.
+- Keep decision status separate from implementation status. A plan does not prove delivery, evidence does not replace current docs, and a wiki decision does not replace its canonical ADR or decision source.
 - Create nested `AGENTS.md` only for a distinct operational root with its own build, test, deploy, or safety rules.
 
 ## Documentation rules
@@ -32,6 +34,9 @@
 - Use descriptive relative Markdown links in new or materially rewritten Repo Docs wiki pages so links to docs, intelligence, code, and tests remain precise and portable. Continue to read existing Obsidian `[[wikilinks]]`, but do not introduce them as the Repo Docs default or mass-convert legacy pages solely for syntax consistency.
 - Save reusable plan reviews, drift analyses, source comparisons, and decision memos under `wiki/analyses/`.
 - Include source, assumption, conflict, and evidence-confidence notes when preserving claim-heavy analysis.
+- Promote documentation only when warranted: use canonical docs plus impact/log for small changes, `wiki/analyses/` for reusable analysis, an ADR for durable structural or compatibility decisions, a plan for multi-stage work, evidence for verification claims, and a review for scoped review findings.
+- Do not pre-create optional ADR, plan, evidence, review, decision, or repo-map directories. New repositories may default to `docs/adr/`; preserve existing flat or custom ADR locations without migration or key renaming.
+- Keep wiki decisions explicitly `source_of_truth: false` and link each one to its canonical ADR or canonical decision source.
 
 ## Change synchronization rules
 
@@ -58,6 +63,11 @@ You must check whether these files need updates:
 - `wiki/_meta/index.md` when wiki page inventory or reading routes change
 - `wiki/_meta/log.md` when meaningful repo-docs maintenance occurs
 - `wiki/analyses/*.md` when the task produced reusable reasoning, decisions, rejected alternatives, or unresolved conflicts
+- the active ADR location when a durable structural, authority, or compatibility decision changes
+- `docs/plans/*.md` when multi-stage scope or the current next action changes
+- `docs/evidence/*.md` when a performance, security, compatibility, or completion claim changes
+- `docs/reviews/*.md` when a review target, finding, or disposition changes
+- `wiki/decisions/*.md` when a derived decision summary needs to track its canonical source
 
 Before finishing, report:
 1. which docs/intelligence files were updated

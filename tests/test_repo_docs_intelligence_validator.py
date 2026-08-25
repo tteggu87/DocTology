@@ -207,6 +207,131 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
         self.assertNotIn("](../../intelligence/)", index_text)
         self.assertNotIn("](../../intelligence/)", log_text)
 
+    def test_adaptive_document_authority_lifecycle_and_templates(self) -> None:
+        skill_root = (
+            ROOT / ".agents" / "skills" / "repo-docs-intelligence-bootstrap"
+        )
+        skill_text = (skill_root / "SKILL.md").read_text(encoding="utf-8")
+        agents_text = (skill_root / "assets" / "AGENTS.template.md").read_text(
+            encoding="utf-8"
+        )
+        portal_text = (
+            skill_root / "assets" / "docs" / "README.template.md"
+        ).read_text(encoding="utf-8")
+        template_paths = {
+            "adr": skill_root / "assets" / "docs" / "adr" / "ADR.template.md",
+            "plan": skill_root
+            / "assets"
+            / "docs"
+            / "plans"
+            / "IMPLEMENTATION_PLAN.template.md",
+            "evidence": skill_root
+            / "assets"
+            / "docs"
+            / "evidence"
+            / "EVIDENCE.template.md",
+            "review": skill_root
+            / "assets"
+            / "docs"
+            / "reviews"
+            / "REVIEW.template.md",
+            "decision": skill_root
+            / "assets"
+            / "wiki"
+            / "decisions"
+            / "decision.template.md",
+        }
+
+        for path in template_paths.values():
+            self.assertTrue(path.is_file(), path)
+
+        self.assertIn("Adaptive Documentation Authority Lifecycle", skill_text)
+        self.assertIn("live code, registered entrypoints, and tests", skill_text)
+        self.assertIn("current canonical docs and accepted ADRs", skill_text)
+        self.assertIn("implementation plans, evidence, and reviews", skill_text)
+        self.assertIn("optional search indexes", skill_text)
+        self.assertIn("Do not create `docs/adr/`", skill_text)
+        self.assertIn("New repositories may use `docs/adr/`", skill_text)
+        self.assertIn("Existing flat ADR files", skill_text)
+        self.assertIn("do not migrate them or rename existing manifest keys", skill_text)
+        self.assertNotIn(
+            "Then classify older material into:\n\n- `docs/adr/`", skill_text
+        )
+        self.assertIn("without moving it merely", skill_text)
+        self.assertIn("active ADR index or location", portal_text)
+        self.assertIn("only when those optional surfaces exist", portal_text)
+        self.assertNotIn("- `docs/adr/`", portal_text)
+        self.assertNotIn("- `docs/reviews/`", portal_text)
+        for trigger in (
+            "Small behavior or wording change",
+            "Reusable investigation or comparison",
+            "Durable structural, authority, or compatibility decision",
+            "Multi-stage or multi-file implementation",
+            "Performance, security, compatibility, or completion claim",
+            "Internal or external patch review",
+        ):
+            self.assertIn(trigger, skill_text)
+
+        adr_text = template_paths["adr"].read_text(encoding="utf-8")
+        for field in (
+            "source_of_truth: true",
+            "decision_id:",
+            "decision_status:",
+            "implementation_status:",
+            "date:",
+            "last_updated:",
+            "superseded_by:",
+            "implementation_plan:",
+            "implementation_evidence:",
+            "related:",
+        ):
+            self.assertIn(field, adr_text)
+        self.assertIn("separate from `implementation_status`", adr_text)
+        for status in (
+            "proposed",
+            "accepted",
+            "implemented",
+            "superseded",
+            "rejected",
+            "deferred",
+            "not_started",
+            "in_progress",
+            "verified",
+            "partial",
+        ):
+            self.assertIn(status, adr_text)
+
+        evidence_text = template_paths["evidence"].read_text(encoding="utf-8")
+        for evidence_contract in (
+            "target_fingerprint:",
+            "## Environment",
+            "## Commands And Results",
+            "## Limitations",
+            "Do not copy large logs",
+        ):
+            self.assertIn(evidence_contract, evidence_text)
+
+        decision_text = template_paths["decision"].read_text(encoding="utf-8")
+        self.assertIn("source_of_truth: false", decision_text)
+        self.assertIn("canonical_decision:", decision_text)
+        self.assertIn("derived and non-canonical", decision_text)
+        self.assertIn("authority order", agents_text)
+        self.assertIn("Do not pre-create optional", agents_text)
+
+        lifecycle_section = skill_text.split(
+            "## Adaptive Documentation Authority Lifecycle", 1
+        )[1].split("## Repo Memory Link Contract", 1)[0]
+        lifecycle_contract = "\n".join(
+            [
+                lifecycle_section,
+                agents_text,
+                portal_text,
+                *(path.read_text(encoding="utf-8") for path in template_paths.values()),
+            ]
+        )
+        for domain_term in ("BUILD", "ASK", "CHECK", "Pack", "MCP", "ontology"):
+            self.assertNotIn(domain_term, lifecycle_contract)
+
     def test_wiki_markdown_links_resolve_relative_to_each_page(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
