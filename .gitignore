@@ -1,20 +1,15 @@
+.DS_Store
 .venv/
 __pycache__/
 *.pyc
-.DS_Store
+.pytest_cache/
+.ruff_cache/
+.codegraph
 .codex/skills/**/.codex/
 .gstack/
 .omx/
+.omo/
+.hermes/
+state/
 continue.json
 wikiconfig.json
-
-# Local operator/runtime artifacts
-.codex/context/whiplash-state.json
-RESEARCH/
-vector/
-warehouse/ontology.duckdb
-warehouse/graph_projection/*.jsonl
-warehouse/graph_projection/summary.json
-warehouse/graph_projection/edges/
-warehouse/graph_projection/nodes/
-raw/inbox/TEST.MD

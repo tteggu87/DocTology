@@ -61,14 +61,14 @@ Do not use this skill when the user only wants to ingest one source into an exis
 ## Default Command
 
 ```bash
-python3 ~/.agents/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py /absolute/path/to/new-project
+python3 ~/.codex/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py /absolute/path/to/new-project
 ```
 
 To make automation explicit:
 
 ```bash
-python3 ~/.agents/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py /absolute/path/to/new-project --sqlite on
-python3 ~/.agents/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py /absolute/path/to/new-project --sqlite off
+python3 ~/.codex/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py /absolute/path/to/new-project --sqlite on
+python3 ~/.codex/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py /absolute/path/to/new-project --sqlite off
 ```
 
 Add `--force` only when the user explicitly wants overwrites.

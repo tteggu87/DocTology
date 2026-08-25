@@ -8,7 +8,14 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BATCH_PATH = ROOT / "scripts" / "wiki_batch.py"
+BATCH_PATH = (
+    ROOT
+    / ".agents"
+    / "skills"
+    / "llm-wiki-bootstrap"
+    / "scripts"
+    / "wiki_batch.py"
+)
 BOOTSTRAP_PATH = ROOT / ".agents" / "skills" / "llm-wiki-bootstrap" / "scripts" / "bootstrap_llm_wiki.py"
 
 

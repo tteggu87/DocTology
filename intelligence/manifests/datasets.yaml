@@ -1,116 +1,18 @@
+metadata:
+  status: Active
+  source_of_truth: false
+  last_updated: 2026-08-25
+  purpose: Filesystem datasets read or written by distribution actions.
 datasets:
-  - key: raw_inbox
-    path: raw/inbox/
-    role: incoming immutable source material awaiting registration or ingest
-    truth_class: source
-    owner: human
-  - key: raw_processed
-    path: raw/processed/
-    role: immutable source material already incorporated into the workspace
-    truth_class: source
-    owner: human
-  - key: warehouse_messages
-    path: warehouse/jsonl/messages.jsonl
-    role: canonical conversational or event-level registry when the corpus is sequential
-    truth_class: canonical
-    owner: ontology
-  - key: warehouse_documents
-    path: warehouse/jsonl/documents.jsonl
-    role: canonical document registry
-    truth_class: canonical
-    owner: ontology
-  - key: warehouse_source_versions
-    path: warehouse/jsonl/source_versions.jsonl
-    role: canonical export snapshot registry for repeated source families
-    truth_class: canonical
-    owner: ontology
-  - key: warehouse_entities
-    path: warehouse/jsonl/entities.jsonl
-    role: canonical entity registry
-    truth_class: canonical
-    owner: ontology
-  - key: warehouse_claims
-    path: warehouse/jsonl/claims.jsonl
-    role: canonical claim registry
-    truth_class: canonical
-    owner: ontology
-  - key: warehouse_claim_evidence
-    path: warehouse/jsonl/claim_evidence.jsonl
-    role: canonical claim-to-evidence registry
-    truth_class: canonical
-    owner: ontology
-  - key: warehouse_segments
-    path: warehouse/jsonl/segments.jsonl
-    role: canonical stable text-reference segments
-    truth_class: canonical
-    owner: ontology
-  - key: warehouse_derived_edges
-    path: warehouse/jsonl/derived_edges.jsonl
-    role: derived relation edges materialized from canonical claims
-    truth_class: derived
-    owner: ontology
-  - key: wiki_sources
-    path: wiki/sources/
-    role: human-facing per-source synthesis pages
-    truth_class: human_facing
-    owner: wiki
-  - key: wiki_entities
-    path: wiki/entities/
-    role: human-facing entity pages
-    truth_class: human_facing
-    owner: wiki
-  - key: wiki_people
-    path: wiki/people/
-    role: human-facing person pages
-    truth_class: human_facing
-    owner: wiki
-  - key: wiki_concepts
-    path: wiki/concepts/
-    role: human-facing concept pages
-    truth_class: human_facing
-    owner: wiki
-  - key: wiki_projects
-    path: wiki/projects/
-    role: human-facing project pages
-    truth_class: human_facing
-    owner: wiki
-  - key: wiki_analyses
-    path: wiki/analyses/
-    role: durable answer and synthesis pages
-    truth_class: human_facing
-    owner: wiki
-  - key: wiki_meta_index
-    path: wiki/_meta/index.md
-    role: sectioned page inventory for the human-facing wiki surface
-    truth_class: human_facing
-    owner: wiki
-  - key: wiki_meta_log
-    path: wiki/_meta/log.md
-    role: durable operational log for ingest, query, lint, and refactor work
-    truth_class: human_facing
-    owner: wiki
-  - key: graph_projection
-    path: warehouse/graph_projection/
-    role: optional graph-style exploration layer exported from canonical truth
-    truth_class: derived
-    owner: graph
-  - key: warehouse_graph_projection_summary
-    path: warehouse/graph_projection/summary.json
-    role: summary artifact describing availability and counts for the derived graph projection
-    truth_class: derived
-    owner: graph
-  - key: source_family_manifest
-    path: intelligence/manifests/source_families.yaml
-    role: declarative mapping for recurring source families and parser assumptions
-    truth_class: contract
-    owner: operator
-  - key: workbench_manifest
-    path: intelligence/manifests/workbench.yaml
-    role: declarative contract for sidecar workbench routes, actions, and mutation boundaries
-    truth_class: contract
-    owner: operator
-  - key: pipeline_manifest
-    path: intelligence/manifests/pipelines.yaml
-    role: declarative stage contract for closed ingest lifecycle expectations
-    truth_class: contract
-    owner: operator
+  - dataset_key: skills.source
+    source: .agents/skills
+    owner: doctology
+    canonical_shape: intelligence/schemas/skill_inventory.sql
+    freshness: on_commit
+    used_by_actions: [skills.check, skills.install]
+  - dataset_key: skills.installed
+    source: target skill root selected by the operator
+    owner: target_environment
+    canonical_shape: intelligence/schemas/skill_inventory.sql
+    freshness: on_install
+    used_by_actions: [skills.install]

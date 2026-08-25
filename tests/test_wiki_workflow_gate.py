@@ -12,7 +12,14 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKFLOW_PATH = ROOT / "scripts" / "wiki_workflow.py"
+WORKFLOW_PATH = (
+    ROOT
+    / ".agents"
+    / "skills"
+    / "llm-wiki-bootstrap"
+    / "scripts"
+    / "wiki_workflow.py"
+)
 BOOTSTRAP_PATH = ROOT / ".agents" / "skills" / "llm-wiki-bootstrap" / "scripts" / "bootstrap_llm_wiki.py"
 
 

@@ -1,159 +1,20 @@
+metadata:
+  status: Active
+  source_of_truth: false
+  last_updated: 2026-08-25
+  purpose: Public distribution actions.
 actions:
-  - key: register_source
-    description: Register an incoming raw source and create or update a matching wiki source stub.
-    inputs:
-      - raw/inbox/<source>
-    outputs:
-      - wiki/sources/<source-page>
-      - wiki/_meta/log.md
-      - wiki/_meta/index.md
-    reads:
-      - raw/inbox/
-      - templates/source_page_template.md
-    writes:
-      - wiki/sources/
-      - wiki/_meta/
-    notes:
-      - This is lighter than ontology-backed ingest and may be used when canonical extraction is not yet available.
-      - This is source registration only; do not report it as completed ontology-backed ingest by itself.
-  - key: ingest_with_ontology
-    description: Read a raw source, update canonical ontology registries, and project human-facing updates into wiki pages.
-    inputs:
-      - raw/inbox/<source>
-    outputs:
-      - warehouse/jsonl/messages.jsonl
-      - warehouse/jsonl/documents.jsonl
-      - warehouse/jsonl/entities.jsonl
-      - warehouse/jsonl/claims.jsonl
-      - warehouse/jsonl/claim_evidence.jsonl
-      - warehouse/jsonl/segments.jsonl
-      - warehouse/jsonl/derived_edges.jsonl
-      - wiki/sources/
-      - wiki/people/
-      - wiki/concepts/
-      - wiki/projects/
-      - wiki/analyses/
-      - wiki/_meta/index.md
-      - wiki/_meta/log.md
-    reads:
-      - raw/inbox/
-      - warehouse/jsonl/
-      - wiki/
-    writes:
-      - warehouse/jsonl/
-      - wiki/
-      - wiki/_meta/
-    notes:
-      - This is the intended repeated user-facing ingest workflow once the ontology-backed ingest skill exists.
-      - Close the lifecycle across source registration, applicable JSONL updates, wiki projection, meta refresh, structural validation, and completion reporting.
-      - Agent or helper-model judgment may choose affected pages, claims, relations, contradictions, and uncertainties; filename, keyword, token-shape, retrieval, graph, or YAML shortcuts must not decide semantic truth.
-  - key: ingest_incremental_export
-    description: Read a repeated export for a known source family, register the export version, upsert canonical sequential records, and then refresh the affected wiki pages.
-    inputs:
-      - raw/inbox/<cumulative-export>
-      - intelligence/manifests/source_families.yaml
-    outputs:
-      - warehouse/jsonl/source_versions.jsonl
-      - warehouse/jsonl/messages.jsonl
-      - warehouse/jsonl/documents.jsonl
-      - wiki/sources/
-      - wiki/_meta/index.md
-      - wiki/_meta/log.md
-    reads:
-      - raw/inbox/
-      - intelligence/manifests/source_families.yaml
-      - warehouse/jsonl/
-      - wiki/
-    writes:
-      - warehouse/jsonl/
-      - wiki/
-      - wiki/_meta/
-    notes:
-      - This action is for repeated exports such as A then A+B and should remain lightweight.
-      - Manifests define family matching and dataset boundaries, but runtime logic still performs fingerprinting and upsert.
-      - This is a specialized canonical update path for recurring exports, not a generic arbitrary-source full ingest framework.
-  - key: answer_query
-    description: Answer a user question using wiki pages first, with ontology-backed verification when needed, then persist durable answers.
-    inputs:
-      - user question
-    outputs:
-      - chat answer
-      - wiki/analyses/<analysis-page> when durable
-      - wiki/_meta/log.md
-    reads:
-      - wiki/_meta/index.md
-      - wiki/
-      - warehouse/jsonl/
-    writes:
-      - wiki/analyses/
-      - wiki/_meta/log.md
-    notes:
-      - Prefer wiki as the human-facing answer surface and use ontology registries for provenance, contradictions, and coverage checks.
-  - key: preview_query_local
-    description: Produce a repo-local query preview from wiki pages plus canonical registry hits without mutating canonical truth.
-    inputs:
-      - user question
-      - wiki/
-      - warehouse/jsonl/
-    outputs:
-      - preview answer markdown
-      - related wiki pages
-      - related source pages
-      - provenance sections
-      - warnings for thin or missing coverage
-    reads:
-      - wiki/
-      - warehouse/jsonl/entities.jsonl
-      - warehouse/jsonl/claims.jsonl
-      - warehouse/jsonl/segments.jsonl
-    writes: []
-    notes:
-      - This is the current Ask workspace contract exposed through the workbench adapter.
-      - It is a routing and draft surface, not a hidden autonomous generation path.
-  - key: save_query_analysis_draft
-    description: Save a durable analysis page from a repo-local query preview and add bounded link-backs on confident related pages.
-    inputs:
-      - query preview result
-      - user question
-    outputs:
-      - wiki/analyses/<analysis-page>
-      - wiki/_meta/log.md
-      - wiki/_meta/index.md
-      - related wiki page link-backs when confidence is sufficient
-    reads:
-      - wiki/
-      - warehouse/jsonl/
-    writes:
-      - wiki/analyses/
-      - wiki/_meta/log.md
-      - wiki/_meta/index.md
-      - selected wiki pages under the allowed workbench write scope
-    notes:
-      - This is backend-gated and intentionally bounded to wiki-facing durable outputs.
-  - key: review_claim_state
-    description: Update canonical claim review state through the backend while keeping browser-side mutation restricted.
-    inputs:
-      - claim id
-      - target review state
-    outputs:
-      - warehouse/jsonl/claims.jsonl
-      - wiki/_meta/log.md
-    reads:
-      - warehouse/jsonl/claims.jsonl
-    writes:
-      - warehouse/jsonl/claims.jsonl
-      - wiki/_meta/log.md
-    notes:
-      - The current workbench contract allows canonical review-state edits only for claims, not arbitrary registry mutation.
-  - key: run_workbench_maintenance_action
-    description: Run an explicit maintenance command through the workbench adapter for status, reindex, or lint.
-    inputs:
-      - action key
-    outputs:
-      - structured command output
-    reads:
-      - scripts/llm_wiki.py
-    writes:
-      - wiki/_meta/index.md when action is reindex
-    notes:
-      - Allowed actions are intentionally limited to status, reindex, and lint.
+  - key: skills.check
+    status: implemented
+    description: Validate the exact three-skill source inventory.
+    capability: cli.skills_check
+    implementation: scripts.manage_skills:validate_source
+    writes_layers: []
+    touches_datasets: [skills.source]
+  - key: skills.install
+    status: implemented
+    description: Synchronize the three complete skill trees to a target skill root.
+    capability: cli.skills_install
+    implementation: scripts.manage_skills:install
+    writes_layers: [TargetSkillRoot]
+    touches_datasets: [skills.source, skills.installed]

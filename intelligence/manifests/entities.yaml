@@ -1,36 +1,11 @@
+metadata:
+  status: Active
+  source_of_truth: false
+  last_updated: 2026-08-25
+  purpose: Named product entities.
 entities:
-  - key: llm_wiki_cli
-    type: system_surface
-    path: scripts/llm_wiki.py
-    role: canonical local CLI for source registration, index rebuild, lint, status, and structured meta log updates
-    truth_class: execution
-  - key: incremental_ingest_cli
-    type: system_surface
-    path: scripts/incremental_ingest.py
-    role: manifest-backed repeated-export ingest path that updates canonical registries and refreshes affected wiki surfaces
-    truth_class: execution
-  - key: workbench_adapter
-    type: system_surface
-    path: scripts/workbench_api.py
-    role: compatibility wrapper that exposes the thin Python adapter for the optional local sidecar workbench
-    truth_class: execution
-  - key: workbench_repository
-    type: component
-    path: scripts/workbench/repository.py
-    role: repo-facing read model plus bounded write actions used by the workbench adapter
-    truth_class: execution
-  - key: workbench_http_router
-    type: component
-    path: scripts/workbench/server.py
-    role: HTTP routing and CLI server entrypoint for explicit workbench routes
-    truth_class: execution
-  - key: source_family_manifest
-    type: contract
-    path: intelligence/manifests/source_families.yaml
-    role: declarative mapping from recurring raw export families to parser assumptions and family identity
-    truth_class: contract
-  - key: workbench_contract
-    type: contract
-    path: intelligence/manifests/workbench.yaml
-    role: declarative contract for workbench read surfaces, action surfaces, and mutation boundaries
-    truth_class: contract
+  - key: doctology.skill_pack
+    description: The exact collection of three public skill source trees.
+    canonical_terms: [public_skill]
+    owned_by: doctology
+    used_by_actions: [skills.check, skills.install]

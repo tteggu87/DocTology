@@ -1,0 +1,14 @@
+metadata:
+  status: Active
+  source_of_truth: false
+  last_updated: 2026-08-25
+  execution_mode: implemented
+  purpose: Distribution validation before installation.
+event_key: skills.install_requested
+emitted_by: [skills.install]
+chain:
+  - action: skills.check
+    reason: Reject an incomplete or expanded active inventory before copying.
+    gate: true
+  - action: skills.install
+    reason: Copy each validated complete skill tree.

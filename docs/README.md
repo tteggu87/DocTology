@@ -1,25 +1,20 @@
-# Docs Portal
+---
+status: Active
+source_of_truth: true
+last_updated: 2026-08-25
+superseded_by: N/A
+---
 
-This directory is the repository-facing documentation portal for the live DocTology implementation.
+# Documentation portal
 
-Start here when you need current truth from the codebase rather than historical discussion:
+- [Current state](CURRENT_STATE.md)
+- [Architecture](ARCHITECTURE.md)
+- [Layer boundaries](LAYERS.md)
+- [Skill integration](SKILLS_INTEGRATION.md)
+- [Roadmap](ROADMAP.md)
+- [Impact summary](IMPACT_SUMMARY.md)
+- [Repository map](repo-map/README.md)
+- [ADR index](adr/README.md), [plans](plans/README.md), [evidence](evidence/README.md), [reviews](reviews/README.md), [archive](archive/README.md)
+- [Derived decision memory](../wiki/decisions/README.md)
 
-- [`CURRENT_STATE.md`](./CURRENT_STATE.md): current product surfaces, write boundaries, and supported operator flows
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md): runtime components, entrypoints, and data flow
-- [`LAYERS.md`](./LAYERS.md): source-vs-canonical-vs-human-facing-vs-derived boundaries
-- [`CLOSED_INGEST_PIPELINE.md`](./CLOSED_INGEST_PIPELINE.md): source registration vs full ontology-backed ingest lifecycle
-- [`SKILLS_INTEGRATION.md`](./SKILLS_INTEGRATION.md): how repo rules, skills, and local tooling fit together
-- [`ROADMAP.md`](./ROADMAP.md): near-term alignment work and known gaps
-- [`IMPACT_SUMMARY.md`](./IMPACT_SUMMARY.md): current refresh summary, checked files, and remaining drift
-
-Current repository posture:
-
-- canonical local wiki-maintenance CLI: `scripts/llm_wiki.py`
-- `scripts/llm_wiki.py ingest` is source registration only, not a completed ontology-backed ingest by itself
-- canonical repeated-export ingest path: `scripts/incremental_ingest.py`
-- optional local sidecar workbench: `apps/workbench/` via `scripts/workbench_api.py`
-- declarative contracts live under `intelligence/`, but execution still lives in Python
-
-Legacy note:
-
-- `scripts/workbench_api.py` is still live, but it is intentionally a compatibility wrapper over the package-style modules in `scripts/workbench/`
+DocTology's current product boundary is the three directories under `.agents/skills/`. Repository memory is derived context and does not override those sources.

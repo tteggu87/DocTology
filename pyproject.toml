@@ -1,0 +1,8 @@
+[project]
+name = "doctology-skill-pack"
+version = "1.0.0"
+description = "Three focused skills for LLM wikis and repository documentation intelligence"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

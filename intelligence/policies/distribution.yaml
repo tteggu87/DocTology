@@ -1,0 +1,11 @@
+metadata:
+  status: Active
+  source_of_truth: false
+  last_updated: 2026-08-25
+  purpose: Public skill-pack boundaries.
+policies:
+  - policy_key: distribution.exact_inventory
+    applies_to: [skills.check, skills.install]
+    condition: Active source inventory contains exactly the three documented public skills and each has SKILL.md.
+    block_on_fail: true
+    notes: [Install complete directories, never isolated SKILL.md files.]

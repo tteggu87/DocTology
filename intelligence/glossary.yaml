@@ -1,89 +1,20 @@
+metadata:
+  status: Active
+  source_of_truth: true
+  last_updated: 2026-08-25
+  purpose: Canonical product terms for DocTology.
 terms:
-  - key: raw_source
-    definition: Immutable source material stored under raw/ and used as the original evidence surface.
-    aliases:
-      - source
-      - raw file
-  - key: canonical_ontology
-    definition: Structured machine-truth registries under warehouse/jsonl/ used for provenance-aware reasoning.
-    aliases:
-      - ontology registry
-      - canonical structured truth
-  - key: wiki_page
-    definition: Human-facing maintained markdown synthesis page under wiki/.
-    aliases:
-      - synthesis page
-      - maintained page
-  - key: derived_output
-    definition: Any artifact generated from canonical truth that is not itself canonical, such as graph projection or retrieval indexes.
-    aliases:
-      - projection
-      - derived artifact
-  - key: entity
-    definition: Named person, project, organization, concept, or domain object extracted into canonical registries.
-  - key: claim
-    definition: Structured statement extracted from a source and tracked with review state and provenance.
-  - key: evidence
-    definition: Supporting link between a claim and a source segment or source reference.
-  - key: segment
-    definition: Stable text-reference unit bridging documents, evidence, retrieval, and downstream synthesis.
-  - key: analysis_page
-    definition: Durable answer or synthesis note saved under wiki/analyses/.
-  - key: ontology_backed_ingest
-    definition: Repeated source-processing workflow that registers source identity, appends proposed ontology records during automatic ingest, and projects source-backed results into wiki pages before any accepted-truth promotion.
-  - key: closed_ingest_pipeline
-    definition: Artifact lifecycle contract for source ingest that continues beyond source registration into proposed JSONL appends, wiki projection, meta refresh, structural validation, and completion reporting.
-  - key: source_registration_only
-    definition: Lightweight source identity registration performed by scripts/llm_wiki.py ingest; it is not full ontology-backed ingest by itself.
-  - key: configured_full_ingest
-    definition: Configured helper-LLM runtime in scripts/llm_full_ingest.py that can dry-run or apply source-backed wiki growth and proposed JSONL output without semantic fallback.
-  - key: proposed_ontology_record
-    definition: Automatically generated entity, claim, evidence, or relation candidate stored as proposed/needs_review rather than accepted canonical truth.
-  - key: proposed_record_id
-    definition: Stable artifact identifier assigned to a proposed ontology record so repeated ingest can skip duplicates without semantic merging.
-  - key: content_hash
-    definition: Structural hash over source identity, record family, and field-specific source-backed text used for idempotent proposed JSONL writes.
-  - key: idempotent_proposed_append
-    definition: Append-or-skip behavior for proposed JSONL records where existing ids or content hashes prevent duplicate lines during repeated ingest.
-  - key: structural_validation
-    definition: Validation that checks artifact presence, parseability, required fields, link integrity, and provenance shape without judging semantic truth.
-  - key: source_family
-    definition: Stable identity for a recurring corpus such as one chat room, mailbox, or note stream across multiple exports.
-    aliases:
-      - family
-      - recurring source
-  - key: export_version
-    definition: One concrete snapshot or export event for a source family, tracked separately from the family itself.
-    aliases:
-      - export snapshot
-      - source version
-  - key: message_fingerprint
-    definition: Stable row identity used to detect duplicates or repeats for sequential corpora within the same source family.
-    aliases:
-      - row fingerprint
-      - message identity
-  - key: incremental_ingest
-    definition: Ingest workflow that recognizes repeated exports of the same source family and adds only newly observed canonical records when possible.
-    aliases:
-      - cumulative export ingest
-      - delta-aware ingest
-  - key: workbench
-    definition: Optional local sidecar UI in apps/workbench backed by the Python adapter in scripts/workbench_api.py.
-    aliases:
-      - sidecar workbench
-      - operator workbench
-  - key: query_preview
-    definition: Repo-local search and synthesis draft produced from wiki pages first, with canonical registry hits added as supporting evidence.
-    aliases:
-      - ask preview
-      - local query preview
-  - key: bounded_write
-    definition: Explicit backend-gated write path restricted to approved wiki or canonical targets rather than arbitrary filesystem mutation.
-    aliases:
-      - gated write
-      - explicit write contract
-  - key: claim_review
-    definition: Operator review action that updates canonical claim review state without letting the browser mutate registries directly.
-    aliases:
-      - claim moderation
-      - claim triage
+  - term: public_skill
+    aliases: [active_skill]
+    status: active
+    definition: One of the three self-contained skill directories distributed by DocTology.
+    owned_by: doctology
+    related_terms: [derived_index]
+    replaced_by: null
+  - term: derived_index
+    aliases: [sqlite_index]
+    status: active
+    definition: Rebuildable retrieval state that never overrides Markdown or repository truth.
+    owned_by: downstream_repository
+    related_terms: [public_skill]
+    replaced_by: null

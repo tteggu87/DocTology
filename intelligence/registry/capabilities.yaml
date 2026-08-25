@@ -1,33 +1,18 @@
+metadata:
+  status: Active
+  source_of_truth: false
+  last_updated: 2026-08-25
+  purpose: Bind distribution actions to Python implementations.
 capabilities:
-  - key: wiki.status
-    action: run_workbench_maintenance_action
-    implementation: scripts/llm_wiki.py:status
-    entrypoint: python3 scripts/llm_wiki.py status
-  - key: wiki.reindex
-    action: run_workbench_maintenance_action
-    implementation: scripts/llm_wiki.py:rebuild_index
-    entrypoint: python3 scripts/llm_wiki.py reindex
-  - key: wiki.lint
-    action: run_workbench_maintenance_action
-    implementation: scripts/llm_wiki.py:lint_wiki
-    entrypoint: python3 scripts/llm_wiki.py lint
-  - key: source.ingest.register
-    action: register_source
-    implementation: scripts/llm_wiki.py:ingest_source
-    entrypoint: python3 scripts/llm_wiki.py ingest <path> [--title ...]
-  - key: source.ingest.incremental
-    action: ingest_incremental_export
-    implementation: scripts/incremental_ingest.py:ingest_incremental
-    entrypoint: python3 scripts/incremental_ingest.py <raw_source> [--project-root ...]
-  - key: workbench.query.preview
-    action: preview_query_local
-    implementation: scripts/workbench/repository.py:query_preview
-    entrypoint: GET /api/query/preview?q=<question>
-  - key: workbench.analysis.save
-    action: save_query_analysis_draft
-    implementation: scripts/workbench/repository.py:save_query_analysis
-    entrypoint: POST /api/actions/save-analysis
-  - key: workbench.claim.review
-    action: review_claim_state
-    implementation: scripts/workbench/repository.py:review_claim
-    entrypoint: POST /api/actions/review-claim
+  - key: cli.skills_check
+    implementation: scripts.manage_skills:validate_source
+    input_contract: repository_root
+    output_contract: validation_errors
+    side_effects: []
+    status: active
+  - key: cli.skills_install
+    implementation: scripts.manage_skills:install
+    input_contract: target_skill_root
+    output_contract: synchronization_status
+    side_effects: [writes target skill directories]
+    status: active
