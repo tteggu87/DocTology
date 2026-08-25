@@ -20,3 +20,12 @@ superseded_by: N/A
 
 - [Repo memory index](../wiki/_meta/index.md)
 - [Repo memory log](../wiki/_meta/log.md)
+
+## Decision And Delivery Records
+
+- [Architecture decisions](adr/README.md)
+- [Plans](plans/README.md)
+- [Evidence](evidence/README.md)
+- [Reviews](reviews/README.md)
+- [Archive](archive/README.md)
+- [Derived decisions](../wiki/decisions/README.md)

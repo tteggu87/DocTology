@@ -209,17 +209,18 @@ class RepoDocsRetrievalTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue((generated / "state" / "repo_docs_index.sqlite").is_file())
 
-    def test_guidance_keeps_retrieval_optional_and_dependency_light(self) -> None:
+    def test_guidance_keeps_retrieval_derived_and_dependency_light(self) -> None:
         skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
         agents = (SKILL_ROOT / "assets" / "AGENTS.template.md").read_text(encoding="utf-8")
 
         for text in (skill, agents):
             self.assertIn("repo_docs_retrieval.py", text)
-            self.assertIn("opt-in", text)
             self.assertIn("CodeGraph", text)
             self.assertIn("non-blocking", text)
-        self.assertNotIn("ONNX", skill[skill.index("## Optional Derived Repo Docs Retrieval") :])
-        self.assertNotIn("RRF", skill[skill.index("## Optional Derived Repo Docs Retrieval") :])
+        retrieval_section = skill[skill.index("## Derived Repo Docs Retrieval") :]
+        self.assertIn("disposable", retrieval_section)
+        self.assertNotIn("ONNX", retrieval_section)
+        self.assertNotIn("RRF", retrieval_section)
 
 
 if __name__ == "__main__":

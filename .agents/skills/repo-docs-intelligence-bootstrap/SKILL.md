@@ -45,10 +45,10 @@ The usual target output is:
 - a `docs/README.md` portal
 - current-state architecture docs that reflect actual code
 - `docs/archive/` for superseded material with a status banner
-- optional `docs/reviews/` and `docs/experiments/`
-- optional `docs/repo-map/` for entrypoint, module, data-flow, and high-impact symbol reading maps
+- `docs/adr/`, `docs/plans/`, `docs/evidence/`, `docs/reviews/`, and `docs/archive/` with concise role indexes
+- `docs/repo-map/` for entrypoint, module, data-flow, and high-impact symbol reading maps
 - a minimal `intelligence/` directory with glossary, manifests, handlers, policies, schemas, and capabilities
-- a small `wiki/` memory layer with `_meta/index.md`, `_meta/log.md`, `analyses/`, `sources/`, `concepts/`, and `projects/`
+- a small `wiki/` memory layer with `_meta/index.md`, `_meta/log.md`, `analyses/`, `sources/`, `concepts/`, `projects/`, and `decisions/`
 - optional `scripts/pipeline_refresh.py` and `scripts/sync_current_state.py` when the repo needs a single entry and doc-sync path
 - a root `AGENTS.md`
 - an impact summary describing what changed, what stayed legacy, and what drift still remains
@@ -75,20 +75,21 @@ The layers are intentionally asymmetric:
 Do not offer a separate wiki-only mode from this skill.
 Create the small wiki memory layer as part of the normal repo-docs profile, but keep it lightweight and subordinate to current docs and intelligence.
 
-## Adaptive Documentation Authority Lifecycle
+## Documentation Authority Lifecycle
 
 Use this authority chain when two artifacts disagree:
 
 1. live code, registered entrypoints, and tests establish what currently runs
 2. current canonical docs and accepted ADRs explain current structure and durable decisions
-3. intelligence contracts define reusable machine-readable terms, actions, datasets, policies, schemas, and bindings when those surfaces exist
+3. intelligence contracts define reusable machine-readable terms, actions, datasets, policies, schemas, and bindings
 4. implementation plans, evidence, and reviews record intended work, verification, and findings without replacing current truth
 5. wiki decisions, analyses, and sources preserve derived explanation and cross-session memory
-6. optional search indexes accelerate discovery but are disposable and never decide truth
+6. derived search indexes accelerate discovery but are disposable and never decide truth
 
 Report disagreement from a lower layer as drift and verify the higher authority before updating it. A plan is not proof that work shipped, evidence is not the sole definition of current behavior, a review does not silently change a decision, and a wiki summary does not replace its canonical ADR.
 
-Promote documentation by risk and reuse instead of pre-creating every surface:
+The Repo Docs profile always creates the complete operating scaffold. Use each
+document role by risk and reuse instead of creating placeholder records:
 
 | Change or work shape | Minimum durable surface |
 | --- | --- |
@@ -98,13 +99,19 @@ Promote documentation by risk and reuse instead of pre-creating every surface:
 | Multi-stage or multi-file implementation | Add an implementation plan with an explicit current next action. |
 | Performance, security, compatibility, or completion claim | Add bounded evidence containing commands, environment, results, scope, limitations, and a target fingerprint. |
 | Internal or external patch review | Add a review that identifies the reviewed target, findings, disposition, and supporting evidence. |
-| Hard-to-reconstruct entrypoints, modules, or data flow | Add or refresh the optional repo map. |
+| Entrypoints, modules, or data flow | Keep the repo map current. |
 
-Do not create `docs/adr/`, `docs/plans/`, `docs/evidence/`, `docs/reviews/`, `wiki/decisions/`, or `docs/repo-map/` until their promotion condition is met. New repositories may use `docs/adr/` as the default ADR location. Existing flat ADR files such as `docs/ADR_*.md` and stable custom ADR directories remain supported; do not migrate them or rename existing manifest keys for layout consistency.
+For a new repository, always create `docs/adr/`, `docs/plans/`,
+`docs/evidence/`, `docs/reviews/`, `docs/repo-map/`, `docs/archive/`, and
+`wiki/decisions/` with their concise README indexes. Do not create fake ADRs,
+plans, evidence, reviews, or decisions merely to fill the folders.
+Existing flat ADR files such as `docs/ADR_*.md`, flat plan files such as
+`docs/*PLAN*.md`, and stable custom locations remain supported; do not migrate
+them or rename existing manifest keys for layout consistency.
 
 Keep decision governance separate from implementation progress. Decision status uses `proposed`, `accepted`, `implemented`, `superseded`, `rejected`, or `deferred`; implementation status uses `not_started`, `in_progress`, `verified`, or `partial`. Never infer one status from the other. Prefer `accepted` plus `verified` for a currently accepted decision whose implementation has been verified; preserve an existing `implemented` decision status when a mature repository already uses it.
 
-Use the bundled lifecycle templates only when a promotion condition is met:
+Use the bundled lifecycle templates when creating a real record:
 
 - `assets/docs/adr/ADR.template.md`
 - `assets/docs/plans/IMPLEMENTATION_PLAN.template.md`
@@ -112,28 +119,38 @@ Use the bundled lifecycle templates only when a promotion condition is met:
 - `assets/docs/reviews/REVIEW.template.md`
 - `assets/wiki/decisions/decision.template.md`
 
+Use the bundled README templates to create the standard scaffold:
+
+- `assets/docs/adr/README.template.md`
+- `assets/docs/plans/README.template.md`
+- `assets/docs/evidence/README.template.md`
+- `assets/docs/reviews/README.template.md`
+- `assets/docs/repo-map/README.template.md`
+- `assets/docs/archive/README.template.md`
+- `assets/wiki/decisions/README.template.md`
+
 Adapt identifiers and relative links to the target repository. ADRs are canonical decision records. Plans are change-control aids. Evidence records reproducible observations without copying large logs. Reviews record scoped findings. Wiki decisions must keep `source_of_truth: false`, resolve their canonical decision source, and clearly label mirrored implementation state as non-canonical.
 
-`lifecycle_schema: repo-docs-v1` marks artifacts created from these templates. Treat
-older flat ADRs and pre-existing plan, evidence, review, or wiki-decision collections
-without that marker as compatible legacy inventory; do not force relocation, field
-renaming, or mass frontmatter migration. Validate marked artifacts strictly, and add
-the marker plus required portable fields when a legacy artifact is materially
-promoted into this lifecycle rather than merely read or indexed.
+Do not require a special activation marker. Standard locations and portable
+frontmatter identify new lifecycle records deterministically. Existing flat or
+custom DuckCrab-style records remain compatible legacy inventory without relocation,
+field renaming, or mass frontmatter migration.
 
-The validator activates lifecycle checks only for document roles that actually exist. It checks unique ADR identities, decision and implementation status vocabularies, resolvable supersession/plan/evidence links, implementation plus verification support for `implemented` claims, non-canonical wiki decisions with canonical sources, portal visibility for activated indexes, and stale plan next actions. Repositories without these optional roles remain valid without creating empty directories.
+The validator checks that the full Repo Docs scaffold exists, while accepting
+established flat ADR and plan locations as compatibility equivalents. It checks
+new standard records for unique identities, valid decision and implementation
+statuses, resolvable supersession/plan/evidence links, implementation plus
+verification support for implemented claims, non-canonical wiki decisions with
+canonical sources, portal visibility, and stale plan next actions.
 
-## Optional Derived Repo Docs Retrieval
+## Derived Repo Docs Retrieval
 
-Keep retrieval opt-in, disposable, and non-blocking. Do not enable it merely
-because the profile exists. Recommend it only after measured friction, such as
-roughly 100 or more documentation pages, tens of megabytes of Markdown, or
-repeated reads of long ADR, plan, evidence, review, or wiki documents. A missing
-index and a repository that leaves retrieval off are both valid states.
+Include the dependency-light retrieval script in the Repo Docs scaffold. Keep
+its SQLite index disposable and non-blocking: a missing or stale index never
+changes documentation truth or validator completion.
 
-When retrieval is warranted, copy the bundled dependency-light
-`scripts/repo_docs_retrieval.py` into the target repository's `scripts/`
-directory or run it from the skill directory. It reads only root `AGENTS.md`,
+Copy the bundled `scripts/repo_docs_retrieval.py` into the target repository's
+`scripts/` directory. It reads only root `AGENTS.md`,
 `docs/**/*.md`, and `wiki/**/*.md`; it never indexes source-code bodies. Its
 heading chunks, relative Markdown-link edges, fingerprints, and FTS5 rows live
 in the atomically replaced `state/repo_docs_index.sqlite` derived index.
@@ -155,7 +172,7 @@ database at any time and rebuild it entirely from Markdown. Retrieval refresh
 failure must be reported separately but must not block canonical docs or the
 validator completion gate.
 
-Keep CodeGraph, LSP, and `rg` responsible for code navigation. This optional
+Keep CodeGraph, LSP, and `rg` responsible for code navigation. This derived
 surface is lexical document retrieval plus bounded Markdown-link traversal
 only; do not add embeddings, rank-fusion layers, approximate-neighbor indexes,
 canonical JSONL truth stores, workflow engines, or runtime databases to this profile.
@@ -193,7 +210,7 @@ maintenance log. Always check the linked canonical file before treating a wiki
 claim as current truth.
 
 For a promoted change, update the smallest canonical truth first, then its ADR
-or plan when activated, implementation, evidence, current docs, derived wiki
+or plan when warranted, implementation, evidence, current docs, derived wiki
 decision or analysis, and finally the impact summary and maintenance log.
 
 ## Core Rules
@@ -365,7 +382,7 @@ Figure out:
 - which current concepts, datasets, handlers, policies, or schemas are affected
 - which legacy paths still matter and why
 - which wiki analyses, logs, plans, or review pages already explain related decisions
-- whether the repo has complexity that deserves `docs/repo-map/` or whether the small wiki index is enough
+- which repo-map pages need real content now and which can remain concise indexes until the repository grows
 
 ### 2. Analyze Impact Before Editing
 
@@ -393,12 +410,17 @@ Then classify older material by role without moving it merely to match this skil
 
 - keep durable decisions in the repository's existing active ADR location
 - keep promoted review records in their existing review location
-- keep experiments in their established location or use `docs/experiments/` when that surface is newly activated
+- keep experiments in their established location or use `docs/experiments/` when a dedicated experiment surface is useful
 - move genuinely superseded material to `docs/archive/` only when archiving is warranted
 
 Do not delete old docs unless they are obviously duplicated and the user explicitly wants deletion.
 
-For new ADRs in a repository with no established ADR location, prefer `docs/adr/`; if the repository already uses flat or custom ADR locations, preserve and extend that location instead of migrating it. Create plan, evidence, review, and wiki-decision directories only after their promotion threshold is met.
+Create the standard role indexes under `docs/adr/`, `docs/plans/`,
+`docs/evidence/`, `docs/reviews/`, `docs/repo-map/`, `docs/archive/`, and
+`wiki/decisions/` as part of every Repo Docs bootstrap. Create actual ADRs,
+plans, evidence, reviews, and decisions only when the work warrants them. If
+the repository already uses flat or custom ADR and plan locations, preserve and
+extend those locations instead of migrating them solely for layout consistency.
 
 If a file goes to `docs/archive/`, prepend a status banner:
 
@@ -421,9 +443,11 @@ Always verify:
 If the repo is transitional, say so directly.
 Do not archive, downplay, or relabel a still-imported path as historical just because it is no longer preferred.
 
-### 4. Maintain Repo Map When It Reduces Drift
+### 4. Maintain The Repo Map
 
-Create or refresh `docs/repo-map/` when entrypoints, module boundaries, data flow, or high-impact symbols are hard to reconstruct from the main docs.
+Always create the `docs/repo-map/` scaffold. Populate or refresh its focused
+maps when entrypoints, module boundaries, data flow, or high-impact symbols
+need more than a concise index to remain reconstructable.
 
 Use the bundled repo-map templates:
 
@@ -440,7 +464,7 @@ Minimum repo-map expectations:
 - `MODULES.md` maps major module responsibilities and still-live legacy modules
 - `DATA_FLOW.md` summarizes primary flow, side effects, and gates
 - `SYMBOL_GRAPH.md` lists only high-impact symbols with caller/callee/risk notes
-- `wiki/_meta/index.md` links `docs/repo-map/README.md` when a repo-map exists
+- `wiki/_meta/index.md` links `docs/repo-map/README.md`
 
 ### 5. Maintain Small Wiki Memory
 
@@ -452,8 +476,13 @@ Create or refresh the small wiki memory scaffold:
 - `wiki/sources/`
 - `wiki/concepts/`
 - `wiki/projects/`
+- `wiki/decisions/`
 
-Add `wiki/decisions/` only when a durable canonical decision benefits from a derived explanation or resumption page. A wiki decision must link to its canonical ADR or other canonical decision source and remain explicitly non-canonical.
+Keep the `wiki/decisions/README.md` index in the standard scaffold. Add an
+actual decision page only when a durable canonical decision benefits from a
+derived explanation or resumption page. A wiki decision must link to its
+canonical ADR or other canonical decision source and remain explicitly
+non-canonical.
 
 Use `wiki/_meta/index.md` as the durable reading map for future sessions.
 Use `wiki/_meta/log.md` for chronological maintenance notes.
@@ -679,6 +708,12 @@ Use these bundled files when useful:
 - `assets/docs/repo-map/MODULES.template.md`
 - `assets/docs/repo-map/DATA_FLOW.template.md`
 - `assets/docs/repo-map/SYMBOL_GRAPH.template.md`
+- `assets/docs/adr/README.template.md`
+- `assets/docs/plans/README.template.md`
+- `assets/docs/evidence/README.template.md`
+- `assets/docs/reviews/README.template.md`
+- `assets/docs/archive/README.template.md`
+- `assets/wiki/decisions/README.template.md`
 - `assets/wiki/_meta/index.template.md`
 - `assets/wiki/_meta/log.template.md`
 - `assets/wiki/analyses/analysis.template.md`
@@ -699,7 +734,7 @@ Use these bundled files when useful:
 ## Bundled Scripts
 
 - `scripts/validate_repo_docs_intelligence.py`
-- `scripts/repo_docs_retrieval.py` (optional derived Markdown retrieval only)
+- `scripts/repo_docs_retrieval.py` (derived Markdown retrieval only)
 - `scripts/repo_docs_dogfood.py` (read-only compatibility inventory plus validator run)
 
 Adapt the templates to the repo. Do not paste them blindly.

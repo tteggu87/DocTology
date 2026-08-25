@@ -53,6 +53,7 @@ WIKI_MEMORY_PATHS: Final = [
     "wiki/sources",
     "wiki/concepts",
     "wiki/projects",
+    "wiki/decisions",
 ]
 
 PATHLIKE_EXTENSIONS = (".md", ".yaml", ".yml", ".sql", ".py")
@@ -96,9 +97,6 @@ IMPLEMENTATION_STATUSES: Final = {
     "partial",
 }
 PLAN_STATUSES: Final = {"active", "completed", "superseded", "deferred"}
-LIFECYCLE_SCHEMA: Final = "repo-docs-v1"
-
-
 class ValidationReport:
     def __init__(self, repo_root: Path) -> None:
         self.repo_root = repo_root
@@ -678,6 +676,8 @@ def validate_markdown_refs(
 
 def validate_archive_banners(archive_dir: Path, report: ValidationReport) -> None:
     for path in archive_dir.rglob("*.md"):
+        if path.name.lower() in {"readme.md", "index.md"}:
+            continue
         top = "\n".join(path.read_text(encoding="utf-8").splitlines()[:8])
         if "Status: Archived" not in top or "Source of Truth: No" not in top:
             report.add_error(
@@ -731,7 +731,7 @@ def validate_repo_map(repo_root: Path, report: ValidationReport) -> None:
         if "docs/repo-map/README.md" not in wiki_index_text:
             report.add_error(
                 "repo_map.wiki_index_missing",
-                "Wiki index must link `docs/repo-map/README.md` when a repo-map exists.",
+                "Wiki index must link `docs/repo-map/README.md`.",
                 wiki_index_path,
             )
 
@@ -1082,7 +1082,6 @@ def collect_lifecycle_documents(
                 continue
             metadata = parse_lifecycle_metadata(path.read_text(encoding="utf-8"))
             document_type = normalize_key(str(metadata.get("type", "")))
-            lifecycle_schema = normalize_key(str(metadata.get("lifecycle_schema", "")))
             directory_role = relative_parts[0].lower() if len(relative_parts) > 1 else ""
             is_index = path.name.lower() in {"readme.md", "index.md"}
             if (
@@ -1095,14 +1094,30 @@ def collect_lifecycle_documents(
                 or document_type == "implementation_plan"
             ):
                 documents["plan"].append((path, metadata))
-            elif (
-                metadata.get("evidence_id")
-                or (document_type == "evidence" and lifecycle_schema == LIFECYCLE_SCHEMA)
+            elif metadata.get("evidence_id") or (
+                document_type == "evidence"
+                and any(
+                    metadata.get(field)
+                    for field in (
+                        "subject",
+                        "target_fingerprint",
+                        "related_decisions",
+                        "related_plans",
+                    )
+                )
             ):
                 documents["evidence"].append((path, metadata))
-            elif (
-                metadata.get("review_id")
-                or (document_type == "review" and lifecycle_schema == LIFECYCLE_SCHEMA)
+            elif metadata.get("review_id") or (
+                document_type == "review"
+                and any(
+                    metadata.get(field)
+                    for field in (
+                        "reviewed_target",
+                        "target_fingerprint",
+                        "related_decisions",
+                        "evidence_refs",
+                    )
+                )
             ):
                 documents["review"].append((path, metadata))
 
@@ -1128,7 +1143,7 @@ def validate_unique_lifecycle_ids(
         if not values:
             report.add_error(
                 f"lifecycle.{kind}_id_missing",
-                f"Activated {kind} document is missing `{field}`.",
+                f"Standard {kind} document is missing `{field}`.",
                 path,
             )
             continue
@@ -1166,7 +1181,7 @@ def validate_lifecycle_references(
         if allowed_targets is not None and target not in allowed_targets:
             report.add_error(
                 "lifecycle.reference_wrong_kind",
-                f"`{field}` reference `{reference}` does not target an activated lifecycle document of the required kind.",
+                f"`{field}` reference `{reference}` does not target a lifecycle document of the required kind.",
                 source_path,
             )
             continue
@@ -1427,7 +1442,7 @@ def validate_lifecycle_portal(
     if not portal.exists():
         report.add_error(
             "lifecycle.portal_missing",
-            "Activated lifecycle documents require `docs/README.md` as their portal.",
+            "Lifecycle documents require `docs/README.md` as their portal.",
             portal,
         )
         return
@@ -1468,12 +1483,150 @@ def validate_lifecycle_portal(
         if not exposed:
             report.add_error(
                 f"lifecycle.portal_{name}_index_missing",
-                f"The docs portal must link the activated {name.replace('_', ' ')} index or location.",
+                f"The docs portal must link the {name.replace('_', ' ')} index or location.",
                 portal,
             )
 
 
+def validate_profile_scaffold(repo_root: Path, report: ValidationReport) -> None:
+    docs = repo_root / "docs"
+    wiki = repo_root / "wiki"
+
+    def has_legacy_role_documents(
+        directory: Path,
+        *,
+        identity_field: str | None = None,
+        standard_type: str | None = None,
+        standard_fields: tuple[str, ...] = (),
+    ) -> bool:
+        if not directory.is_dir():
+            return False
+        legacy_found = False
+        for path in directory.glob("*.md"):
+            if path.name.lower() in {"readme.md", "index.md"}:
+                continue
+            metadata = parse_lifecycle_metadata(path.read_text(encoding="utf-8"))
+            document_type = normalize_key(str(metadata.get("type", "")))
+            if identity_field and metadata.get(identity_field):
+                return False
+            if (
+                standard_type
+                and document_type == standard_type
+                and (
+                    not standard_fields
+                    or any(metadata.get(field) for field in standard_fields)
+                )
+            ):
+                return False
+            legacy_found = True
+        return legacy_found
+
+    flat_adrs = [
+        path
+        for path in docs.glob("*.md")
+        if re.match(r"^ADR(?:[_-]|\d)", path.name, re.IGNORECASE)
+    ] if docs.exists() else []
+    flat_plans = [
+        path
+        for path in docs.glob("*.md")
+        if "PLAN" in path.stem.upper()
+    ] if docs.exists() else []
+
+    roles: list[tuple[str, Path, bool]] = [
+        ("ADR", docs / "adr" / "README.md", bool(flat_adrs)),
+        ("plan", docs / "plans" / "README.md", bool(flat_plans)),
+        (
+            "evidence",
+            docs / "evidence" / "README.md",
+            has_legacy_role_documents(
+                docs / "evidence",
+                identity_field="evidence_id",
+                standard_type="evidence",
+                standard_fields=(
+                    "subject",
+                    "target_fingerprint",
+                    "related_decisions",
+                    "related_plans",
+                ),
+            ),
+        ),
+        (
+            "review",
+            docs / "reviews" / "README.md",
+            has_legacy_role_documents(
+                docs / "reviews",
+                identity_field="review_id",
+                standard_type="review",
+                standard_fields=(
+                    "reviewed_target",
+                    "target_fingerprint",
+                    "related_decisions",
+                    "evidence_refs",
+                ),
+            ),
+        ),
+        (
+            "archive",
+            docs / "archive" / "README.md",
+            (docs / "archive").is_dir()
+            and any((docs / "archive").iterdir()),
+        ),
+        ("repo-map", docs / "repo-map" / "README.md", False),
+        (
+            "wiki decision",
+            wiki / "decisions" / "README.md",
+            has_legacy_role_documents(
+                wiki / "decisions",
+                standard_type="decision",
+            ),
+        ),
+    ]
+    compatibility_roles = {
+        role: legacy_equivalent for role, _, legacy_equivalent in roles
+    }
+    for role, standard_index, legacy_equivalent in roles:
+        if standard_index.exists() or legacy_equivalent:
+            continue
+        report.add_warning(
+            "profile.scaffold_missing",
+            f"The complete Repo Docs profile is missing the {role} role index `{standard_index.relative_to(repo_root)}`.",
+            standard_index,
+        )
+
+    portal = docs / "README.md"
+    if not portal.exists():
+        return
+    portal_text = portal.read_text(encoding="utf-8")
+    expected_links = {
+        "ADR": "adr/README.md",
+        "plan": "plans/README.md",
+        "evidence": "evidence/README.md",
+        "review": "reviews/README.md",
+        "archive": "archive/README.md",
+        "repo-map": "repo-map/README.md",
+        "wiki decision": "../wiki/decisions/README.md",
+    }
+    for role, expected in expected_links.items():
+        if expected in portal_text:
+            continue
+        if compatibility_roles.get(role, False):
+            continue
+        role_directory_link = expected.removesuffix("README.md")
+        if role_directory_link and role_directory_link in portal_text:
+            continue
+        if role == "ADR" and flat_adrs and any(path.name in portal_text for path in flat_adrs):
+            continue
+        if role == "plan" and flat_plans and any(path.name in portal_text for path in flat_plans):
+            continue
+        report.add_warning(
+            "profile.portal_role_missing",
+            f"The docs portal should link the {role} role through `{expected}` or an established compatibility location.",
+            portal,
+        )
+
+
 def validate_document_lifecycle(repo_root: Path, report: ValidationReport) -> None:
+    validate_profile_scaffold(repo_root, report)
     documents = collect_lifecycle_documents(repo_root)
     validate_adr_lifecycle(repo_root, documents, report)
     validate_plan_lifecycle(documents["plan"], report)

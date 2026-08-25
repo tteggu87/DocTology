@@ -16,11 +16,11 @@
 ## Repository rules
 - Treat live code and registered entrypoints as truth for what runs.
 - Treat current docs as human-readable truth only when they match live code and registered contracts.
-- Treat intelligence manifests as reusable machine-readable contracts when present.
+- Treat intelligence manifests as reusable machine-readable contracts.
 - Treat generated indexes, search outputs, graph projections, and wiki memory as derived aids unless this repository explicitly defines them as canonical.
-- Keep Repo Docs retrieval opt-in and non-blocking. When measured document scale warrants it and `scripts/repo_docs_retrieval.py` is installed, use it for heading search and bounded Markdown-link traversal only; a missing index remains valid.
+- Keep Repo Docs retrieval derived and non-blocking. Use `scripts/repo_docs_retrieval.py` for heading search and bounded Markdown-link traversal; a missing or stale index remains rebuildable and never changes canonical truth.
 - Treat Repo Docs retrieval results as discovery candidates and verify canonical targets before relying on them. Keep CodeGraph, LSP, and `rg` responsible for code navigation because source-code bodies are not part of the document index.
-- Use this authority order when artifacts disagree: live code and tests; current canonical docs and accepted ADRs; intelligence contracts; plans, evidence, and reviews; derived wiki memory; optional search indexes.
+- Use this authority order when artifacts disagree: live code and tests; current canonical docs and accepted ADRs; intelligence contracts; plans, evidence, and reviews; derived wiki memory; derived search indexes.
 - Prefer thin wrappers and a thick core package.
 - Keep repository memory lightweight; add docs, contracts, or wiki pages only when they reduce ambiguity, drift, or repeated mistakes.
 - Keep `wiki/` as derived memory for analyses, source notes, plans, reviews, and cross-session context; do not treat wiki pages as runtime truth.
@@ -36,24 +36,25 @@
 - Use descriptive relative Markdown links in new or materially rewritten Repo Docs wiki pages so links to docs, intelligence, code, and tests remain precise and portable. Continue to read existing Obsidian `[[wikilinks]]`, but do not introduce them as the Repo Docs default or mass-convert legacy pages solely for syntax consistency.
 - Save reusable plan reviews, drift analyses, source comparisons, and decision memos under `wiki/analyses/`.
 - Include source, assumption, conflict, and evidence-confidence notes when preserving claim-heavy analysis.
-- Promote documentation only when warranted: use canonical docs plus impact/log for small changes, `wiki/analyses/` for reusable analysis, an ADR for durable structural or compatibility decisions, a plan for multi-stage work, evidence for verification claims, and a review for scoped review findings.
-- Do not pre-create optional ADR, plan, evidence, review, decision, or repo-map directories. New repositories may default to `docs/adr/`; preserve existing flat or custom ADR locations without migration or key renaming.
+- Keep the complete Repo Docs scaffold present: `docs/adr/`, `docs/plans/`, `docs/evidence/`, `docs/reviews/`, `docs/repo-map/`, `docs/archive/`, and `wiki/decisions/`, each with its index README. Do not create placeholder ADRs, plans, evidence, reviews, or decisions merely to populate those folders.
+- Use an ADR for durable structural or compatibility decisions, a plan for multi-stage work, evidence for verification claims, a review for scoped findings, and `wiki/analyses/` for reusable analysis.
+- Preserve an existing repository's flat or custom ADR and plan locations without migration or key renaming; new repositories use the standard scaffold.
 - Keep wiki decisions explicitly `source_of_truth: false` and link each one to its canonical ADR or canonical decision source.
-- Once ADR, plan, evidence, review, or wiki-decision surfaces exist, keep their identities unique, statuses valid, references resolvable, implemented claims evidence-backed, activated indexes visible from the docs portal, and completed or superseded plans free of a current next action.
-- If optional retrieval is active, `python scripts/repo_docs_retrieval.py --repo-root . doctor` may report stale derived state, but retrieval failure must remain separate from canonical documentation completion and validator results.
+- Keep ADR, plan, evidence, review, and wiki-decision identities unique, statuses valid, references resolvable, implemented claims evidence-backed, indexes visible from the docs portal, and completed or superseded plans free of a current next action.
+- `python scripts/repo_docs_retrieval.py --repo-root . doctor` may report stale derived state, but retrieval failure remains separate from canonical documentation completion and validator results.
 
 ## Change synchronization rules
 
 When code changes, update the corresponding docs and intelligence artifacts in the same task.
 
-For promoted work, synchronize in this order: smallest canonical truth, activated ADR or plan, implementation, evidence, current docs, derived wiki decision or analysis, then impact summary and maintenance log.
+Synchronize in this order: smallest canonical truth, relevant ADR or plan, implementation, evidence, current docs, derived wiki decision or analysis, then impact summary and maintenance log.
 
 You must check whether these files need updates:
 - `docs/CURRENT_STATE.md` when behavior, entrypoints, providers, defaults, or runtime flow changes
 - `docs/ARCHITECTURE.md` when component roles, data flow, or storage responsibilities change
 - `docs/LAYERS.md` when boundaries between Raw/Core/Derived/Search/Graph/Serve change
-- `docs/repo-map/ENTRYPOINTS.md` when entrypoints, scripts, routes, or wrappers change and a repo-map exists
-- `docs/repo-map/MODULES.md` and `docs/repo-map/SYMBOL_GRAPH.md` when broad module ownership or high-impact symbols change and a repo-map exists
+- `docs/repo-map/ENTRYPOINTS.md` when entrypoints, scripts, routes, or wrappers change
+- `docs/repo-map/MODULES.md` and `docs/repo-map/SYMBOL_GRAPH.md` when broad module ownership or high-impact symbols change
 - `docs/SKILLS_INTEGRATION.md` when CLI, skill wrappers, or external entrypoints change
 - `docs/ROADMAP.md` when deferred cleanup or staged alignment changes
 - `docs/IMPACT_SUMMARY.md` when structural changes or validator findings need explicit reporting

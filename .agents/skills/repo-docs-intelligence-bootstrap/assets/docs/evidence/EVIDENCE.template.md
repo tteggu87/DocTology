@@ -1,7 +1,6 @@
 ---
 title: Evidence title
 type: evidence
-lifecycle_schema: repo-docs-v1
 evidence_id: EVIDENCE-XXXX
 date: YYYY-MM-DD
 subject: Verification subject

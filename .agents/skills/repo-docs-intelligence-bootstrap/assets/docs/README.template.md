@@ -20,26 +20,32 @@ Start here.
 - [Current repository state](CURRENT_STATE.md)
 - [Architecture](ARCHITECTURE.md)
 - [Layer boundaries](LAYERS.md)
-- Add a descriptive link to the repo-map index when it is activated.
+- [Repository map](repo-map/README.md)
 - [Skill integration](SKILLS_INTEGRATION.md)
 - [Roadmap](ROADMAP.md)
 - [Impact summary](IMPACT_SUMMARY.md)
 
-## Activated Lifecycle Indexes
+## Decision And Delivery Records
 
-- When ADRs exist, add a descriptive relative Markdown link to the repository's active ADR index or location. Preserve flat or custom ADR layouts.
-- Add plan, evidence, and review index links only when those optional surfaces exist.
-- Add a derived wiki-decision index only when it exists, and label it non-canonical.
+- [Architecture decisions](adr/README.md)
+- [Plans and designs](plans/README.md)
+- [Evidence](evidence/README.md)
+- [Reviews](reviews/README.md)
+- [Archive](archive/README.md)
+- [Derived decision memory](../wiki/decisions/README.md) — non-canonical
 
-## Optional Derived Retrieval
+## Derived Retrieval
 
-- Leave Repo Docs retrieval off unless measured document scale or repeated long-document reads justify it.
-- When active, `scripts/repo_docs_retrieval.py` rebuilds disposable heading, FTS5, fingerprint, and Markdown-link state from `AGENTS.md`, `docs/**/*.md`, and `wiki/**/*.md` only.
-- Search results are non-canonical discovery candidates. A missing or stale optional index does not change documentation truth or validator status.
+- `scripts/repo_docs_retrieval.py` rebuilds disposable heading, FTS5,
+  fingerprint, and Markdown-link state from `AGENTS.md`, `docs/**/*.md`, and
+  `wiki/**/*.md` only.
+- Search results are non-canonical discovery candidates. A missing or stale
+  derived index does not change documentation truth or validator status.
 
 ## Legacy And Non-Current Material
 
-- Add experiment or archive links only when those locations exist.
+- Keep experiments visibly classified and move only genuinely superseded
+  material into the [archive](archive/README.md).
 - Do not classify active reviews as legacy material.
 
 ## Review Questions

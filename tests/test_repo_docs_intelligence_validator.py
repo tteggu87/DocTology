@@ -222,7 +222,7 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
         self.assertNotIn("](../../intelligence/)", log_text)
         self.assertIn("[Current repository state](CURRENT_STATE.md)", portal_text)
 
-    def test_adaptive_document_authority_lifecycle_and_templates(self) -> None:
+    def test_complete_document_authority_profile_and_templates(self) -> None:
         skill_root = (
             ROOT / ".agents" / "skills" / "repo-docs-intelligence-bootstrap"
         )
@@ -256,27 +256,32 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
             / "decisions"
             / "decision.template.md",
         }
+        scaffold_indexes = [
+            skill_root / "assets" / "docs" / role / "README.template.md"
+            for role in ("adr", "plans", "evidence", "reviews", "repo-map", "archive")
+        ] + [
+            skill_root / "assets" / "wiki" / "decisions" / "README.template.md"
+        ]
 
-        for path in template_paths.values():
+        for path in [*template_paths.values(), *scaffold_indexes]:
             self.assertTrue(path.is_file(), path)
 
-        self.assertIn("Adaptive Documentation Authority Lifecycle", skill_text)
+        self.assertIn("Documentation Authority Lifecycle", skill_text)
         self.assertIn("live code, registered entrypoints, and tests", skill_text)
         self.assertIn("current canonical docs and accepted ADRs", skill_text)
         self.assertIn("implementation plans, evidence, and reviews", skill_text)
-        self.assertIn("optional search indexes", skill_text)
-        self.assertIn("Do not create `docs/adr/`", skill_text)
-        self.assertIn("New repositories may use `docs/adr/`", skill_text)
+        self.assertIn("derived search indexes", skill_text)
+        self.assertIn("always creates the complete operating scaffold", skill_text)
         self.assertIn("Existing flat ADR files", skill_text)
-        self.assertIn("do not migrate them or rename existing manifest keys", skill_text)
+        self.assertIn("do not migrate", skill_text)
+        self.assertIn("rename existing manifest keys", skill_text)
         self.assertNotIn(
             "Then classify older material into:\n\n- `docs/adr/`", skill_text
         )
         self.assertIn("without moving it merely", skill_text)
-        self.assertIn("active ADR index or location", portal_text)
-        self.assertIn("only when those optional surfaces exist", portal_text)
-        self.assertNotIn("- `docs/adr/`", portal_text)
-        self.assertNotIn("- `docs/reviews/`", portal_text)
+        self.assertIn("[Architecture decisions](adr/README.md)", portal_text)
+        self.assertIn("[Reviews](reviews/README.md)", portal_text)
+        self.assertIn("[Derived decision memory](../wiki/decisions/README.md)", portal_text)
         for trigger in (
             "Small behavior or wording change",
             "Reusable investigation or comparison",
@@ -290,7 +295,6 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
         adr_text = template_paths["adr"].read_text(encoding="utf-8")
         for field in (
             "source_of_truth: true",
-            "lifecycle_schema: repo-docs-v1",
             "decision_id:",
             "decision_status:",
             "implementation_status:",
@@ -332,11 +336,15 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
         self.assertIn("canonical_decision:", decision_text)
         self.assertIn("derived and non-canonical", decision_text)
         self.assertIn("authority order", agents_text)
-        self.assertIn("Do not pre-create optional", agents_text)
+        self.assertIn("complete Repo Docs scaffold", agents_text)
+        self.assertIn("Do not create placeholder ADRs", agents_text)
         self.assertIn("compatible legacy inventory", skill_text)
+        self.assertNotIn("lifecycle_schema", skill_text)
+        for path in template_paths.values():
+            self.assertNotIn("lifecycle_schema", path.read_text(encoding="utf-8"))
 
         lifecycle_section = skill_text.split(
-            "## Adaptive Documentation Authority Lifecycle", 1
+            "## Documentation Authority Lifecycle", 1
         )[1].split("## Repo Memory Link Contract", 1)[0]
         lifecycle_contract = "\n".join(
             [
@@ -349,7 +357,7 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
         for domain_term in ("BUILD", "ASK", "CHECK", "Pack", "MCP", "ontology"):
             self.assertNotIn(domain_term, lifecycle_contract)
 
-    def test_minimal_repo_does_not_activate_optional_lifecycle_validation(self) -> None:
+    def test_empty_repo_reports_missing_complete_profile_without_fake_records(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             report = self.validator.ValidationReport(root)
@@ -372,8 +380,161 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
             )
 
         self.assertEqual(report.errors, [])
-        self.assertEqual(report.warnings, [])
+        self.assertTrue(report.warnings)
+        self.assertEqual(
+            {issue["code"] for issue in report.warnings},
+            {"profile.scaffold_missing"},
+        )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_standard_profile_scaffold_is_complete_without_placeholder_records(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative in (
+                "docs/adr/README.md",
+                "docs/plans/README.md",
+                "docs/evidence/README.md",
+                "docs/reviews/README.md",
+                "docs/repo-map/README.md",
+                "docs/archive/README.md",
+                "wiki/decisions/README.md",
+            ):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(f"# {path.parent.name}\n", encoding="utf-8")
+            portal = root / "docs" / "README.md"
+            portal.write_text(
+                "\n".join(
+                    [
+                        "[ADR](adr/README.md)",
+                        "[Plans](plans/README.md)",
+                        "[Evidence](evidence/README.md)",
+                        "[Reviews](reviews/README.md)",
+                        "[Repo map](repo-map/README.md)",
+                        "[Archive](archive/README.md)",
+                        "[Decisions](../wiki/decisions/README.md)",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_profile_scaffold(root, report)
+
+        self.assertEqual(report.errors, [])
+        self.assertEqual(report.warnings, [])
+
+    def test_duckcrab_style_flat_records_are_compatible_without_migration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            docs = root / "docs"
+            wiki_decisions = root / "wiki" / "decisions"
+            for directory in (
+                docs / "evidence",
+                docs / "reviews",
+                docs / "archive",
+                docs / "repo-map",
+                wiki_decisions,
+            ):
+                directory.mkdir(parents=True, exist_ok=True)
+            (docs / "ADR_RUNTIME_BOUNDARY.md").write_text("# ADR\n", encoding="utf-8")
+            (docs / "RUNTIME_IMPLEMENTATION_PLAN.md").write_text("# Plan\n", encoding="utf-8")
+            (docs / "evidence" / "proof.md").write_text("# Proof\n", encoding="utf-8")
+            (docs / "reviews" / "review.md").write_text("# Review\n", encoding="utf-8")
+            (docs / "archive" / ".gitkeep").write_text("", encoding="utf-8")
+            (docs / "repo-map" / "README.md").write_text("# Map\n", encoding="utf-8")
+            (wiki_decisions / "runtime.md").write_text("# Decision\n", encoding="utf-8")
+            (docs / "README.md").write_text(
+                "\n".join(
+                    [
+                        "[ADR](ADR_RUNTIME_BOUNDARY.md)",
+                        "[Plan](RUNTIME_IMPLEMENTATION_PLAN.md)",
+                        "[Evidence](evidence/)",
+                        "[Reviews](reviews/)",
+                        "[Archive](archive/)",
+                        "[Repo map](repo-map/README.md)",
+                        "[Decisions](../wiki/decisions/)",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_profile_scaffold(root, report)
+
+        missing_scaffold = {
+            issue["message"] for issue in report.warnings
+            if issue["code"] == "profile.scaffold_missing"
+        }
+        self.assertEqual(missing_scaffold, set())
+
+    def test_standard_records_cannot_hide_missing_role_indexes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_lifecycle_doc(
+                root / "docs" / "evidence" / "proof.md",
+                """
+type: evidence
+evidence_id: EVIDENCE-0001
+""",
+                "Proof",
+            )
+            write_lifecycle_doc(
+                root / "docs" / "reviews" / "review.md",
+                """
+type: review
+review_id: REVIEW-0001
+""",
+                "Review",
+            )
+            write_lifecycle_doc(
+                root / "wiki" / "decisions" / "decision.md",
+                """
+type: decision
+source_of_truth: false
+""",
+                "Decision",
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_profile_scaffold(root, report)
+
+        missing_paths = {
+            issue["path"] for issue in report.warnings
+            if issue["code"] == "profile.scaffold_missing"
+        }
+        self.assertIn("docs/evidence/README.md", missing_paths)
+        self.assertIn("docs/reviews/README.md", missing_paths)
+        self.assertIn("wiki/decisions/README.md", missing_paths)
+
+    def test_template_shaped_records_cannot_bypass_missing_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_lifecycle_doc(
+                root / "docs" / "evidence" / "proof.md",
+                """
+type: evidence
+subject: Completion proof
+target_fingerprint: abc123
+""",
+                "Proof",
+            )
+            write_lifecycle_doc(
+                root / "docs" / "reviews" / "review.md",
+                """
+type: review
+reviewed_target: abc123
+target_fingerprint: abc123
+""",
+                "Review",
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_document_lifecycle(root, report)
+
+        error_codes = {issue["code"] for issue in report.errors}
+        self.assertIn("lifecycle.evidence_id_missing", error_codes)
+        self.assertIn("lifecycle.review_id_missing", error_codes)
 
     def test_mature_lifecycle_chain_and_portal_are_valid(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
