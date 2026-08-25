@@ -69,17 +69,21 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
         self.assertTrue((ROOT / "archive/skills/lightweight-ontology-core/SKILL.md").exists())
         self.assertTrue((ROOT / "archive/skills/lg-ontology/SKILL.md").exists())
 
-    def test_wiki_loop_is_capability_aware_and_self_contained(self) -> None:
+    def test_wiki_loop_is_wiki_only_and_self_contained(self) -> None:
         text = read_repo_text(WIKI_LOOP_SKILL)
-        ontology_contract = read_repo_text(".agents/skills/llm-wiki-loop/references/ontology-contract.md")
         self.assertIn("The target repository owns its contracts and runtime", text)
-        self.assertIn("**`llm-first-ontology`**", text)
-        self.assertIn("**`wiki-plus-ontology`**", text)
-        self.assertIn("**`wiki-only`**", text)
+        self.assertIn("one capability lane: `wiki-only`", text)
+        self.assertIn("Confirm The Wiki-Only Contract", text)
+        self.assertIn("SQLite is either `on` or `off`", text)
         self.assertIn("Select only commands whose files exist", text)
-        self.assertIn("references/ontology-contract.md", text)
-        self.assertIn("accepted claim requires", ontology_contract)
-        self.assertIn("certified derived edges reference accepted claims", ontology_contract)
+        self.assertIn("Do not create or mutate `warehouse/jsonl/`", text)
+        self.assertIn("dedicated operator contract", text)
+        self.assertFalse(
+            (ROOT / ".agents/skills/llm-wiki-loop/references/ontology-contract.md").exists()
+        )
+        self.assertNotIn("Select One Capability Lane", text)
+        self.assertNotIn("**`llm-first-ontology`**", text)
+        self.assertNotIn("**`wiki-plus-ontology`**", text)
         self.assertNotIn("lightweight-ontology-core", text)
         self.assertNotIn("lg-ontology", text)
 
