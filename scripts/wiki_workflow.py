@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import uuid
 from pathlib import Path
@@ -46,6 +48,8 @@ NA_REASONS = {
     "refresh_index_and_log": {"meta_current_after_batch_apply"},
 }
 POSTURES = {"ready", "partial", "not_ready", "blocked"}
+RETRIEVAL_REFRESH_TIMEOUT_SECONDS = 300
+SEMANTIC_REFRESH_STATUSES = {"ready", "partial", "pending", "unavailable"}
 
 
 class WorkflowError(RuntimeError):
@@ -138,6 +142,55 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     temporary = path.with_name(path.name + f".{os.getpid()}.tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     os.replace(temporary, path)
+
+
+def acquire_refresh_claim(
+    path: Path, run_id: str, *, blocking: bool = False
+) -> int | None:
+    """Acquire a process-bound claim, recovering leftover lock files."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        operation = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
+        fcntl.flock(descriptor, operation)
+    except BlockingIOError:
+        os.close(descriptor)
+        return None
+    claim = {
+        "run_id": run_id,
+        "owner_pid": os.getpid(),
+        "claimed_at": utc_now(),
+    }
+    encoded = (json.dumps(claim, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
+    os.ftruncate(descriptor, 0)
+    os.write(descriptor, encoded)
+    os.fsync(descriptor)
+    return descriptor
+
+
+def release_refresh_claim(descriptor: int) -> None:
+    fcntl.flock(descriptor, fcntl.LOCK_UN)
+    os.close(descriptor)
+
+
+def retrieval_refresh_lock_path(root: Path) -> Path:
+    """Return the one repo-global lock protecting the shared derived index."""
+    return root.resolve() / "state" / "wiki_index.refresh.lock"
+
+
+def run_finish_lock_path(root: Path, run_id: str) -> Path:
+    """Return the run-local lock protecting finalization state transitions."""
+    path = run_path(root, run_id)
+    return path.with_name(path.name + ".finish.lock")
+
+
+def fallback_semantic_status(payload: dict[str, Any]) -> str:
+    status = payload.get("semantic_status", payload.get("semantic_lane"))
+    if status == "unavailable" and int(payload.get("semantic_vectors") or 0) > 0:
+        return "partial"
+    if status in SEMANTIC_REFRESH_STATUSES:
+        return str(status)
+    return "unavailable"
 
 
 def load_run(root: Path, run_id: str) -> tuple[Path, dict[str, Any]]:
@@ -307,6 +360,26 @@ def project_status(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
     if stale:
         blockers.append("PROCEDURE_STAGE_STALE")
 
+    wiki_complete = not blockers
+    refresh = payload.get("retrieval_refresh")
+    if not isinstance(refresh, dict):
+        refresh = {
+            "retrieval_ready": False,
+            "retrieval_status": "pending",
+            "semantic_status": "pending",
+        }
+    completion_fingerprint = payload.get("completion_fingerprint")
+    if (
+        payload.get("status") == "completed"
+        and completion_fingerprint != current_fingerprint
+    ):
+        refresh = {
+            **refresh,
+            "retrieval_ready": False,
+            "retrieval_status": "stale",
+            "semantic_status": "pending",
+            "reason": "wiki changed after the recorded retrieval refresh",
+        }
     return {
         "schema_version": 1,
         "workflow": "INGEST",
@@ -322,21 +395,160 @@ def project_status(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
         "latest_mutation_sequence": latest_mutation,
         "current_fingerprint": current_fingerprint,
         "reviewed_fingerprint": review.get("reviewed_fingerprint") if review else None,
+        "wiki_complete": wiki_complete,
+        "retrieval_ready": bool(refresh.get("retrieval_ready", False)),
+        "retrieval_status": refresh.get("retrieval_status", "pending"),
+        "semantic_status": refresh.get("semantic_status", "pending"),
+        "retrieval_refresh": refresh,
+    }
+
+
+def run_retrieval_refresh(root: Path) -> dict[str, Any]:
+    script = root / "scripts" / "wiki_retrieval.py"
+    if not script.is_file():
+        return {
+            "retrieval_ready": False,
+            "retrieval_status": "not_enabled",
+            "semantic_status": "unavailable",
+            "reason": "SQLite retrieval helpers are not installed",
+        }
+    completed = None
+    failure_reason = "retrieval refresh failed"
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(script), "--repo-root", str(root), "refresh"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=RETRIEVAL_REFRESH_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        failure_reason = str(exc)
+    try:
+        result = (
+            json.loads(completed.stdout)
+            if completed and completed.stdout.strip()
+            else {}
+        )
+    except json.JSONDecodeError:
+        result = {}
+    if completed and completed.returncode == 0 and isinstance(result, dict):
+        return result
+    reason = (
+        (completed.stderr or completed.stdout or failure_reason).strip()
+        if completed
+        else failure_reason
+    )
+    try:
+        status = subprocess.run(
+            [sys.executable, str(script), "--repo-root", str(root), "status"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        status = None
+    try:
+        status_payload = (
+            json.loads(status.stdout) if status and status.stdout.strip() else {}
+        )
+    except json.JSONDecodeError:
+        status_payload = {}
+    semantic_status = fallback_semantic_status(status_payload)
+    if status and status.returncode == 0 and status_payload.get("state") == "ready":
+        return {
+            **status_payload,
+            "retrieval_ready": True,
+            "retrieval_status": "ready",
+            "semantic_status": semantic_status,
+            "reason": reason[:1000],
+        }
+    return {
+        **status_payload,
+        "retrieval_ready": False,
+        "retrieval_status": (
+            "partial" if status_payload.get("state") in {"stale", "partial"} else "failed"
+        ),
+        "semantic_status": semantic_status,
+        "reason": reason[:1000],
     }
 
 
 def finish_run(root: Path, run_id: str) -> dict[str, Any]:
     root = root.resolve()
-    path, payload = load_run(root, run_id)
-    projection = project_status(root, payload)
-    if projection["status"] != "pass":
-        return projection
-    payload["status"] = "completed"
-    payload["completed_at"] = utc_now()
-    payload["updated_at"] = utc_now()
-    payload["completion_fingerprint"] = projection["current_fingerprint"]
-    write_json(path, payload)
-    return {**projection, "run_status": "completed"}
+    run_descriptor = acquire_refresh_claim(
+        run_finish_lock_path(root, run_id), run_id, blocking=True
+    )
+    assert run_descriptor is not None
+    try:
+        path, payload = load_run(root, run_id)
+        projection = project_status(root, payload)
+        if projection["status"] != "pass":
+            return projection
+        existing_refresh = payload.get("retrieval_refresh")
+        if (
+            isinstance(existing_refresh, dict)
+            and existing_refresh.get("retrieval_status") != "pending"
+        ):
+            return projection
+        payload["status"] = "completed"
+        payload.setdefault("completed_at", utc_now())
+        payload["updated_at"] = utc_now()
+        payload["completion_fingerprint"] = projection["current_fingerprint"]
+        if not isinstance(existing_refresh, dict):
+            payload["retrieval_refresh"] = {
+                "retrieval_ready": False,
+                "retrieval_status": "pending",
+                "semantic_status": "pending",
+            }
+        write_json(path, payload)
+
+        claim_path = retrieval_refresh_lock_path(root)
+        descriptor = acquire_refresh_claim(claim_path, run_id)
+        if descriptor is None:
+            _latest_path, latest = load_run(root, run_id)
+            return project_status(root, latest)
+        try:
+            _latest_path, payload = load_run(root, run_id)
+            projection = project_status(root, payload)
+            if projection["status"] != "pass":
+                return projection
+            existing_refresh = payload.get("retrieval_refresh")
+            if (
+                isinstance(existing_refresh, dict)
+                and existing_refresh.get("retrieval_status") != "pending"
+            ):
+                return projection
+            attempt = (
+                int(existing_refresh.get("attempt") or 0) + 1
+                if isinstance(existing_refresh, dict)
+                else 1
+            )
+            payload["updated_at"] = utc_now()
+            payload["retrieval_refresh"] = {
+                "retrieval_ready": False,
+                "retrieval_status": "pending",
+                "semantic_status": "pending",
+                "attempt": attempt,
+                "started_at": utc_now(),
+                "owner_pid": os.getpid(),
+            }
+            write_json(path, payload)
+            refresh = run_retrieval_refresh(root)
+            _latest_path, latest = load_run(root, run_id)
+            latest["retrieval_refresh"] = {
+                **refresh,
+                "attempt": attempt,
+                "completed_at": utc_now(),
+            }
+            latest["updated_at"] = utc_now()
+            write_json(path, latest)
+            return project_status(root, latest)
+        finally:
+            release_refresh_claim(descriptor)
+    finally:
+        release_refresh_claim(run_descriptor)
 
 
 def build_parser() -> argparse.ArgumentParser:

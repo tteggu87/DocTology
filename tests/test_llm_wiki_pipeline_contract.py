@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -156,44 +157,54 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
                 (target / "scripts" / "llm_wiki.py").read_text(encoding="utf-8"),
             )
 
-    def test_bootstrap_writes_llm_first_runtime_for_default_profile(self) -> None:
+    def test_active_bootstrap_is_wiki_only_with_sqlite_as_the_only_choice(self) -> None:
+        parser = self.bootstrap.build_parser()
+        args = parser.parse_args(["vault", "--sqlite", "off"])
+        self.assertFalse(hasattr(args, "profile"))
+        self.assertEqual(args.sqlite, "off")
+        self.assertEqual(self.bootstrap.ACTIVE_PROFILE, "wiki-only")
+        self.assertEqual(
+            self.bootstrap.ARCHIVED_PROFILES,
+            ("wiki-plus-ontology", "llm-first-ontology"),
+        )
+        archive_note = read_repo_text("archive/profiles/ontology-bootstrap/README.md")
+        self.assertIn("llm-first-ontology", archive_note)
+        self.assertIn("removed", archive_note)
+        self.assertIn("active `llm-wiki-bootstrap` CLI", archive_note)
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(SystemExit, "archived and unavailable"):
+                self.bootstrap.scaffold(
+                    Path(tmp) / "ontology",
+                    force=False,
+                    profile="llm-first-ontology",
+                )
+
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "vault"
-            self.bootstrap.scaffold(target, force=False, profile="llm-first-ontology")
-
+            self.bootstrap.scaffold(target, force=False, sqlite_enabled=False)
             agents = (target / "AGENTS.md").read_text(encoding="utf-8")
-            self.assertIn("## Strict LLM-First Semantic Rule", agents)
+            readme = (target / "README.md").read_text(encoding="utf-8")
             self.assertIn("<!-- LLM_WIKI_CONTRACT_START -->", agents)
-            self.assertTrue((target / "wikiconfig.example.json").exists())
-            self.assertIn("wikiconfig.json", (target / ".gitignore").read_text(encoding="utf-8"))
-            for relative_path in (
-                "intelligence/contract_index.yaml",
-                "intelligence/policies/semantic_boundary.yaml",
-                "intelligence/policies/proposal_lifecycle.yaml",
-                "intelligence/manifests/semantic_workflows.yaml",
-                "scripts/llm_compile_source.py",
-                "scripts/llm_query.py",
-                "scripts/query_analysis.py",
-                "scripts/proposal_review.py",
-                "scripts/pipeline_check.py",
-                "scripts/wiki_workflow.py",
-                "scripts/wiki_batch.py",
-                "scripts/reindex_sqlite_operational.py",
-                "scripts/refresh_duckdb_analytics.py",
-                "scripts/verify_three_layer_drift.py",
-                "templates/llm-wiki-three-layer/sqlite_operational.schema.sql",
-                "templates/llm-wiki-three-layer/duckdb_analytical.schema.sql",
-                "warehouse/jsonl/compile_proposals.jsonl",
-                "warehouse/jsonl/review_events.jsonl",
-                "wiki/_meta/representative_questions.json",
-            ):
-                self.assertTrue((target / relative_path).exists(), relative_path)
+            self.assertIn("without the optional SQLite", readme)
+            self.assertFalse((target / "scripts" / "wiki_retrieval.py").exists())
+            self.assertFalse((target / "warehouse").exists())
+            self.assertFalse((target / "intelligence").exists())
+
+        stdin = mock.Mock()
+        stdin.isatty.return_value = False
+        with mock.patch.object(sys, "stdin", stdin):
+            self.assertTrue(self.bootstrap.resolve_sqlite_choice(None))
 
     def test_all_profiles_generate_procedure_and_batch_gate_runtime(self) -> None:
         for profile in ("wiki-only", "wiki-plus-ontology", "llm-first-ontology"):
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as tmp:
                 target = Path(tmp) / "vault"
-                self.bootstrap.scaffold(target, force=False, profile=profile)
+                if profile == "wiki-only":
+                    self.bootstrap.scaffold(target, force=False)
+                else:
+                    self.bootstrap._scaffold_archived_profile_for_contract_tests(
+                        target, force=False, profile=profile
+                    )
                 for relative_path in (
                     "scripts/pipeline_check.py",
                     "scripts/wiki_workflow.py",
@@ -209,7 +220,9 @@ class ClosedIngestPipelineContractTest(unittest.TestCase):
     def test_bootstrap_writes_legacy_ontology_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "vault"
-            self.bootstrap.scaffold(target, force=False, profile="wiki-plus-ontology")
+            self.bootstrap._scaffold_archived_profile_for_contract_tests(
+                target, force=False, profile="wiki-plus-ontology"
+            )
 
             agents = (target / "AGENTS.md").read_text(encoding="utf-8")
             self.assertIn("## Link Traversal Rules", agents)
@@ -260,7 +273,9 @@ tags:
     def test_generated_ingest_registers_source_and_records_pending_synthesis(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "vault"
-            self.bootstrap.scaffold(target, force=False, profile="wiki-plus-ontology")
+            self.bootstrap._scaffold_archived_profile_for_contract_tests(
+                target, force=False, profile="wiki-plus-ontology"
+            )
             source = target / "raw" / "inbox" / "korean-source.txt"
             source.write_text("라텔은 벌꿀오소리다.\n", encoding="utf-8")
 
@@ -292,7 +307,9 @@ tags:
     def test_generated_reindex_links_pages_and_clears_orphans(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "vault"
-            self.bootstrap.scaffold(target, force=False, profile="wiki-plus-ontology")
+            self.bootstrap._scaffold_archived_profile_for_contract_tests(
+                target, force=False, profile="wiki-plus-ontology"
+            )
             source_page = target / "wiki" / "sources" / "source-test.md"
             concept_page = target / "wiki" / "concepts" / "concept-test.md"
             source_page.write_text(
@@ -328,7 +345,9 @@ tags:
     def test_generated_query_analysis_saves_durable_answer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "vault"
-            self.bootstrap.scaffold(target, force=False, profile="llm-first-ontology")
+            self.bootstrap._scaffold_archived_profile_for_contract_tests(
+                target, force=False, profile="llm-first-ontology"
+            )
             result = subprocess.run(
                 [
                     sys.executable,

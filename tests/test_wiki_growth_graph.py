@@ -77,7 +77,9 @@ class WikiGrowthGraphTest(unittest.TestCase):
     def make_vault(self) -> tuple[tempfile.TemporaryDirectory[str], Path, Path]:
         tmp = tempfile.TemporaryDirectory()
         root = Path(tmp.name) / "vault"
-        self.bootstrap.scaffold(root, force=False, profile="wiki-plus-ontology")
+        self.bootstrap._scaffold_archived_profile_for_contract_tests(
+            root, force=False, profile="wiki-plus-ontology"
+        )
         source = root / "raw" / "inbox" / "example.md"
         source.write_text("# Example\n\n라텔은 벌꿀오소리다.\n", encoding="utf-8")
         return tmp, root, source

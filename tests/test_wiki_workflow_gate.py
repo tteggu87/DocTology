@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import subprocess
+import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,9 +30,16 @@ class WikiWorkflowGateTest(unittest.TestCase):
         cls.workflow = load_module(WORKFLOW_PATH, "wiki_workflow_under_test")
         cls.bootstrap = load_module(BOOTSTRAP_PATH, "bootstrap_for_workflow_test")
 
-    def make_vault(self, base: Path) -> tuple[Path, Path]:
+    def make_vault(
+        self, base: Path, *, sqlite_enabled: bool = True
+    ) -> tuple[Path, Path]:
         root = base / "vault"
-        self.bootstrap.scaffold(root, force=False, profile="wiki-only")
+        self.bootstrap.scaffold(
+            root,
+            force=False,
+            profile="wiki-only",
+            sqlite_enabled=sqlite_enabled,
+        )
         source = root / "raw" / "inbox" / "example.md"
         source.write_text("# Example\n\nEvidence.\n", encoding="utf-8")
         return root, source
@@ -62,6 +74,54 @@ class WikiWorkflowGateTest(unittest.TestCase):
             result=None,
             posture=None,
             reviewed_fingerprint=None,
+        )
+
+    def record_ready_completion(self, root: Path, run_id: str) -> None:
+        self.record_preflight(root, run_id)
+        source_page = root / "wiki" / "sources" / "source-example.md"
+        source_page.write_text(
+            "---\ntitle: Example\ntype: source\nstatus: active\n"
+            "raw_path: raw/inbox/example.md\n---\n\n# Example\n\nSummary.\n",
+            encoding="utf-8",
+        )
+        self.workflow.record_stage(
+            root, run_id, "register_or_resolve_source",
+            refs=["wiki/sources/source-example.md"], na_reason=None, result=None,
+            posture=None, reviewed_fingerprint=None,
+        )
+        source_page.write_text(
+            source_page.read_text(encoding="utf-8") + "\n## Key Facts\n\n- Evidence.\n",
+            encoding="utf-8",
+        )
+        self.workflow.record_stage(
+            root, run_id, "update_source_page",
+            refs=["wiki/sources/source-example.md"], na_reason=None, result=None,
+            posture=None, reviewed_fingerprint=None,
+        )
+        self.workflow.record_stage(
+            root, run_id, "update_affected_pages", refs=[],
+            na_reason="no_affected_page_promotion", result=None, posture=None,
+            reviewed_fingerprint=None,
+        )
+        log = root / "wiki" / "_meta" / "log.md"
+        log.write_text(
+            log.read_text(encoding="utf-8") + "\n- Example ingest updated.\n",
+            encoding="utf-8",
+        )
+        self.workflow.record_stage(
+            root, run_id, "refresh_index_and_log", refs=["wiki/_meta/log.md"],
+            na_reason=None, result=None, posture=None, reviewed_fingerprint=None,
+        )
+        self.workflow.record_stage(
+            root, run_id, "validate_structure",
+            refs=["wiki/sources/source-example.md"], na_reason=None, result="passed",
+            posture=None, reviewed_fingerprint=None,
+        )
+        fingerprint = self.workflow.state_fingerprint(root, "raw/inbox/example.md")
+        self.workflow.record_stage(
+            root, run_id, "final_review_completed",
+            refs=["wiki/sources/source-example.md"], na_reason=None, result=None,
+            posture="ready", reviewed_fingerprint=fingerprint,
         )
 
     def test_missing_stage_blocks_finish(self) -> None:
@@ -164,6 +224,319 @@ class WikiWorkflowGateTest(unittest.TestCase):
 
         self.assertEqual(stale["status"], "blocked")
         self.assertIn("final_review_completed", stale["stale_stages"])
+        self.assertFalse(stale["retrieval_ready"])
+        self.assertEqual(stale["retrieval_status"], "stale")
+
+    def test_finish_refreshes_retrieval_once_and_semantic_unavailable_is_non_blocking(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            run = self.workflow.start_run(root, "raw/inbox/example.md")
+            self.record_ready_completion(root, run["run_id"])
+            with mock.patch.object(
+                self.workflow,
+                "run_retrieval_refresh",
+                wraps=self.workflow.run_retrieval_refresh,
+            ) as refresh:
+                first = self.workflow.finish_run(root, run["run_id"])
+                second = self.workflow.finish_run(root, run["run_id"])
+
+        self.assertEqual(refresh.call_count, 1)
+        self.assertTrue(first["wiki_complete"])
+        self.assertTrue(first["retrieval_ready"])
+        self.assertEqual(first["retrieval_status"], "ready")
+        self.assertEqual(first["semantic_status"], "unavailable")
+        self.assertEqual(first["retrieval_refresh"], second["retrieval_refresh"])
+        self.assertIsNotNone(first["retrieval_refresh"]["corpus_fingerprint"])
+
+    def test_sqlite_off_completion_reports_retrieval_not_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp), sqlite_enabled=False)
+            run = self.workflow.start_run(root, "raw/inbox/example.md")
+            self.record_ready_completion(root, run["run_id"])
+            result = self.workflow.finish_run(root, run["run_id"])
+
+        self.assertTrue(result["wiki_complete"])
+        self.assertFalse(result["retrieval_ready"])
+        self.assertEqual(result["retrieval_status"], "not_enabled")
+        self.assertEqual(result["semantic_status"], "unavailable")
+
+    def test_same_run_stale_snapshot_cannot_regress_ready_or_duplicate_refresh(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            run = self.workflow.start_run(root, "raw/inbox/example.md")
+            run_id = run["run_id"]
+            self.record_ready_completion(root, run_id)
+            started = threading.Event()
+            release = threading.Event()
+            results = []
+
+            def delayed_refresh(_root):
+                started.set()
+                self.assertTrue(release.wait(timeout=5))
+                return {
+                    "retrieval_ready": True,
+                    "retrieval_status": "ready",
+                    "semantic_status": "unavailable",
+                }
+
+            with mock.patch.object(
+                self.workflow, "run_retrieval_refresh", side_effect=delayed_refresh
+            ) as refresh:
+                first_worker = threading.Thread(
+                    target=lambda: results.append(
+                        self.workflow.finish_run(root, run_id)
+                    )
+                )
+                first_worker.start()
+                self.assertTrue(started.wait(timeout=5))
+                stale_worker = threading.Thread(
+                    target=lambda: results.append(
+                        self.workflow.finish_run(root, run_id)
+                    )
+                )
+                stale_worker.start()
+                stale_worker.join(timeout=0.1)
+                self.assertTrue(stale_worker.is_alive())
+                release.set()
+                first_worker.join(timeout=5)
+                stale_worker.join(timeout=5)
+
+            _path, stored = self.workflow.load_run(root, run_id)
+
+        self.assertFalse(first_worker.is_alive())
+        self.assertFalse(stale_worker.is_alive())
+        self.assertEqual(refresh.call_count, 1)
+        self.assertEqual(len(results), 2)
+        self.assertTrue(all(result["run_status"] == "completed" for result in results))
+        self.assertTrue(all(result["retrieval_status"] == "ready" for result in results))
+        self.assertTrue(
+            all(result["retrieval_refresh"]["attempt"] == 1 for result in results)
+        )
+        self.assertEqual(stored["retrieval_refresh"]["retrieval_status"], "ready")
+        self.assertEqual(stored["retrieval_refresh"]["attempt"], 1)
+
+    def test_interrupted_pending_refresh_reclaims_stale_process_lock_and_retries_once(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            run = self.workflow.start_run(root, "raw/inbox/example.md")
+            run_id = run["run_id"]
+            self.record_ready_completion(root, run_id)
+            crash_script = """
+import importlib.util
+import os
+import sys
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("crashing_workflow", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.run_retrieval_refresh = lambda _root: os._exit(23)
+module.finish_run(Path(sys.argv[2]), sys.argv[3])
+"""
+            interrupted = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    crash_script,
+                    str(WORKFLOW_PATH),
+                    str(root),
+                    run_id,
+                ],
+                check=False,
+            )
+            self.assertEqual(interrupted.returncode, 23)
+            _path, pending = self.workflow.load_run(root, run_id)
+            self.assertEqual(
+                pending["retrieval_refresh"]["retrieval_status"], "pending"
+            )
+            self.assertEqual(pending["retrieval_refresh"]["attempt"], 1)
+
+            recovered_payload = {
+                "retrieval_ready": True,
+                "retrieval_status": "ready",
+                "semantic_status": "unavailable",
+            }
+            with mock.patch.object(
+                self.workflow,
+                "run_retrieval_refresh",
+                return_value=recovered_payload,
+            ) as refresh:
+                recovered = self.workflow.finish_run(root, run_id)
+                repeated = self.workflow.finish_run(root, run_id)
+
+        self.assertEqual(refresh.call_count, 1)
+        self.assertEqual(recovered["retrieval_status"], "ready")
+        self.assertEqual(recovered["retrieval_refresh"]["attempt"], 2)
+        self.assertEqual(recovered["retrieval_refresh"], repeated["retrieval_refresh"])
+
+    def test_preexisting_unlocked_refresh_file_does_not_block_completion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            run = self.workflow.start_run(root, "raw/inbox/example.md")
+            run_id = run["run_id"]
+            self.record_ready_completion(root, run_id)
+            self.workflow.retrieval_refresh_lock_path(root).write_text(
+                '{"owner_pid": 999999, "claimed_at": "stale"}\n',
+                encoding="utf-8",
+            )
+            with mock.patch.object(
+                self.workflow,
+                "run_retrieval_refresh",
+                return_value={
+                    "retrieval_ready": True,
+                    "retrieval_status": "ready",
+                    "semantic_status": "unavailable",
+                },
+            ) as refresh:
+                result = self.workflow.finish_run(root, run_id)
+
+        self.assertEqual(refresh.call_count, 1)
+        self.assertEqual(result["retrieval_status"], "ready")
+
+    def test_different_runs_share_one_repo_global_refresh_writer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            first = self.workflow.start_run(root, "raw/inbox/example.md")
+            self.record_ready_completion(root, first["run_id"])
+            _first_path, first_payload = self.workflow.load_run(root, first["run_id"])
+            second_id = "wiki-second-completed-run"
+            second_payload = json.loads(json.dumps(first_payload))
+            second_payload["run_id"] = second_id
+            self.workflow.write_json(
+                self.workflow.run_path(root, second_id), second_payload
+            )
+            started = threading.Event()
+            release = threading.Event()
+            results = []
+
+            def delayed_refresh(_root):
+                started.set()
+                self.assertTrue(release.wait(timeout=5))
+                return {
+                    "retrieval_ready": True,
+                    "retrieval_status": "ready",
+                    "semantic_status": "unavailable",
+                }
+
+            with mock.patch.object(
+                self.workflow, "run_retrieval_refresh", side_effect=delayed_refresh
+            ) as refresh:
+                worker = threading.Thread(
+                    target=lambda: results.append(
+                        self.workflow.finish_run(root, first["run_id"])
+                    )
+                )
+                worker.start()
+                self.assertTrue(started.wait(timeout=5))
+                blocked = self.workflow.finish_run(root, second_id)
+                _second_path, stored_second = self.workflow.load_run(root, second_id)
+                self.assertTrue(blocked["wiki_complete"])
+                self.assertEqual(blocked["run_status"], "completed")
+                self.assertEqual(blocked["retrieval_status"], "pending")
+                self.assertEqual(stored_second["status"], "completed")
+                self.assertEqual(
+                    stored_second["retrieval_refresh"]["retrieval_status"],
+                    "pending",
+                )
+                self.assertNotIn("attempt", stored_second["retrieval_refresh"])
+                self.assertEqual(refresh.call_count, 1)
+                claim = json.loads(
+                    self.workflow.retrieval_refresh_lock_path(root).read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertEqual(claim["run_id"], first["run_id"])
+                release.set()
+                worker.join(timeout=5)
+
+            self.assertFalse(worker.is_alive())
+            self.assertEqual(results[0]["retrieval_status"], "ready")
+
+            with mock.patch.object(
+                self.workflow,
+                "run_retrieval_refresh",
+                return_value={
+                    "retrieval_ready": True,
+                    "retrieval_status": "ready",
+                    "semantic_status": "unavailable",
+                },
+            ) as second_refresh:
+                recovered = self.workflow.finish_run(root, second_id)
+
+        self.assertEqual(second_refresh.call_count, 1)
+        self.assertEqual(recovered["retrieval_status"], "ready")
+        self.assertEqual(recovered["retrieval_refresh"]["attempt"], 1)
+
+    def test_refresh_timeout_recovers_ready_lexical_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            self.workflow.run_retrieval_refresh(root)
+            ready = self.workflow.subprocess.CompletedProcess(
+                args=[],
+                returncode=0,
+                stdout='{"state":"ready","semantic_lane":"unavailable"}',
+                stderr="",
+            )
+            with mock.patch.object(
+                self.workflow.subprocess,
+                "run",
+                side_effect=[
+                    self.workflow.subprocess.TimeoutExpired("refresh", 1),
+                    ready,
+                ],
+            ):
+                result = self.workflow.run_retrieval_refresh(root)
+
+        self.assertTrue(result["retrieval_ready"])
+        self.assertEqual(result["retrieval_status"], "ready")
+        self.assertEqual(result["semantic_status"], "unavailable")
+
+    def test_refresh_failure_fallback_preserves_semantic_status_and_counts(self) -> None:
+        cases = (
+            ("ready", 4, "ready"),
+            ("unavailable", 2, "partial"),
+            ("pending", 0, "pending"),
+            ("unavailable", 0, "unavailable"),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            failed = self.workflow.subprocess.CompletedProcess(
+                args=[], returncode=1, stdout="", stderr="refresh failed"
+            )
+            for semantic_lane, semantic_vectors, expected in cases:
+                with self.subTest(semantic_lane=semantic_lane, vectors=semantic_vectors):
+                    status = self.workflow.subprocess.CompletedProcess(
+                        args=[],
+                        returncode=0,
+                        stdout=json.dumps(
+                            {
+                                "state": "ready",
+                                "semantic_lane": semantic_lane,
+                                "semantic_vectors": semantic_vectors,
+                                "semantic_cohort_fingerprint": "sha256:test",
+                            }
+                        ),
+                        stderr="",
+                    )
+                    with mock.patch.object(
+                        self.workflow.subprocess,
+                        "run",
+                        side_effect=[failed, status],
+                    ):
+                        result = self.workflow.run_retrieval_refresh(root)
+
+                    self.assertTrue(result["retrieval_ready"])
+                    self.assertEqual(result["semantic_status"], expected)
+                    self.assertEqual(result["semantic_vectors"], semantic_vectors)
+                    self.assertEqual(
+                        result["semantic_cohort_fingerprint"], "sha256:test"
+                    )
 
 
 if __name__ == "__main__":

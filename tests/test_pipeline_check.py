@@ -30,10 +30,15 @@ class PipelineCheckTest(unittest.TestCase):
         cls.pipeline_check = load_module(PIPELINE_CHECK_PATH, "pipeline_check_under_test")
         cls.bootstrap = load_module(BOOTSTRAP_PATH, "bootstrap_for_pipeline_check_test")
 
+    def scaffold_archived(self, root: Path, profile: str = "wiki-plus-ontology") -> None:
+        self.bootstrap._scaffold_archived_profile_for_contract_tests(
+            root, force=False, profile=profile
+        )
+
     def test_missing_source_is_failed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "vault"
-            self.bootstrap.scaffold(root, force=False, profile="wiki-plus-ontology")
+            self.scaffold_archived(root)
 
             result = self.pipeline_check.check_source(root, "raw/inbox/missing.md")
 
@@ -44,7 +49,7 @@ class PipelineCheckTest(unittest.TestCase):
     def test_existing_source_without_source_page_is_pending(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "vault"
-            self.bootstrap.scaffold(root, force=False, profile="wiki-plus-ontology")
+            self.scaffold_archived(root)
             source = root / "raw" / "inbox" / "example.md"
             source.write_text("# Example\n", encoding="utf-8")
 
@@ -63,7 +68,7 @@ class PipelineCheckTest(unittest.TestCase):
             ontology_results = []
             for profile in ("wiki-plus-ontology", "llm-first-ontology"):
                 ontology_root = Path(tmp) / profile
-                self.bootstrap.scaffold(ontology_root, force=False, profile=profile)
+                self.scaffold_archived(ontology_root, profile)
                 ontology_results.append(self.pipeline_check.ontology_integrity_check(ontology_root))
 
         self.assertEqual(wiki_only["status"], "not_applicable")
@@ -72,7 +77,7 @@ class PipelineCheckTest(unittest.TestCase):
     def test_ontology_integrity_rejects_unreviewed_accepted_claim(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "vault"
-            self.bootstrap.scaffold(root, force=False, profile="wiki-plus-ontology")
+            self.scaffold_archived(root)
             jsonl = root / "warehouse" / "jsonl"
             (jsonl / "documents.jsonl").write_text('{"document_id":"doc:1"}\n', encoding="utf-8")
             (jsonl / "entities.jsonl").write_text('{"entity_id":"entity:1"}\n', encoding="utf-8")
@@ -92,7 +97,7 @@ class PipelineCheckTest(unittest.TestCase):
     def test_ontology_integrity_rejects_derived_edge_from_proposed_claim(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "vault"
-            self.bootstrap.scaffold(root, force=False, profile="wiki-plus-ontology")
+            self.scaffold_archived(root)
             jsonl = root / "warehouse" / "jsonl"
             (jsonl / "claims.jsonl").write_text(
                 '{"claim_id":"claim:1","status":"proposed","review_state":"needs_review"}\n',
@@ -111,7 +116,7 @@ class PipelineCheckTest(unittest.TestCase):
     def test_log_matching_uses_exact_source_identity_not_basename(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "vault"
-            self.bootstrap.scaffold(root, force=False, profile="wiki-plus-ontology")
+            self.scaffold_archived(root)
             source_a = root / "raw" / "inbox" / "a" / "same.md"
             source_b = root / "raw" / "inbox" / "b" / "same.md"
             source_a.parent.mkdir(parents=True, exist_ok=True)
@@ -147,7 +152,7 @@ raw_path: "raw/inbox/b/same.md"
     def test_ingest_report_matching_uses_exact_source_identity_not_basename(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "vault"
-            self.bootstrap.scaffold(root, force=False, profile="wiki-plus-ontology")
+            self.scaffold_archived(root)
             source_a = root / "raw" / "inbox" / "a" / "same.md"
             source_b = root / "raw" / "inbox" / "b" / "same.md"
             source_a.parent.mkdir(parents=True, exist_ok=True)
@@ -194,7 +199,7 @@ status: partial
     def test_full_growth_artifacts_mark_growth_loop_applied(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "vault"
-            self.bootstrap.scaffold(root, force=False, profile="wiki-plus-ontology")
+            self.scaffold_archived(root)
             source = root / "raw" / "inbox" / "example.md"
             source.write_text("# Example\n", encoding="utf-8")
             source_page = root / "wiki" / "sources" / "source-example.md"
@@ -258,7 +263,7 @@ status: applied
     def test_skipped_affected_pages_do_not_mark_growth_loop_applied(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "vault"
-            self.bootstrap.scaffold(root, force=False, profile="wiki-plus-ontology")
+            self.scaffold_archived(root)
             source = root / "raw" / "inbox" / "example.md"
             source.write_text("# Example\n", encoding="utf-8")
             source_page = root / "wiki" / "sources" / "source-example.md"

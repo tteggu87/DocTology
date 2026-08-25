@@ -26,6 +26,7 @@ __pycache__/
 .DS_Store
 .omx/
 .gstack/
+state/*.sqlite
 """
     if profile == "llm-first-ontology":
         base += """
@@ -83,7 +84,7 @@ def wikiconfig_example_json() -> str:
 
 def sqlite_operational_schema_sql() -> str:
     return """-- sqlite_operational.schema.sql
--- Purpose: operational index schema for a file-canonical LLM Wiki
+-- Purpose: disposable Markdown-derived retrieval index. Rebuild from wiki/*.md.
 
 PRAGMA foreign_keys = ON;
 
@@ -94,6 +95,54 @@ CREATE TABLE IF NOT EXISTS pages (
   page_type TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   checksum TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS documents (
+  id TEXT PRIMARY KEY,
+  page_id TEXT NOT NULL UNIQUE,
+  path TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  checksum TEXT NOT NULL,
+  byte_size INTEGER NOT NULL,
+  FOREIGN KEY (page_id) REFERENCES pages(id)
+);
+
+CREATE TABLE IF NOT EXISTS chunks (
+  id TEXT PRIMARY KEY,
+  document_id TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  heading_path TEXT NOT NULL,
+  line_start INTEGER NOT NULL,
+  line_end INTEGER NOT NULL,
+  byte_start INTEGER NOT NULL,
+  byte_end INTEGER NOT NULL,
+  content TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  UNIQUE (document_id, chunk_index),
+  FOREIGN KEY (document_id) REFERENCES documents(id)
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(
+  chunk_id UNINDEXED,
+  title,
+  path,
+  heading_path,
+  content,
+  tokenize = 'unicode61'
+);
+
+CREATE TABLE IF NOT EXISTS chunk_embeddings (
+  chunk_id TEXT NOT NULL,
+  chunk_hash TEXT NOT NULL,
+  model_identity TEXT NOT NULL,
+  tokenizer_identity TEXT NOT NULL,
+  preprocessing_identity TEXT NOT NULL,
+  dimensions INTEGER NOT NULL CHECK (dimensions > 0),
+  vector BLOB NOT NULL,
+  vector_fingerprint TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (chunk_id, model_identity, tokenizer_identity, preprocessing_identity),
+  FOREIGN KEY (chunk_id) REFERENCES chunks(id)
 );
 
 CREATE TABLE IF NOT EXISTS page_links (
@@ -127,6 +176,11 @@ CREATE TABLE IF NOT EXISTS tags (
   FOREIGN KEY (page_id) REFERENCES pages(id)
 );
 
+CREATE TABLE IF NOT EXISTS index_metadata (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS memories (
   id TEXT PRIMARY KEY,
   memory_type TEXT NOT NULL CHECK (
@@ -151,6 +205,12 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pages_title ON pages(title);
+CREATE INDEX IF NOT EXISTS idx_documents_page ON documents(page_id);
+CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks(document_id, chunk_index);
+CREATE INDEX IF NOT EXISTS idx_chunks_hash ON chunks(content_hash);
+CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_identity
+  ON chunk_embeddings(model_identity, tokenizer_identity, preprocessing_identity, dimensions);
+CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_hash ON chunk_embeddings(chunk_hash);
 CREATE INDEX IF NOT EXISTS idx_page_links_from ON page_links(from_page_id);
 CREATE INDEX IF NOT EXISTS idx_page_links_to ON page_links(to_page_id);
 CREATE INDEX IF NOT EXISTS idx_aliases_text ON aliases(alias_text);
@@ -199,6 +259,68 @@ def generated_helper_script(name: str) -> str:
     return source.replace("Path(__file__).resolve().parents[4]", "Path(__file__).resolve().parent.parent")
 
 
+def retrieval_contract(profile: str, sqlite_enabled: bool = True) -> str:
+    if not sqlite_enabled:
+        return """
+
+## Derived Retrieval
+
+- SQLite retrieval was not enabled during bootstrap.
+- Markdown remains the complete truth and reading surface.
+- SQLite may be enabled later by installing the active retrieval helpers intentionally; it is not required for wiki maintenance.
+- Final workflow output reports retrieval as `not_enabled`; canonical Markdown completion remains independent.
+"""
+    profile_note = (
+        "This wiki-only profile has no `warehouse/jsonl/`; Markdown remains its complete truth surface."
+        if profile == "wiki-only"
+        else "The index is derived from Markdown and never replaces raw, wiki, or canonical JSONL truth."
+    )
+    return f"""
+
+## Derived Retrieval Lanes
+
+- Markdown is the truth read by `scripts/wiki_retrieval.py`; `state/wiki_index.sqlite` is optional, disposable, and rebuilt with `rebuild`.
+- Pages at or below the default 64 KiB threshold stay whole. Larger pages split at Markdown headings, with paragraph fallback for oversized sections.
+- `search --mode lexical` is the dependable default: exact title/path, FTS5, then bounded wikilinks.
+- `search --mode semantic` is an optional local ONNX cosine-similarity candidate lane. Similarity candidates are not accepted evidence.
+- `search --mode both` keeps lexical and semantic ranks separate, applies deterministic page/chunk deduplication, and still succeeds when ONNX or semantic vectors are unavailable.
+- Run `refresh` once after the final canonical writer. It atomically rebuilds lexical state, reuses compatible vectors, and embeds only missing chunks when local model artifacts are configured.
+- Configure local artifacts with `--model-path`/`--tokenizer-path` or `WIKI_ONNX_MODEL`/`WIKI_TOKENIZER`, or omit them for lexical-only operation. Local ONNX uses zero API tokens and adds no ANN database.
+- Workflow completion reports `wiki_complete` separately from derived `retrieval_ready` and semantic status; optional retrieval failure never reverses canonical Markdown completion.
+- The runtime uses no reciprocal-rank fusion (RRF), never compares BM25 with cosine, and never requires ONNX for ingest or query completion.
+- Query readiness uses fast Markdown path/size/mtime checks. Same-size edits with preserved mtimes require `doctor`, which performs exhaustive content and vector validation.
+- {profile_note}
+"""
+
+
+def retrieval_readme(profile: str, sqlite_enabled: bool = True) -> str:
+    if not sqlite_enabled:
+        return """
+
+## Retrieval
+
+This workspace was created without the optional SQLite retrieval helpers. Markdown remains the complete truth and reading surface. Final workflow completion reports retrieval as `not_enabled` and does not require retrieval scripts or model configuration.
+"""
+    profile_note = (
+        "The `wiki-only` profile intentionally contains no `warehouse/jsonl/`."
+        if profile == "wiki-only"
+        else "Canonical files remain authoritative; SQLite is only a Markdown-derived reading aid."
+    )
+    return f"""
+
+## Markdown-Derived Retrieval
+
+```bash
+python scripts/wiki_retrieval.py --repo-root . rebuild
+python scripts/wiki_retrieval.py --repo-root . refresh
+python scripts/wiki_retrieval.py --repo-root . search "your query" --mode lexical
+python scripts/wiki_retrieval.py --repo-root . search "your query" --mode both
+```
+
+`state/wiki_index.sqlite` is disposable derived state. Run `refresh` once after the final canonical writer: it atomically rebuilds lexical state, reuses compatible vectors, and embeds only missing current chunks when `--model-path`/`--tokenizer-path` or `WIKI_ONNX_MODEL`/`WIKI_TOKENIZER` are configured. Local ONNX uses zero API tokens and remains optional; omitting or failing its artifacts never invalidates canonical Markdown completion or lexical readiness. Workflow output reports `wiki_complete`, `retrieval_ready`, and semantic status separately. By default, Markdown files up to 64 KiB remain one chunk; larger files split at headings and then paragraphs when needed. Lane ranks stay separate: there is no RRF or ANN, and BM25 is never compared with cosine. Query readiness uses fast path/size/mtime checks; run `doctor` for exhaustive content and vector validation, including same-size changes whose mtimes were preserved. {profile_note}
+"""
+
+
 def ensure_safe_target(target: Path, force: bool) -> None:
     if not target.exists():
         target.mkdir(parents=True, exist_ok=True)
@@ -212,10 +334,11 @@ def ensure_safe_target(target: Path, force: bool) -> None:
         )
 
 
-PROFILES = ["wiki-only", "wiki-plus-ontology", "llm-first-ontology"]
+ACTIVE_PROFILE = "wiki-only"
+ARCHIVED_PROFILES = ("wiki-plus-ontology", "llm-first-ontology")
 
 
-def wiki_only_agents_md() -> str:
+def wiki_only_agents_md(sqlite_enabled: bool = True) -> str:
     return """# AGENTS.md
 
 This repository is an Obsidian-first LLM Wiki.
@@ -436,7 +559,7 @@ Large-source work must use `scripts/wiki_batch.py`: freeze the source manifest, 
 Missing or stale stages keep the run active. Pending sources, unobserved canonical mutations, writer conflicts, stale question receipts, or stale corpus fingerprints block completion. Repair them or report the work as partial/pending; never describe a blocked gate as complete.
 
 <!-- LLM_WIKI_CONTRACT_END -->
-"""
+""" + retrieval_contract("wiki-only", sqlite_enabled)
 
 
 def ontology_agents_md() -> str:
@@ -682,10 +805,10 @@ If unsure whether something belongs in the wiki, prefer asking:
 `Should I save this as a wiki page?`
 
 <!-- LLM_WIKI_CONTRACT_END -->
-"""
+""" + retrieval_contract("wiki-plus-ontology")
 
 
-def agents_md(profile: str) -> str:
+def agents_md(profile: str, sqlite_enabled: bool = True) -> str:
     if profile == "llm-first-ontology":
         return """# AGENTS.md
 
@@ -787,13 +910,13 @@ Large-source work must use `scripts/wiki_batch.py`: freeze the source manifest, 
 Missing or stale stages keep the run active. Pending sources, unobserved canonical mutations, writer conflicts, stale question receipts, or stale corpus fingerprints block completion. Repair them or report the work as partial/pending; never describe a blocked gate as complete.
 
 <!-- LLM_WIKI_CONTRACT_END -->
-"""
+""" + retrieval_contract(profile, sqlite_enabled)
     if profile == "wiki-plus-ontology":
         return ontology_agents_md()
-    return wiki_only_agents_md()
+    return wiki_only_agents_md(sqlite_enabled)
 
 
-def readme(target: Path, profile: str) -> str:
+def readme(target: Path, profile: str, sqlite_enabled: bool = True) -> str:
     root = target.resolve()
     if profile == "llm-first-ontology":
         return f"""# LLM-First Ontology Wiki
@@ -845,7 +968,7 @@ Put sources under `{root}/raw/inbox/`, create source pages/citation anchors, the
 ## Procedure Gate
 
 Use `python3 scripts/wiki_workflow.py start --workflow ingest --source raw/inbox/<source>` for one source. Use `python3 scripts/wiki_batch.py plan --source raw/inbox/<source>` plus `python3 scripts/wiki_batch.py certify --batch <id>` for a corpus batch. A blocked run or stale certification is not complete.
-"""
+""" + retrieval_readme(profile, sqlite_enabled)
     if profile == "wiki-plus-ontology":
         return f"""# LLM Wiki for Obsidian
 
@@ -1020,7 +1143,7 @@ Until then, the repo-local contracts and folder structure are enough to start co
 ## Procedure Gate
 
 Use `python3 scripts/wiki_workflow.py start --workflow ingest --source raw/inbox/<source>` for one source. For a batch, use `wiki_batch.py plan`, staged drafts, one writer `apply`, strict pipeline checking, representative-question receipts, and `certify`. A blocked run or stale certification is not complete.
-"""
+""" + retrieval_readme(profile, sqlite_enabled)
 
     return f"""# LLM Wiki for Obsidian
 
@@ -1253,7 +1376,7 @@ When the wiki grows, you can add:
 - git-based review workflows
 
 Until then, `index.md`, `log.md`, and the folder structure are enough to run today.
-"""
+""" + retrieval_readme(profile, sqlite_enabled)
 
 
 def glossary_yaml() -> str:
@@ -2512,7 +2635,12 @@ print("OK wiki graph navigation")
     }
 
 
-def scaffold(target: Path, force: bool, profile: str) -> None:
+def _scaffold_impl(
+    target: Path,
+    force: bool,
+    profile: str = ACTIVE_PROFILE,
+    sqlite_enabled: bool = True,
+) -> None:
     date = today()
     ensure_safe_target(target, force)
 
@@ -2534,6 +2662,9 @@ def scaffold(target: Path, force: bool, profile: str) -> None:
         target / "state" / "wiki_runs",
         target / "state" / "wiki_batches",
     ]
+
+    if sqlite_enabled:
+        directories.append(target / "templates" / "llm-wiki-three-layer")
 
     if profile == "llm-first-ontology":
         directories.extend(
@@ -2564,13 +2695,31 @@ def scaffold(target: Path, force: bool, profile: str) -> None:
     for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
 
-    write_text(target / "AGENTS.md", agents_md(profile))
-    write_text(target / "README.md", readme(target, profile))
+    write_text(target / "AGENTS.md", agents_md(profile, sqlite_enabled))
+    write_text(target / "README.md", readme(target, profile, sqlite_enabled))
     write_text(target / ".gitignore", gitignore_text(profile))
     write_text(target / "scripts" / "llm_wiki.py", llm_wiki_py())
     write_text(target / "scripts" / "pipeline_check.py", generated_helper_script("pipeline_check.py"))
     write_text(target / "scripts" / "wiki_workflow.py", generated_helper_script("wiki_workflow.py"))
     write_text(target / "scripts" / "wiki_batch.py", generated_helper_script("wiki_batch.py"))
+    if sqlite_enabled:
+        write_text(target / "scripts" / "reindex_sqlite_operational.py", generated_helper_script("reindex_sqlite_operational.py"))
+        write_text(target / "scripts" / "wiki_retrieval.py", generated_helper_script("wiki_retrieval.py"))
+        write_text(target / "templates" / "llm-wiki-three-layer" / "sqlite_operational.schema.sql", sqlite_operational_schema_sql())
+    elif force:
+        for managed_path in (
+            target / "scripts" / "reindex_sqlite_operational.py",
+            target / "scripts" / "wiki_retrieval.py",
+            target
+            / "templates"
+            / "llm-wiki-three-layer"
+            / "sqlite_operational.schema.sql",
+            target / "state" / "wiki_index.sqlite",
+        ):
+            managed_path.unlink(missing_ok=True)
+        sqlite_template_dir = target / "templates" / "llm-wiki-three-layer"
+        if sqlite_template_dir.is_dir() and not any(sqlite_template_dir.iterdir()):
+            sqlite_template_dir.rmdir()
     write_text(target / "templates" / "source_page_template.md", source_template())
     write_text(target / "wiki" / "_meta" / "dashboard.md", dashboard_md(date))
     write_text(target / "wiki" / "_meta" / "index.md", index_md(date))
@@ -2583,10 +2732,8 @@ def scaffold(target: Path, force: bool, profile: str) -> None:
             write_text(target / rel_path, content)
         for rel_path, content in llm_first_script_files().items():
             write_text(target / rel_path, content)
-        write_text(target / "scripts" / "reindex_sqlite_operational.py", generated_helper_script("reindex_sqlite_operational.py"))
         write_text(target / "scripts" / "refresh_duckdb_analytics.py", generated_helper_script("refresh_duckdb_analytics.py"))
         write_text(target / "scripts" / "verify_three_layer_drift.py", generated_helper_script("verify_three_layer_drift.py"))
-        write_text(target / "templates" / "llm-wiki-three-layer" / "sqlite_operational.schema.sql", sqlite_operational_schema_sql())
         write_text(target / "templates" / "llm-wiki-three-layer" / "duckdb_analytical.schema.sql", duckdb_analytical_schema_sql())
         write_text(target / "docs" / "README.md", "# Docs Portal\n\nStart with `../AGENTS.md` and `../intelligence/contract_index.yaml`.\n")
         write_text(target / "docs" / "LLM_FIRST_ONTOLOGY_BOOTSTRAP_PROFILE.md", "# LLM-First Ontology Bootstrap Profile\n\nThis repo was generated with the strict LLM-first ontology profile.\n")
@@ -2600,10 +2747,8 @@ def scaffold(target: Path, force: bool, profile: str) -> None:
         write_text(target / "intelligence" / "glossary.yaml", glossary_yaml())
         write_text(target / "intelligence" / "manifests" / "datasets.yaml", datasets_yaml())
         write_text(target / "intelligence" / "manifests" / "actions.yaml", actions_yaml())
-        write_text(target / "scripts" / "reindex_sqlite_operational.py", generated_helper_script("reindex_sqlite_operational.py"))
         write_text(target / "scripts" / "refresh_duckdb_analytics.py", generated_helper_script("refresh_duckdb_analytics.py"))
         write_text(target / "scripts" / "verify_three_layer_drift.py", generated_helper_script("verify_three_layer_drift.py"))
-        write_text(target / "templates" / "llm-wiki-three-layer" / "sqlite_operational.schema.sql", sqlite_operational_schema_sql())
         write_text(target / "templates" / "llm-wiki-three-layer" / "duckdb_analytical.schema.sql", duckdb_analytical_schema_sql())
         for name in (
             "messages.jsonl",
@@ -2617,25 +2762,70 @@ def scaffold(target: Path, force: bool, profile: str) -> None:
             write_text(target / "warehouse" / "jsonl" / name, "")
 
 
+def scaffold(
+    target: Path,
+    force: bool,
+    profile: str = ACTIVE_PROFILE,
+    sqlite_enabled: bool = True,
+) -> None:
+    if profile != ACTIVE_PROFILE:
+        archived = ", ".join(ARCHIVED_PROFILES)
+        raise SystemExit(
+            f"profile={profile} is archived and unavailable in the active bootstrap "
+            f"({archived}); create a wiki-only workspace instead"
+        )
+    _scaffold_impl(target, force, profile=profile, sqlite_enabled=sqlite_enabled)
+
+
+def _scaffold_archived_profile_for_contract_tests(
+    target: Path,
+    force: bool,
+    profile: str,
+    sqlite_enabled: bool = True,
+) -> None:
+    """Preserve historical fixture coverage without exposing an active product API."""
+    if profile not in ARCHIVED_PROFILES:
+        raise ValueError(f"not an archived profile: {profile}")
+    _scaffold_impl(target, force, profile=profile, sqlite_enabled=sqlite_enabled)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Scaffold an Obsidian-first LLM Wiki workspace.")
     parser.add_argument("target", help="Target directory for the new workspace.")
     parser.add_argument(
-        "--profile",
-        choices=PROFILES,
-        default="llm-first-ontology",
-        help="Scaffold profile. Defaults to llm-first-ontology for strict no-fallback LLM Wiki repos. wiki-plus-ontology is the deprecated legacy ontology scaffold.",
+        "--sqlite",
+        choices=("on", "off"),
+        help="Include the optional derived SQLite retrieval tools. Interactive runs ask when omitted; non-interactive runs default to on.",
     )
     parser.add_argument("--force", action="store_true", help="Allow writing scaffold files into a non-empty directory.")
     return parser
+
+
+def resolve_sqlite_choice(explicit: str | None) -> bool:
+    if explicit is not None:
+        return explicit == "on"
+    if not sys.stdin.isatty():
+        return True
+    answer = input(
+        "Use the local SQLite retrieval index? "
+        "Markdown remains canonical and SQLite is rebuildable. [Y/n] "
+    ).strip().casefold()
+    return answer not in {"n", "no"}
 
 
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     target = Path(args.target).expanduser().resolve()
-    scaffold(target, args.force, args.profile)
-    print(f"Scaffolded LLM Wiki workspace at {target} with profile={args.profile}")
+    sqlite_enabled = resolve_sqlite_choice(args.sqlite)
+    scaffold(
+        target,
+        args.force,
+        profile=ACTIVE_PROFILE,
+        sqlite_enabled=sqlite_enabled,
+    )
+    sqlite_status = "on" if sqlite_enabled else "off"
+    print(f"Scaffolded wiki-only LLM Wiki workspace at {target} with sqlite={sqlite_status}")
     return 0
 
 
