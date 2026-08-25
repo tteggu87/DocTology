@@ -8,6 +8,7 @@ import json
 import re
 import subprocess
 import sys
+import urllib.parse
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -197,6 +198,180 @@ def scan_markdown_refs(text: str) -> list[str]:
         ):
             refs.append(candidate)
     return sorted(set(refs))
+
+
+def strip_markdown_code(text: str) -> str:
+    """Remove fenced and inline code so examples are not treated as live links."""
+    visible: list[str] = []
+    fence_character: str | None = None
+    fence_length = 0
+    list_content_indents: list[int] = []
+
+    def indent_width(value: str) -> int:
+        width = 0
+        for character in value:
+            width = width + 1 if character == " " else width + (4 - width % 4)
+        return width
+
+    for line in text.splitlines():
+        fence = re.match(r"^[ \t]{0,3}(`{3,}|~{3,})", line)
+        if fence:
+            marker = fence.group(1)
+            if fence_character is None:
+                fence_character = marker[0]
+                fence_length = len(marker)
+            elif marker[0] == fence_character and len(marker) >= fence_length:
+                fence_character = None
+                fence_length = 0
+            visible.append("")
+            continue
+        if fence_character is not None:
+            visible.append("")
+            continue
+        if not line.strip():
+            visible.append("")
+            continue
+
+        leading = re.match(r"^[ \t]*", line)
+        leading_text = leading.group(0) if leading else ""
+        indentation = indent_width(leading_text)
+        indented = line[len(leading_text) :]
+        list_marker = re.match(r"([-+*]|\d+[.)])([ \t]+)", indented)
+        if list_marker:
+            while list_content_indents and indentation < list_content_indents[-1]:
+                list_content_indents.pop()
+            content_indent = indentation + len(list_marker.group(1)) + indent_width(
+                list_marker.group(2)
+            )
+            list_content_indents.append(content_indent)
+            visible.append(line)
+            continue
+
+        while list_content_indents and indentation < list_content_indents[-1]:
+            list_content_indents.pop()
+        if list_content_indents:
+            content_indent = list_content_indents[-1]
+            if indentation >= content_indent + 4:
+                visible.append("")
+                continue
+            visible.append(line)
+            continue
+        if indentation >= 4:
+            visible.append("")
+            continue
+        visible.append(re.sub(r"(`+)(?:(?!\1).)*\1", "", line))
+    return "\n".join(visible)
+
+
+def markdown_inline_destinations(text: str) -> list[str]:
+    destinations: list[str] = []
+    position = 0
+    while position < len(text):
+        if text[position] != "[":
+            position += 1
+            continue
+        label_depth = 1
+        escaped = False
+        label_end: int | None = None
+        index = position + 1
+        while index < len(text) and text[index] != "\n":
+            character = text[index]
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == "[":
+                label_depth += 1
+            elif character == "]":
+                label_depth -= 1
+                if label_depth == 0:
+                    label_end = index
+                    break
+            index += 1
+        if label_end is None or label_end + 1 >= len(text) or text[label_end + 1] != "(":
+            position += 1
+            continue
+        start = label_end + 2
+        depth = 1
+        escaped = False
+        for index in range(start, len(text)):
+            character = text[index]
+            if escaped:
+                escaped = False
+                continue
+            if character == "\\":
+                escaped = True
+                continue
+            if character == "(":
+                depth += 1
+            elif character == ")":
+                depth -= 1
+                if depth == 0:
+                    destinations.append(text[start:index])
+                    position = index + 1
+                    break
+        else:
+            position = label_end + 1
+    return destinations
+
+
+def markdown_reference_destinations(text: str) -> list[str]:
+    destinations: list[str] = []
+    pattern = re.compile(
+        r"^[ \t]{0,3}\[(?!\^)[^\]\n]+\]:[ \t]*(?:<([^>\n]+)>|([^\s]+))",
+        re.MULTILINE,
+    )
+    for match in pattern.finditer(text):
+        destinations.append(match.group(1) or match.group(2))
+    return destinations
+
+
+def scan_local_markdown_links(text: str) -> list[str]:
+    """Return local inline/reference Markdown destinations, excluding URLs and anchors."""
+    visible = strip_markdown_code(text)
+    links: list[str] = []
+    destinations = markdown_inline_destinations(visible)
+    destinations.extend(markdown_reference_destinations(visible))
+    for raw_target in destinations:
+        target = raw_target.strip()
+        if target.startswith("<") and ">" in target:
+            target = target[1 : target.index(">")]
+        else:
+            target = target.split(maxsplit=1)[0]
+        target = target.replace(r"\(", "(").replace(r"\)", ")")
+        parsed = urllib.parse.urlsplit(target)
+        if parsed.scheme or parsed.netloc or not parsed.path:
+            continue
+        links.append(urllib.parse.unquote(parsed.path))
+    return sorted(set(links))
+
+
+def validate_wiki_markdown_links(
+    path: Path, repo_root: Path, report: ValidationReport
+) -> None:
+    """Validate default Repo Docs links without rejecting legacy wikilinks."""
+    resolved_root = repo_root.resolve()
+    for target in scan_local_markdown_links(path.read_text(encoding="utf-8")):
+        candidate = (
+            resolved_root / target.lstrip("/")
+            if target.startswith("/")
+            else path.parent / target
+        ).resolve()
+        try:
+            candidate.relative_to(resolved_root)
+        except ValueError:
+            report.add_error(
+                "wiki.markdown_link_outside_repo",
+                f"Local Markdown link `{target}` resolves outside the repository.",
+                path,
+            )
+            continue
+        if not candidate.exists():
+            report.add_error(
+                "wiki.broken_markdown_link",
+                f"Local Markdown link `{target}` does not resolve from `{path.relative_to(repo_root)}`.",
+                path,
+            )
 
 
 def load_yaml(path: Path, report: ValidationReport) -> object | None:
@@ -969,6 +1144,7 @@ def validate_wiki_memory(repo_root: Path, report: ValidationReport) -> None:
 
     for path in wiki_dir.rglob("*.md"):
         text = path.read_text(encoding="utf-8")
+        validate_wiki_markdown_links(path, repo_root, report)
         metadata = parse_doc_metadata(text)
         source_value = normalize_truth_value(metadata.get("source_of_truth", "false"))
         if source_value in {"yes", "true"}:

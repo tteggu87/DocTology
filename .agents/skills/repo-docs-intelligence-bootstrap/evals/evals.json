@@ -144,6 +144,7 @@
         "The result accepts mapping-shaped `actions`, `datasets`, `entities`, `terms`, and `capabilities` sections without recreating them as lists.",
         "The result keeps `docs/repo-map/` as a derived code-reading map with entrypoints, modules, data flow, and high-impact symbol summary pages.",
         "The result links `docs/repo-map/README.md` from `wiki/_meta/index.md` when a repo-map exists.",
+        "The result uses descriptive relative Markdown links as the Repo Docs wiki default while preserving existing Obsidian wikilinks as compatible legacy input.",
         "The result does not create a separate wiki-only workflow or promote wiki pages as canonical runtime truth."
       ]
     }

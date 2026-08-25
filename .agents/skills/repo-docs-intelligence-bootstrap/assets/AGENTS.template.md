@@ -4,6 +4,7 @@
 - Plan first for non-trivial tasks.
 - Search before code.
 - Read durable repo memory before substantial work: `wiki/_meta/index.md`, `wiki/_meta/log.md`, and relevant `wiki/analyses/*`.
+- From the memory index and recent log, follow relevant local Markdown links for at most 2 additional hops and at most 12 pages total; record the bounded reading path and verify linked canonical files before relying on wiki claims.
 - Do impact analysis before modifying schemas, manifests, handlers, or graph/materialization code.
 - Follow schema-first: define glossary/action/schema before adding implementation.
 - Update the smallest canonical truth first when concepts, actions, or boundaries change.
@@ -28,6 +29,7 @@
 - Keep current-state docs aligned with actual code.
 - Distinguish current truth, intentional legacy, and unresolved drift explicitly.
 - Keep `wiki/_meta/index.md` and `wiki/_meta/log.md` current after meaningful repo-docs maintenance.
+- Use descriptive relative Markdown links in new or materially rewritten Repo Docs wiki pages so links to docs, intelligence, code, and tests remain precise and portable. Continue to read existing Obsidian `[[wikilinks]]`, but do not introduce them as the Repo Docs default or mass-convert legacy pages solely for syntax consistency.
 - Save reusable plan reviews, drift analyses, source comparisons, and decision memos under `wiki/analyses/`.
 - Include source, assumption, conflict, and evidence-confidence notes when preserving claim-heavy analysis.
 

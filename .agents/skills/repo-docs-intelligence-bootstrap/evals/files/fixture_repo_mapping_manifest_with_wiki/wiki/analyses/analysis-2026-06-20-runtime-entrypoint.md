@@ -16,11 +16,12 @@ unresolved_conflicts: []
 
 ## Answer
 
-`app.runner:run` is the implementation linked from `intelligence/manifests/actions.yaml`.
+`app.runner:run` is the implementation linked from the
+[action contracts](../../intelligence/manifests/actions.yaml).
 This analysis records the review context and does not override current docs or intelligence contracts.
 
 ## Evidence Register
 
-- `docs/CURRENT_STATE.md`
-- `intelligence/manifests/actions.yaml`
-- `intelligence/registry/capabilities.yaml`
+- [Current repository state](../../docs/CURRENT_STATE.md)
+- [Action contracts](../../intelligence/manifests/actions.yaml)
+- [Capability bindings](../../intelligence/registry/capabilities.yaml)

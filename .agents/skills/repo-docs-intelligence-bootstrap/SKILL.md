@@ -75,6 +75,36 @@ The layers are intentionally asymmetric:
 Do not offer a separate wiki-only mode from this skill.
 Create the small wiki memory layer as part of the normal repo-docs profile, but keep it lightweight and subordinate to current docs and intelligence.
 
+## Repo Memory Link Contract
+
+Use portable Markdown links as the default link syntax in both `docs/` and the
+small `wiki/` memory layer:
+
+```markdown
+[Current architecture](../../docs/ARCHITECTURE.md)
+[Related decision](../analyses/runtime-entrypoint.md)
+[Runtime implementation](../../src/runtime.py)
+```
+
+Repo memory connects wiki pages to canonical docs, manifests, schemas, code,
+and tests. Relative Markdown paths keep those targets precise and clickable in
+GitHub, IDEs, and ordinary Markdown tools. Use descriptive anchor text that
+states why the target matters; do not leave navigational paths as inline code
+when they should be clickable.
+
+Treat existing Obsidian `[[wikilinks]]` as a supported legacy input. Do not
+mass-convert a working vault merely to change syntax, and do not reject a repo
+because historical pages still contain wikilinks. New or materially rewritten
+Repo Docs memory pages should use Markdown links. This differs intentionally
+from the Obsidian-first `llm-wiki-bootstrap`, where wikilinks remain the default.
+
+Before substantial repo-memory work, start at `wiki/_meta/index.md`, read the
+newest relevant entries in `wiki/_meta/log.md`, and follow relevant local
+Markdown links for at most 2 additional hops and at most 12 pages total. Stop
+when the linked material becomes historical, unrelated, or duplicate evidence.
+Record the bounded reading path in the handoff or maintenance log. Always check
+the linked canonical file before treating a wiki claim as current truth.
+
 ## Core Rules
 
 ### Search Before Code

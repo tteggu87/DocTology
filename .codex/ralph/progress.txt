@@ -47,3 +47,25 @@ Started: 2026-08-25T00:00:00+09:00
   - `git diff --check` -> pass: no whitespace errors.
 - Learnings for future iterations: repeated-failure learning should produce review evidence, not grant the ingest operator authority to modify its own gates.
 ---
+## Adaptive Repo Docs lifecycle (started 2026-08-25)
+
+### Codebase Patterns
+- Keep one unified Repo Docs profile; optional surfaces activate only when their promotion threshold is met.
+- Preserve existing file locations and manifest keys. New defaults must not force migration of mature repositories.
+- Treat code/tests and current docs as authority, wiki and SQLite as derived aids, and search output as candidates rather than truth.
+- Keep DuckCrab domain vocabulary out of the reusable skill; absorb only general document lifecycle patterns.
+
+## 2026-08-25 - US-001
+- Established descriptive relative Markdown links as the Repo Docs wiki default while keeping legacy Obsidian wikilinks compatible.
+- Added bounded two-hop/twelve-page traversal guidance and canonical-target verification.
+- Added robust local Markdown link validation for missing/outside targets, URLs, anchors, inline/fenced/indented code, footnotes, reference links, nested lists, nested labels, and escaped/balanced paths.
+- Updated templates and eval fixture without emitting links to absent optional repo-map or intelligence targets.
+- Files changed: repo-docs `SKILL.md`, AGENTS/wiki templates, eval fixture/expectation, validator, and validator tests.
+- Quality checks:
+  - `python3 -m pytest -q tests/test_repo_docs_intelligence_validator.py` -> 23 passed.
+  - `python3 -m pytest -q` -> 171 passed and 26 subtests passed.
+  - Ruff -> all checks passed.
+  - Skill quick validation -> valid.
+  - Independent review -> CLEAN, no Critical/Important/Minor findings.
+- Learnings: Markdown validation must understand optional targets and enough CommonMark container context to avoid turning examples into live links or hiding nested-list links.
+---

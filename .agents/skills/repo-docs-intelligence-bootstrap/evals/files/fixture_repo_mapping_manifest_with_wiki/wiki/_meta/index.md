@@ -7,15 +7,17 @@ source_of_truth: false
 
 # Repo Memory Index
 
-This is a derived reading map. It does not replace `docs/CURRENT_STATE.md` or `intelligence/manifests/actions.yaml`.
+This is a derived reading map. It does not replace the
+[current repository state](../../docs/CURRENT_STATE.md) or
+[action contracts](../../intelligence/manifests/actions.yaml).
 
 ## Start Here
 
-- `docs/CURRENT_STATE.md`
-- `docs/repo-map/README.md`
-- `wiki/_meta/log.md`
-- `wiki/analyses/analysis-2026-06-20-runtime-entrypoint.md`
+- [Current repository state](../../docs/CURRENT_STATE.md)
+- [Repository reading map](../../docs/repo-map/README.md)
+- [Repo memory log](log.md)
+- [Runtime entrypoint analysis](../analyses/analysis-2026-06-20-runtime-entrypoint.md)
 
 ## Code Reading Routes
 
-- `docs/repo-map/README.md`
+- [Repository reading map](../../docs/repo-map/README.md)

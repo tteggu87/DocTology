@@ -181,6 +181,183 @@ class RepoDocsIntelligenceValidatorTest(unittest.TestCase):
         self.assertIn("bundled skill validator", agents_template_text)
         self.assertIn("--finalize", agents_template_text)
 
+    def test_repo_memory_contract_prefers_portable_markdown_links(self) -> None:
+        skill_root = (
+            ROOT / ".agents" / "skills" / "repo-docs-intelligence-bootstrap"
+        )
+        skill_text = (skill_root / "SKILL.md").read_text(encoding="utf-8")
+        agents_text = (skill_root / "assets" / "AGENTS.template.md").read_text(
+            encoding="utf-8"
+        )
+        index_text = (
+            skill_root / "assets" / "wiki" / "_meta" / "index.template.md"
+        ).read_text(encoding="utf-8")
+        log_text = (
+            skill_root / "assets" / "wiki" / "_meta" / "log.template.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Use portable Markdown links as the default", skill_text)
+        self.assertIn("supported legacy input", skill_text)
+        self.assertIn("at most 2 additional hops", skill_text)
+        self.assertIn("at most 12 pages total", skill_text)
+        self.assertIn("descriptive relative Markdown links", agents_text)
+        self.assertIn("[Current repository state]", index_text)
+        self.assertNotIn("- `docs/CURRENT_STATE.md`", index_text)
+        self.assertNotIn("](../../docs/repo-map/README.md)", index_text)
+        self.assertNotIn("](../../intelligence/)", index_text)
+        self.assertNotIn("](../../intelligence/)", log_text)
+
+    def test_wiki_markdown_links_resolve_relative_to_each_page(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_doc(root / "docs" / "CURRENT_STATE.md", "Current State")
+            write_doc(
+                root / "wiki" / "_meta" / "index.md",
+                "Repo Memory Index",
+                "- [Current state](../../docs/CURRENT_STATE.md)\n"
+                "- [Analysis](../analyses/runtime.md)",
+            )
+            write_doc(
+                root / "wiki" / "analyses" / "runtime.md",
+                "Runtime",
+                "Legacy [[runtime-note]] remains readable.",
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_wiki_memory(root, report)
+
+        self.assertEqual(report.errors, [])
+
+    def test_wiki_markdown_links_reject_broken_and_outside_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_doc(
+                root / "wiki" / "_meta" / "index.md",
+                "Repo Memory Index",
+                "- [Missing](../analyses/missing.md)\n"
+                "- [Outside](../../../outside.md)",
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_wiki_memory(root, report)
+
+        codes = {issue["code"] for issue in report.errors}
+        self.assertIn("wiki.broken_markdown_link", codes)
+        self.assertIn("wiki.markdown_link_outside_repo", codes)
+
+    def test_wiki_link_scan_ignores_code_and_supports_parentheses_and_references(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_doc(root / "docs" / "guide_(v2).md", "Guide")
+            write_doc(
+                root / "wiki" / "_meta" / "index.md",
+                "Repo Memory Index",
+                "\n".join(
+                    [
+                        "`[Inline example](../missing-inline.md)`",
+                        "```markdown",
+                        "[Fenced example](../missing-fenced.md)",
+                        "```",
+                        "[Guide](../../docs/guide_(v2).md)",
+                        "[Missing reference][missing]",
+                        "",
+                        "[missing]: ../../docs/missing.md",
+                    ]
+                ),
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_wiki_memory(root, report)
+
+        broken = [
+            issue
+            for issue in report.errors
+            if issue["code"] == "wiki.broken_markdown_link"
+        ]
+        self.assertEqual(len(broken), 1)
+        self.assertIn("../../docs/missing.md", broken[0]["message"])
+
+    def test_wiki_link_scan_ignores_footnotes_and_indented_code_and_unescapes_paths(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_doc(root / "docs" / "guide_(v3).md", "Guide")
+            write_doc(
+                root / "wiki" / "_meta" / "index.md",
+                "Repo Memory Index",
+                "\n".join(
+                    [
+                        "Claim.[^1]",
+                        "",
+                        "[^1]: Supporting prose, not a path.",
+                        "",
+                        "    [Indented example](../missing-indented.md)",
+                        "",
+                        r"[Escaped guide](../../docs/guide_\(v3\).md)",
+                    ]
+                ),
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_wiki_memory(root, report)
+
+        self.assertEqual(report.errors, [])
+
+    def test_wiki_link_scan_checks_nested_lists_and_nested_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_doc(
+                root / "wiki" / "_meta" / "index.md",
+                "Repo Memory Index",
+                "\n".join(
+                    [
+                        "- Sources:",
+                        "    - [Missing nested](../missing-nested.md)",
+                        "\t- [Missing tab](../missing-tab.md)",
+                        "- [See [details]](../missing-details.md)",
+                        "- Source:",
+                        "",
+                        "    [Missing continuation](../missing-continuation.md)",
+                        "    > [Missing quote](../missing-quote.md)",
+                        "1. Ordered source:",
+                        "",
+                        "    [Missing ordered](../missing-ordered.md)",
+                    ]
+                ),
+            )
+
+            report = self.validator.ValidationReport(root)
+            self.validator.validate_wiki_memory(root, report)
+
+        broken_targets = {
+            target
+            for issue in report.errors
+            if issue["code"] == "wiki.broken_markdown_link"
+            for target in (
+                "../missing-nested.md",
+                "../missing-tab.md",
+                "../missing-details.md",
+                "../missing-continuation.md",
+                "../missing-quote.md",
+                "../missing-ordered.md",
+            )
+            if target in issue["message"]
+        }
+        self.assertEqual(
+            broken_targets,
+            {
+                "../missing-nested.md",
+                "../missing-tab.md",
+                "../missing-details.md",
+                "../missing-continuation.md",
+                "../missing-quote.md",
+                "../missing-ordered.md",
+            },
+        )
+
     def test_finalize_requires_changed_files_input(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -24,7 +24,7 @@ Summarize the current conclusion. Keep runtime truth grounded in code, docs, and
 
 ## Evidence Register
 
-- Source: `docs/CURRENT_STATE.md`
+- Source: [current repository state](../../docs/CURRENT_STATE.md)
   - Use: current human-readable repository state
   - Confidence: medium
 
@@ -44,4 +44,6 @@ Summarize the current conclusion. Keep runtime truth grounded in code, docs, and
 
 ## Next Checks
 
-- Re-read canonical docs and intelligence before relying on this analysis.
+- Re-read the [current repository state](../../docs/CURRENT_STATE.md),
+  [architecture](../../docs/ARCHITECTURE.md), and relevant intelligence contracts
+  before relying on this analysis.

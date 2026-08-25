@@ -12,18 +12,20 @@ It does not replace `AGENTS.md`, current docs, intelligence manifests, or live c
 
 ## Start Here
 
-- `AGENTS.md`
-- `docs/README.md`
-- `docs/CURRENT_STATE.md`
-- `docs/ARCHITECTURE.md`
-- `docs/LAYERS.md`
-- `docs/repo-map/README.md` when present
-- `intelligence/`
-- `wiki/_meta/log.md`
+- [Repository operating rules](../../AGENTS.md)
+- [Documentation portal](../../docs/README.md)
+- [Current repository state](../../docs/CURRENT_STATE.md)
+- [Current architecture](../../docs/ARCHITECTURE.md)
+- [Layer boundaries](../../docs/LAYERS.md)
+- [Recent repo-memory activity](log.md)
 
 ## Code Reading Routes
 
-- Link `docs/repo-map/README.md` here when the repository has a repo-map.
+- When `docs/repo-map/README.md` exists, add it here as a descriptive relative
+  Markdown link. Do not emit a link to an optional target before it exists.
+- When `intelligence/` exists, add its most relevant manifest or registry file
+  here as a descriptive relative Markdown link. Do not link an optional
+  directory before it exists.
 
 ## High-Signal Analyses
 
