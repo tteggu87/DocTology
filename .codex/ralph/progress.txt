@@ -101,3 +101,20 @@ Started: 2026-08-25T00:00:00+09:00
   - Independent read-only review after two repair rounds -> pass: Critical 0, Important 0, Minor 0; ready to merge.
 - Learnings for future iterations: optional validation must activate from both recognized locations and metadata, while index files and ambiguous names remain excluded; plans never count as proof of implementation.
 ---
+## 2026-08-25T15:58:41+09:00 - US-004
+- Added an opt-in, standard-library-only Repo Docs retrieval CLI with atomic SQLite rebuild, status, FTS5 search, bounded two-hop/twelve-page Markdown-link traversal, and deep doctor checks.
+- Indexed only root `AGENTS.md`, `docs/**/*.md`, and `wiki/**/*.md` as heading chunks with document/chunk/corpus fingerprints; source-code bodies, embeddings, rank fusion, ANN, canonical JSONL, workflow engines, and runtime databases remain outside the profile.
+- Kept missing retrieval state valid and retrieval failures non-blocking for canonical docs and validator completion; updated the skill, AGENTS template, and docs portal template with measured opt-in guidance and CodeGraph/LSP/`rg` ownership for code navigation.
+- Files changed: repo-docs `SKILL.md`, AGENTS/docs portal templates, bundled retrieval CLI, focused retrieval tests, `wiki/_meta/log.md`, `.codex/ralph/prd.json`, and `.codex/ralph/progress.txt`.
+- Quality checks run and result:
+  - `python3 -m pytest -q tests/test_repo_docs_retrieval.py tests/test_repo_docs_intelligence_validator.py` -> pass: 40 tests.
+  - `python3 -m pytest -q` -> pass: 188 tests and 26 subtests.
+  - `python3 -S tests/test_repo_docs_retrieval.py -q` -> pass: 8 dependency-light tests.
+  - `/Users/hoyasung007hotmail.com/.local/bin/ruff check .agents/skills/repo-docs-intelligence-bootstrap tests/test_repo_docs_retrieval.py tests/test_repo_docs_intelligence_validator.py` -> pass: all checks passed.
+  - `python3 /Users/hoyasung007hotmail.com/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/repo-docs-intelligence-bootstrap` -> pass: skill is valid.
+  - `python3 -m py_compile .agents/skills/repo-docs-intelligence-bootstrap/scripts/repo_docs_retrieval.py tests/test_repo_docs_retrieval.py` -> pass.
+  - `git diff --check` -> pass: no whitespace errors.
+  - Generated-profile smoke is included in the focused suite and passed under `python3 -S`.
+  - Independent read-only review after the final doctor/test repair -> pass: Critical 0, Important 0, Minor 0; CLEAN.
+- Learnings for future iterations: derived document search can remain dependency-light and disposable when status is cheap, doctor recomputes exact source-derived rows, and code navigation stays with code-aware tools.
+---

@@ -31,6 +31,12 @@ Start here.
 - Add plan, evidence, and review index links only when those optional surfaces exist.
 - Add a derived wiki-decision index only when it exists, and label it non-canonical.
 
+## Optional Derived Retrieval
+
+- Leave Repo Docs retrieval off unless measured document scale or repeated long-document reads justify it.
+- When active, `scripts/repo_docs_retrieval.py` rebuilds disposable heading, FTS5, fingerprint, and Markdown-link state from `AGENTS.md`, `docs/**/*.md`, and `wiki/**/*.md` only.
+- Search results are non-canonical discovery candidates. A missing or stale optional index does not change documentation truth or validator status.
+
 ## Legacy And Non-Current Material
 
 - Add experiment or archive links only when those locations exist.

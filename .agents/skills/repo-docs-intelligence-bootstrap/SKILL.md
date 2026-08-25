@@ -116,6 +116,43 @@ Adapt identifiers and relative links to the target repository. ADRs are canonica
 
 The validator activates lifecycle checks only for document roles that actually exist. It checks unique ADR identities, decision and implementation status vocabularies, resolvable supersession/plan/evidence links, implementation plus verification support for `implemented` claims, non-canonical wiki decisions with canonical sources, portal visibility for activated indexes, and stale plan next actions. Repositories without these optional roles remain valid without creating empty directories.
 
+## Optional Derived Repo Docs Retrieval
+
+Keep retrieval opt-in, disposable, and non-blocking. Do not enable it merely
+because the profile exists. Recommend it only after measured friction, such as
+roughly 100 or more documentation pages, tens of megabytes of Markdown, or
+repeated reads of long ADR, plan, evidence, review, or wiki documents. A missing
+index and a repository that leaves retrieval off are both valid states.
+
+When retrieval is warranted, copy the bundled dependency-light
+`scripts/repo_docs_retrieval.py` into the target repository's `scripts/`
+directory or run it from the skill directory. It reads only root `AGENTS.md`,
+`docs/**/*.md`, and `wiki/**/*.md`; it never indexes source-code bodies. Its
+heading chunks, relative Markdown-link edges, fingerprints, and FTS5 rows live
+in the atomically replaced `state/repo_docs_index.sqlite` derived index.
+
+Typical commands are:
+
+```bash
+python scripts/repo_docs_retrieval.py --repo-root . rebuild
+python scripts/repo_docs_retrieval.py --repo-root . status
+python scripts/repo_docs_retrieval.py --repo-root . search "runtime boundary"
+python scripts/repo_docs_retrieval.py --repo-root . traverse docs/README.md --hops 2 --limit 12
+python scripts/repo_docs_retrieval.py --repo-root . doctor
+```
+
+`rebuild` is the only mutating command and publishes through atomic replacement.
+`status`, `search`, `traverse`, and `doctor` are read-only. Search and link
+results are discovery candidates, not truth or validator evidence. Delete the
+database at any time and rebuild it entirely from Markdown. Retrieval refresh
+failure must be reported separately but must not block canonical docs or the
+validator completion gate.
+
+Keep CodeGraph, LSP, and `rg` responsible for code navigation. This optional
+surface is lexical document retrieval plus bounded Markdown-link traversal
+only; do not add embeddings, rank-fusion layers, approximate-neighbor indexes,
+canonical JSONL truth stores, workflow engines, or runtime databases to this profile.
+
 ## Repo Memory Link Contract
 
 Use portable Markdown links as the default link syntax in both `docs/` and the
@@ -655,6 +692,7 @@ Use these bundled files when useful:
 ## Bundled Scripts
 
 - `scripts/validate_repo_docs_intelligence.py`
+- `scripts/repo_docs_retrieval.py` (optional derived Markdown retrieval only)
 
 Adapt the templates to the repo. Do not paste them blindly.
 Use the validator as a guardrail, not as a substitute for impact analysis.

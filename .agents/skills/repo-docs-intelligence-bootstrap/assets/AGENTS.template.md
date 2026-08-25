@@ -18,6 +18,8 @@
 - Treat current docs as human-readable truth only when they match live code and registered contracts.
 - Treat intelligence manifests as reusable machine-readable contracts when present.
 - Treat generated indexes, search outputs, graph projections, and wiki memory as derived aids unless this repository explicitly defines them as canonical.
+- Keep Repo Docs retrieval opt-in and non-blocking. When measured document scale warrants it and `scripts/repo_docs_retrieval.py` is installed, use it for heading search and bounded Markdown-link traversal only; a missing index remains valid.
+- Treat Repo Docs retrieval results as discovery candidates and verify canonical targets before relying on them. Keep CodeGraph, LSP, and `rg` responsible for code navigation because source-code bodies are not part of the document index.
 - Use this authority order when artifacts disagree: live code and tests; current canonical docs and accepted ADRs; intelligence contracts; plans, evidence, and reviews; derived wiki memory; optional search indexes.
 - Prefer thin wrappers and a thick core package.
 - Keep repository memory lightweight; add docs, contracts, or wiki pages only when they reduce ambiguity, drift, or repeated mistakes.
@@ -38,6 +40,7 @@
 - Do not pre-create optional ADR, plan, evidence, review, decision, or repo-map directories. New repositories may default to `docs/adr/`; preserve existing flat or custom ADR locations without migration or key renaming.
 - Keep wiki decisions explicitly `source_of_truth: false` and link each one to its canonical ADR or canonical decision source.
 - Once ADR, plan, evidence, review, or wiki-decision surfaces exist, keep their identities unique, statuses valid, references resolvable, implemented claims evidence-backed, activated indexes visible from the docs portal, and completed or superseded plans free of a current next action.
+- If optional retrieval is active, `python scripts/repo_docs_retrieval.py --repo-root . doctor` may report stale derived state, but retrieval failure must remain separate from canonical documentation completion and validator results.
 
 ## Change synchronization rules
 

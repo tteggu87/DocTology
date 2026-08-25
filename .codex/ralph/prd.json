@@ -51,7 +51,7 @@
       "title": "Add optional derived Repo Docs retrieval",
       "description": "As a maintainer of a documentation-heavy repository, I want an opt-in SQLite FTS and Markdown-link index that reduces context reads without becoming truth or a mandatory bootstrap dependency.",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "A bundled dependency-light CLI can rebuild, status-check, search, traverse bounded links, and doctor a derived SQLite index from AGENTS.md, docs Markdown, and wiki Markdown only.",
         "The index stores heading chunks, descriptive Markdown-link edges, content fingerprints, and FTS5 data; it is disposable, atomically rebuilt, and never indexes source-code bodies or becomes canonical truth.",
