@@ -50,6 +50,7 @@ Do not use this skill when the user only wants to ingest one source into an exis
    - when SQLite is enabled, also verify:
      - `scripts/reindex_sqlite_operational.py`
      - `scripts/wiki_retrieval.py`
+     - `scripts/raw_retrieval.py`
      - `templates/llm-wiki-three-layer/sqlite_operational.schema.sql`
 6. Spot-check the generated repo contract:
    - `AGENTS.md` includes a startup ritual for future agents
@@ -85,6 +86,7 @@ Add `--force` only when the user explicitly wants overwrites.
 - source-page template
 - starter dashboard, index, and log pages
 - optional Markdown-derived SQLite/FTS5 retrieval helpers
+- an independent incremental lexical index for `raw/**/*.md` when SQLite is enabled; no raw vectors or blended ranking
 - persistent bounded run/batch receipts under `state/`, plus a representative-question contract under `wiki/_meta/`
 - coverage-preserving full ingest by default, with applied per-source receipts and explicit summary opt-in
 

@@ -8,8 +8,9 @@ superseded_by: N/A
 # Modules
 
 - `.agents/skills/llm-wiki-bootstrap/`: vault scaffolding, optional
-  page-streamed SQLite retrieval, bounded ONNX vector refresh, and copied gate
-  runtimes, including the full-coverage receipt gate.
+  page-streamed wiki SQLite retrieval, separate incremental raw lexical
+  retrieval, bounded wiki ONNX vector refresh, and copied gate runtimes,
+  including the full-coverage receipt gate.
 - `.agents/skills/llm-wiki-loop/`: agent-operated repeated wiki growth contract;
   ordinary ingest compiles to coverage-preserving full mode and explicit summary
   requests remain opt-in.

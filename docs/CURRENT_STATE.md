@@ -32,6 +32,12 @@ exact. Rebuilds stream page bodies, preserve compatible ONNX vectors in bounded
 batches, correct peer-heading paths, and compare a streamed exact fingerprint
 immediately before replacing the disposable index.
 
+SQLite-enabled generated vaults also include `raw_retrieval.py`. It maintains a
+separate incremental `state/raw_index.sqlite` over `raw/**/*.md`, stores chunk
+metadata/offsets without a duplicate regular content column, uses lexical FTS
+only, and reopens canonical raw byte ranges for results. Raw `status` is
+stat-based, `search` is unchecked candidate discovery, and `doctor` is exact.
+
 Generated wiki lint treats `_meta` navigation links and self-links as non-semantic for orphan detection. Orphans are advisory unless `lint --strict-orphans` is requested.
 
 Generated workflow locks use `fcntl.flock` on Unix and `msvcrt.locking` on

@@ -7,6 +7,10 @@ updated: 2026-08-26
 
 # Maintenance log
 
+- 2026-08-26: Added an independent raw Markdown lexical index to generated
+  SQLite-enabled vaults. Incremental rebuilds update added/changed/removed files;
+  search reopens canonical byte ranges, while stat status and exact doctor stay
+  separate. Raw vectors and blended ranking remain intentionally absent.
 - 2026-08-26: Made coverage-preserving ingest the default generated contract.
   Short ingest requests now compile to `full` heading/bounded-chunk accounting;
   `summary` requires explicit intent. Full final review must reference one

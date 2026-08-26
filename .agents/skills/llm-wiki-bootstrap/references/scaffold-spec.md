@@ -53,6 +53,7 @@ With SQLite enabled, also generate:
 
 ```text
 scripts/
+  raw_retrieval.py
   reindex_sqlite_operational.py
   wiki_retrieval.py
 templates/llm-wiki-three-layer/
@@ -64,6 +65,9 @@ templates/llm-wiki-three-layer/
 - `raw/` is immutable source storage.
 - `wiki/` is maintained synthesis and the complete knowledge truth surface.
 - `state/wiki_index.sqlite` is optional, disposable, and rebuildable from Markdown.
+- `state/raw_index.sqlite` is a separate optional lexical index for immutable
+  `raw/**/*.md`; it stores chunk metadata/offsets plus one FTS copy, reopens raw
+  bytes for results, and does not add vectors or canonical truth.
 - Lexical SQLite search and bounded wikilink traversal are candidate discovery only:
   they report unchecked freshness and callers reopen canonical Markdown before
   treating a result as evidence. `status` is the cheap stat gate; `doctor` is

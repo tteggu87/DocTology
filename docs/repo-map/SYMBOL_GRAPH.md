@@ -15,6 +15,12 @@ superseded_by: N/A
   user-requested `summary` mode into the source run.
 - `wiki_workflow.validate_full_coverage_receipt`: binds full final review to one
   applied raw-source receipt with balanced accounting and no deferred units.
+- `raw_retrieval.rebuild`: transactionally updates only added, changed, or
+  removed `raw/**/*.md` documents in a separate lexical index.
+- `raw_retrieval.search`: queries raw FTS, then reopens the canonical source byte
+  range and labels changed spans stale instead of returning stored text as truth.
+- `raw_retrieval.doctor`: hashes raw documents and reconstructs chunk/FTS rows
+  for exact derived-state verification.
 - `reindex_sqlite_operational.rebuild`: streams generated-wiki page bodies,
   retains only page metadata, and checks exact source content before atomic
   publication.

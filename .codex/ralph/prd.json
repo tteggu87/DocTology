@@ -1,0 +1,35 @@
+{
+  "branchName": "feat/raw-source-index",
+  "product": "Optional raw-source retrieval for generated LLM Wiki vaults",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Build a separate incremental raw lexical index",
+      "priority": 1,
+      "passes": true,
+      "acceptanceCriteria": [
+        "SQLite-enabled scaffolds include one self-contained raw retrieval CLI and SQLite-disabled scaffolds do not.",
+        "The CLI maintains state/raw_index.sqlite independently from state/wiki_index.sqlite.",
+        "Only raw/**/*.md is indexed into heading/bounded chunks with path, line, and byte offsets.",
+        "Search is lexical FTS only, labels results as raw source candidates, and reopens canonical raw bytes for returned text.",
+        "Repeated rebuilds update only added, changed, or removed files by stat identity; status is stat-based and doctor performs exact content verification.",
+        "Raw body text is not duplicated in a regular SQLite content column and no ONNX, RRF, daemon, or canonical truth is introduced.",
+        "Focused and full repository checks pass."
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Add wiki-first raw fallback retrieval",
+      "priority": 2,
+      "passes": false,
+      "acceptanceCriteria": [
+        "Existing wiki search remains the default and keeps its output contract.",
+        "An explicit raw fallback option queries raw only when wiki lexical results are empty; direct raw search remains available for verification and ingest planning.",
+        "Wiki and raw results remain separate labeled lanes with no blended score or RRF.",
+        "Generated AGENTS.md and llm-wiki-loop teach wiki-first lookup followed by raw fallback for missing, thin, verification, or coverage cases.",
+        "SQLite-off vaults degrade honestly without blocking wiki search.",
+        "Focused and full repository checks pass."
+      ]
+    }
+  ]
+}

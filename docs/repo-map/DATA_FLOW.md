@@ -17,3 +17,10 @@ For Repo Docs retrieval the downstream flow is:
 
 `status` reads file stats, `doctor` reads content and verifies structure, while
 search and traversal do neither freshness operation on their hot path.
+
+For generated LLM Wiki raw retrieval the downstream flow is:
+
+`raw/**/*.md -> incremental heading/chunk FTS -> state/raw_index.sqlite -> raw candidate offsets -> reopen canonical raw bytes`
+
+Raw and wiki indexes publish and age independently. Raw has no vector or blended
+ranking lane; stat status and exact doctor remain separate from unchecked search.

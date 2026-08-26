@@ -35,6 +35,10 @@ superseded_by: N/A
   now compile short ingest requests into heading/bounded-chunk accounting;
   explicit summary remains opt-in, and full final review requires a matching,
   balanced receipt with zero deferred units.
+- Added a separate, incremental `raw/**/*.md` lexical index for SQLite-enabled
+  vaults. It updates only stat-changed paths, keeps chunk content out of regular
+  tables, reopens canonical byte ranges for results, and deliberately adds no
+  raw ONNX, RRF, ANN, daemon, or canonical database.
 - Corrected generated wiki orphan detection so automatic `_meta` index links and self-links cannot hide disconnected pages; added optional strict failure behavior and regression coverage.
 - Replaced the mixed ontology/wiki/workbench repository surface with exactly three self-contained skills under `.agents/skills/`.
 - Added `scripts/manage_skills.py`, focused tests, CI, current Repo Docs, minimal intelligence contracts, and small repository memory.
@@ -48,6 +52,7 @@ superseded_by: N/A
 - `.agents/skills/llm-wiki-bootstrap/references/scaffold-spec.md`
 - `.agents/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py`
 - `.agents/skills/llm-wiki-bootstrap/scripts/reindex_sqlite_operational.py`
+- `.agents/skills/llm-wiki-bootstrap/scripts/raw_retrieval.py`
 - `.agents/skills/llm-wiki-bootstrap/scripts/wiki_retrieval.py`
 - `.agents/skills/llm-wiki-bootstrap/scripts/wiki_workflow.py`
 - `.agents/skills/repo-docs-intelligence-bootstrap/assets/AGENTS.template.md`
@@ -57,11 +62,15 @@ superseded_by: N/A
 - `.agents/skills/repo-docs-intelligence-bootstrap/scripts/repo_docs_retrieval.py`
 - `.agents/skills/repo-docs-intelligence-bootstrap/scripts/repo_docs_search.sql`
 - `.agents/skills/repo-docs-intelligence-bootstrap/scripts/repo_docs_traverse.sql`
+- `.codex/ralph/prd.json`
+- `.codex/ralph/progress.txt`
 - `docs/ARCHITECTURE.md`
 - `docs/CURRENT_STATE.md`
 - `docs/IMPACT_SUMMARY.md`
 - `docs/repo-map/MODULES.md`
 - `docs/repo-map/SYMBOL_GRAPH.md`
+- `docs/repo-map/DATA_FLOW.md`
+- `docs/repo-map/ENTRYPOINTS.md`
 - `docs/LAYERS.md`
 - `docs/README.md`
 - `docs/ROADMAP.md`
@@ -74,6 +83,7 @@ superseded_by: N/A
 - `docs/repo-map/SYMBOL_GRAPH.md`
 - `tests/test_repo_docs_retrieval.py`
 - `tests/test_wiki_batch_gate.py`
+- `tests/test_wiki_raw_retrieval.py`
 - `tests/test_wiki_sqlite_index.py`
 - `tests/test_wiki_sqlite_retrieval.py`
 - `tests/test_wiki_sqlite_semantic.py`
@@ -116,8 +126,9 @@ undefined until the owner selects one.
 
 ## Validator Summary
 
-The full suite passes 151/151, including full-mode receipt requirements,
-deferred-unit ready rejection, resumable partial review, explicit summary opt-in, and prior Windows lock
-regressions. Changed workflow Python passes `py_compile`; patch whitespace
+The full suite passes 156/156, including raw-index rebuild/search/doctor checks,
+full-mode receipt requirements, deferred-unit ready rejection, resumable partial
+review, explicit summary opt-in, and prior Windows lock regressions. Changed
+workflow Python passes `py_compile`; patch whitespace
 passes `git diff --check`. Final repository validator and skill-distribution
 results are recorded at handoff after the final mutation.

@@ -81,6 +81,7 @@ class WikiSqliteIndexTests(unittest.TestCase):
                         (root / "scripts" / "reindex_sqlite_operational.py").exists()
                     )
                     self.assertFalse((root / "scripts" / "wiki_retrieval.py").exists())
+                    self.assertFalse((root / "scripts" / "raw_retrieval.py").exists())
                     self.assertFalse(
                         (
                             root
@@ -97,6 +98,7 @@ class WikiSqliteIndexTests(unittest.TestCase):
                     (root / "scripts" / "reindex_sqlite_operational.py").is_file()
                 )
                 self.assertTrue((root / "scripts" / "wiki_retrieval.py").is_file())
+                self.assertTrue((root / "scripts" / "raw_retrieval.py").is_file())
                 self.assertTrue(
                     (
                         root

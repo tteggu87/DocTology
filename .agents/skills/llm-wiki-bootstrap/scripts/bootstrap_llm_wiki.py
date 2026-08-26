@@ -280,6 +280,9 @@ def retrieval_contract(profile: str, sqlite_enabled: bool = True) -> str:
 ## Derived Retrieval Lanes
 
 - Markdown is the truth read by `scripts/wiki_retrieval.py`; `state/wiki_index.sqlite` is optional, disposable, and rebuilt with `rebuild`.
+- `scripts/raw_retrieval.py` maintains a separate `state/raw_index.sqlite` for
+  lexical discovery over `raw/**/*.md`. It stores offsets and one FTS copy,
+  reopens raw bytes for results, and never adds raw vectors or blended ranking.
 - Pages at or below the default 64 KiB threshold stay whole. Larger pages split at Markdown headings, with paragraph fallback for oversized sections.
 - `search --mode lexical` is the dependable default: exact title/path, FTS5, then bounded wikilinks.
 - `search --mode semantic` is an optional local ONNX cosine-similarity candidate lane. Similarity candidates are not accepted evidence.
@@ -316,9 +319,27 @@ python scripts/wiki_retrieval.py --repo-root . rebuild
 python scripts/wiki_retrieval.py --repo-root . refresh
 python scripts/wiki_retrieval.py --repo-root . search "your query" --mode lexical
 python scripts/wiki_retrieval.py --repo-root . search "your query" --mode both
+python scripts/raw_retrieval.py --repo-root . rebuild
+python scripts/raw_retrieval.py --repo-root . search "source query"
+python scripts/raw_retrieval.py --repo-root . status
+python scripts/raw_retrieval.py --repo-root . doctor
 ```
 
-`state/wiki_index.sqlite` is disposable derived state. Run `refresh` once after the final canonical writer: it atomically rebuilds lexical state, reuses compatible vectors, and embeds only missing current chunks when `--model-path`/`--tokenizer-path` or `WIKI_ONNX_MODEL`/`WIKI_TOKENIZER` are configured. Local ONNX uses zero API tokens and remains optional; omitting or failing its artifacts never invalidates canonical Markdown completion or lexical readiness. Workflow output reports `wiki_complete`, `retrieval_ready`, and semantic status separately. By default, Markdown files up to 64 KiB remain one chunk; larger files split at headings and then paragraphs when needed. Lane ranks stay separate: there is no RRF or ANN, and BM25 is never compared with cosine. Lexical search and wikilink traversal return `freshness: unchecked` candidates from one structural SQLite connection, so reopen the listed Markdown paths before treating them as evidence. Run `status` for fast path/size/mtime readiness and `doctor` for exhaustive content and vector validation, including same-size changes whose mtimes were preserved. {profile_note}
+`state/wiki_index.sqlite` and `state/raw_index.sqlite` are separate disposable
+derived indexes. Raw rebuilds update only added, changed, or removed Markdown
+files by stat identity; raw search returns labeled source candidates after
+reopening the canonical byte range. Raw retrieval is lexical-only: it adds no
+ONNX vectors, RRF, ANN, or daemon. Run `refresh` once after the final canonical
+wiki writer: it atomically rebuilds lexical state, reuses compatible vectors,
+and embeds only missing wiki chunks when local artifacts are configured. Local
+ONNX uses zero API tokens and remains optional. Workflow output keeps
+`wiki_complete`, `retrieval_ready`, and semantic status separate. By default, Markdown files up to
+64 KiB remain one chunk; larger files split at headings and then paragraphs.
+Wiki lane ranks stay separate, and BM25 is never compared with cosine. Wiki and
+raw lexical results return `freshness: unchecked`; reopen their listed Markdown
+paths before treating them as evidence. Run `status` for fast path/size/mtime
+readiness and `doctor` for exhaustive content validation, including same-size
+changes whose mtimes were preserved. {profile_note}
 """
 
 
@@ -2784,16 +2805,19 @@ def _scaffold_impl(
     if sqlite_enabled:
         write_text(target / "scripts" / "reindex_sqlite_operational.py", generated_helper_script("reindex_sqlite_operational.py"))
         write_text(target / "scripts" / "wiki_retrieval.py", generated_helper_script("wiki_retrieval.py"))
+        write_text(target / "scripts" / "raw_retrieval.py", generated_helper_script("raw_retrieval.py"))
         write_text(target / "templates" / "llm-wiki-three-layer" / "sqlite_operational.schema.sql", sqlite_operational_schema_sql())
     elif force:
         for managed_path in (
             target / "scripts" / "reindex_sqlite_operational.py",
             target / "scripts" / "wiki_retrieval.py",
+            target / "scripts" / "raw_retrieval.py",
             target
             / "templates"
             / "llm-wiki-three-layer"
             / "sqlite_operational.schema.sql",
             target / "state" / "wiki_index.sqlite",
+            target / "state" / "raw_index.sqlite",
         ):
             managed_path.unlink(missing_ok=True)
         sqlite_template_dir = target / "templates" / "llm-wiki-three-layer"
