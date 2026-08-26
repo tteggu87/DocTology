@@ -9,6 +9,8 @@ superseded_by: N/A
 
 ## Changed
 
+- Restored the original cropped DocTology logo asset and its centered GitHub
+  README presentation without reviving the removed workbench surface.
 - Upgraded the canonical Repo Docs retrieval script to schema v3 with stat-only
   status, exact doctor, unchecked one-connection discovery, exact one-result-per-
   document ranking, source line ranges, batch query attribution, peer-heading
@@ -49,6 +51,8 @@ superseded_by: N/A
 
 ### Files
 
+- `README.md`
+- `branding/doctology-logo-cropped.jpeg`
 - `.agents/skills/llm-wiki-bootstrap/SKILL.md`
 - `.agents/skills/llm-wiki-loop/SKILL.md`
 - `.agents/skills/repo-docs-intelligence-bootstrap/SKILL.md`

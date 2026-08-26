@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="branding/doctology-logo-cropped.jpeg" alt="DocTology logo" width="820" />
+</p>
+
 # DocTology
 
 DocTology is a small distribution repository for three agent skills:
