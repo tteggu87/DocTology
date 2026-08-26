@@ -70,12 +70,20 @@ class WikiSqliteIndexTests(unittest.TestCase):
                 agents = (root / "AGENTS.md").read_text(encoding="utf-8")
                 readme = (root / "README.md").read_text(encoding="utf-8")
                 self.assertIn("Markdown", agents)
-                self.assertIn("Coverage-Preserving Ingest", agents)
-                self.assertIn("--coverage-mode summary", agents)
-                self.assertTrue(
-                    (root / "templates" / "coverage_receipt_template.md").is_file()
+                self.assertIn("Certified Source Ingest", agents)
+                self.assertIn("llm-wiki-loop", agents)
+                for name in (
+                    "wiki_workflow.py",
+                    "wiki_batch.py",
+                    "pipeline_check.py",
+                ):
+                    self.assertFalse((root / "scripts" / name).exists())
+                self.assertFalse(
+                    (root / "templates" / "coverage_receipt_template.md").exists()
                 )
-                self.assertTrue((root / "wiki" / "_meta" / "ingest_reports").is_dir())
+                self.assertFalse(
+                    (root / "wiki" / "_meta" / "representative_questions.json").exists()
+                )
                 if not sqlite_enabled:
                     self.assertFalse(
                         (root / "scripts" / "reindex_sqlite_operational.py").exists()

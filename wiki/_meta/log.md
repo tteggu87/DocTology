@@ -2,11 +2,18 @@
 title: DocTology maintenance log
 type: meta
 status: active
-updated: 2026-08-26
+updated: 2026-08-27
 ---
 
 # Maintenance log
 
+- 2026-08-27: Moved the LLM Wiki procedure, batch, and structural gate runtime
+  into `llm-wiki-loop`. Fresh bootstrap vaults retain the base wiki and optional
+  SQLite only; certified ingest runs the skill-local runtime through
+  `--repo-root` and writes only bounded state, receipts, and wiki changes. The
+  invocation contract now anchors `wiki_loop.py` to the loaded skill directory,
+  preventing project or global installs from resolving it inside the target
+  repository by mistake.
 - 2026-08-26: Restored the original cropped DocTology logo and rewrote the root
   README around the human-facing Obsidian LLM Wiki, agent-facing Repo Docs,
   deterministic gates, optional SQLite, and copyable skill-first workflows.

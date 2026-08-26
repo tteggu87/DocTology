@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-08-26
+last_updated: 2026-08-27
 superseded_by: N/A
 ---
 
@@ -11,6 +11,10 @@ superseded_by: N/A
 - `scripts.manage_skills.validate_source`: rejects missing or extra active skills.
 - `scripts.manage_skills.install`: synchronizes each complete skill tree.
 - `bootstrap_llm_wiki.scaffold`: creates downstream wiki workspaces.
+- `wiki_loop.preflight`: validates a target wiki-only repository and reports
+  legacy local gate files without installing or executing them.
+- `wiki_loop.dispatch`: runs the loop-owned procedure, batch, or structural
+  checker against `--repo-root`.
 - `wiki_workflow.start_run`: freezes `full` coverage by default or an explicit
   user-requested `summary` mode into the source run.
 - `wiki_workflow.validate_full_coverage_receipt`: binds full final review to one

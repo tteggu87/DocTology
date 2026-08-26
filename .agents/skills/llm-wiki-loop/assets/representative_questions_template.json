@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "direct_lookup",
+      "question": "Replace with a corpus-specific direct lookup question.",
+      "required": false,
+      "expected_posture": "supported"
+    },
+    {
+      "id": "evidence_refusal",
+      "question": "Replace with a question the corpus should refuse when evidence is absent.",
+      "required": false,
+      "expected_posture": "abstain"
+    }
+  ]
+}

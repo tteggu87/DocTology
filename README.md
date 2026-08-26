@@ -30,8 +30,8 @@ DocTology는 별도 서버를 운영하는 지식 플랫폼이 아닙니다. 세
 
 | Skill | 역할 |
 | --- | --- |
-| [`llm-wiki-bootstrap`](.agents/skills/llm-wiki-bootstrap/SKILL.md) | `raw/`, `wiki/`, `AGENTS.md`, 게이트 스크립트를 갖춘 Obsidian-first 위키를 생성하고 SQLite 사용 여부를 선택합니다. |
-| [`llm-wiki-loop`](.agents/skills/llm-wiki-loop/SKILL.md) | raw 원문을 빠짐없이 읽어 기존 개념·엔티티와 연결하고, coverage와 절차 게이트를 통과할 때까지 위키를 성장시킵니다. |
+| [`llm-wiki-bootstrap`](.agents/skills/llm-wiki-bootstrap/SKILL.md) | `raw/`, `wiki/`, `AGENTS.md`를 갖춘 Obsidian-first 위키를 생성하고 SQLite 사용 여부를 선택합니다. |
+| [`llm-wiki-loop`](.agents/skills/llm-wiki-loop/SKILL.md) | raw 원문을 빠짐없이 읽어 기존 개념·엔티티와 연결하고, 스킬 내부의 coverage·procedure·batch 게이트로 위키를 인증합니다. |
 | [`repo-docs-intelligence-bootstrap`](.agents/skills/repo-docs-intelligence-bootstrap/SKILL.md) | 코드 저장소에 현재 문서, ADR·plan·evidence, repo map, 에이전트 계약, 검증기를 함께 구축하고 변화에 맞춰 갱신합니다. |
 
 ## 가장 쉬운 시작
@@ -69,7 +69,8 @@ llm-wiki-loop로 raw/inbox의 새 문서를 full coverage로 위키화해줘.
 누락 없이 처리하며, 필요한 기존 페이지를 갱신하거나 재사용 가치가 있는
 페이지만 새로 만듭니다. 결과는 Obsidian에서 폴더를 열어 wikilink와 그래프를
 바로 탐색할 수 있습니다. Obsidian은 선택 사항이며 모든 결과는 일반
-Markdown으로도 읽을 수 있습니다.
+Markdown으로도 읽을 수 있습니다. 게이트 실행 파일은 위키 저장소에 복사되지
+않고 `llm-wiki-loop` 스킬 내부에서 `--repo-root`로 실행됩니다.
 
 ### 에이전트가 읽는 저장소 문서 만들기
 
@@ -117,6 +118,7 @@ DocTology는 “에이전트가 작성했으니 완료”라고 간주하지 않
 - 일반 위키화 요청은 기본적으로 `full` coverage로 해석
 - 원문 heading/chunk별 반영·제외·보류 수량을 receipt로 기록
 - 누락된 단계, 오래된 검토, 미반영 원문, writer 충돌을 결정적으로 차단
+- loop runtime은 스킬 내부에 한 번만 존재하며 대상 위키에는 run·receipt 결과만 기록
 - 위키 변경이 끝나면 선택적 wiki SQLite를 자동 refresh
 - Repo Docs는 validator가 현재 문서, 상태, 링크와 변경 영향의 drift를 검사
 - 실패한 SQLite 검색 인덱스는 Markdown 완료 상태를 뒤집지 않음

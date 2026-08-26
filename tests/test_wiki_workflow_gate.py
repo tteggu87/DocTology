@@ -18,9 +18,12 @@ WORKFLOW_PATH = (
     ROOT
     / ".agents"
     / "skills"
-    / "llm-wiki-bootstrap"
+    / "llm-wiki-loop"
     / "scripts"
     / "wiki_workflow.py"
+)
+LOOP_ENTRYPOINT = (
+    ROOT / ".agents" / "skills" / "llm-wiki-loop" / "scripts" / "wiki_loop.py"
 )
 BOOTSTRAP_PATH = ROOT / ".agents" / "skills" / "llm-wiki-bootstrap" / "scripts" / "bootstrap_llm_wiki.py"
 
@@ -52,6 +55,135 @@ class WikiWorkflowGateTest(unittest.TestCase):
         source = root / "raw" / "inbox" / "example.md"
         source.write_text("# Example\n\nEvidence.\n", encoding="utf-8")
         return root, source
+
+    def test_loop_runtime_operates_bootstrap_vault_without_installing_scripts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            preflight = subprocess.run(
+                [sys.executable, str(LOOP_ENTRYPOINT), "--repo-root", str(root), "preflight"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            started = subprocess.run(
+                [
+                    sys.executable,
+                    str(LOOP_ENTRYPOINT),
+                    "--repo-root",
+                    str(root),
+                    "workflow",
+                    "start",
+                    "--workflow",
+                    "ingest",
+                    "--source",
+                    "raw/inbox/example.md",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(preflight.returncode, 0, preflight.stderr)
+            self.assertEqual(json.loads(preflight.stdout)["state"], "ready")
+            self.assertEqual(started.returncode, 0, started.stderr)
+            self.assertEqual(json.loads(started.stdout)["runtime"], "llm-wiki-loop")
+            for name in ("wiki_workflow.py", "wiki_batch.py", "pipeline_check.py"):
+                self.assertFalse((root / "scripts" / name).exists())
+
+    def test_preflight_reports_but_does_not_manage_legacy_repo_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            legacy = root / "scripts" / "wiki_workflow.py"
+            legacy.write_text("legacy runtime\n", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(LOOP_ENTRYPOINT), "--repo-root", str(root), "preflight"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(result.stdout)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(payload["state"], "ready")
+            self.assertEqual(payload["legacy_repo_runtime"], ["scripts/wiki_workflow.py"])
+            self.assertEqual(legacy.read_text(encoding="utf-8"), "legacy runtime\n")
+
+    def test_loop_runtime_accepts_a_compatible_non_bootstrap_wiki(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "existing-wiki"
+            (root / "raw" / "inbox").mkdir(parents=True)
+            (root / "wiki" / "_meta").mkdir(parents=True)
+            (root / "AGENTS.md").write_text("# Existing wiki\n", encoding="utf-8")
+            (root / "wiki" / "_meta" / "index.md").write_text(
+                "# Index\n", encoding="utf-8"
+            )
+            (root / "raw" / "inbox" / "example.md").write_text(
+                "# Example\n\nEvidence.\n", encoding="utf-8"
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(LOOP_ENTRYPOINT),
+                    "--repo-root",
+                    str(root),
+                    "workflow",
+                    "start",
+                    "--workflow",
+                    "ingest",
+                    "--source",
+                    "raw/inbox/example.md",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["runtime"], "llm-wiki-loop")
+            self.assertTrue((root / "state" / "wiki_runs").is_dir())
+            self.assertFalse((root / "scripts").exists())
+
+    def test_preflight_does_not_promote_a_child_path_to_parent_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            child = root / "missing-child"
+            result = subprocess.run(
+                [sys.executable, str(LOOP_ENTRYPOINT), "--repo-root", str(child), "preflight"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(result.stdout)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(payload["state"], "not_ready")
+            self.assertIn("not a directory", payload["reason"])
+            self.assertNotIn("repo_root", payload)
+
+    def test_preflight_requires_file_and_directory_surface_types(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "malformed"
+            root.mkdir()
+            (root / "AGENTS.md").mkdir()
+            (root / "raw").write_text("not a directory\n", encoding="utf-8")
+            (root / "wiki").write_text("not a directory\n", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(LOOP_ENTRYPOINT), "--repo-root", str(root), "preflight"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(result.stdout)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(payload["state"], "not_ready")
+            self.assertEqual(
+                payload["reasons"],
+                [
+                    "missing required wiki surfaces: AGENTS.md (file), raw (directory), wiki (directory)"
+                ],
+            )
 
     def write_coverage_receipt(
         self,

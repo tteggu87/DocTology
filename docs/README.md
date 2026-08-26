@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: true
-last_updated: 2026-08-26
+last_updated: 2026-08-27
 superseded_by: N/A
 ---
 
@@ -14,7 +14,7 @@ superseded_by: N/A
 - [Roadmap](ROADMAP.md)
 - [Impact summary](IMPACT_SUMMARY.md)
 - [Repository map](repo-map/README.md)
-- [ADR index](adr/README.md), [plans](plans/README.md), [evidence](evidence/README.md), [reviews](reviews/README.md), [archive](archive/README.md)
+- [ADR index](adr/README.md), including [loop runtime ownership](adr/ADR-0001-loop-runtime-ownership.md); [plans](plans/README.md), [evidence](evidence/README.md), [reviews](reviews/README.md), [archive](archive/README.md)
 - [Derived decision memory](../wiki/decisions/README.md)
 - [Repo Docs retrieval absorption evidence](evidence/2026-08-26-repo-docs-sqlite-absorption.md)
 

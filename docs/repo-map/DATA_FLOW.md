@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-08-26
+last_updated: 2026-08-27
 superseded_by: N/A
 ---
 
@@ -10,6 +10,12 @@ superseded_by: N/A
 `source skill directories -> manage_skills install -> target skill root`
 
 The installer copies whole skill trees. A downstream bootstrap may then create a wiki repository, and that repository owns its Markdown and optional derived SQLite state. No downstream corpus flows back into DocTology.
+
+For certified LLM Wiki ingest, the loop owns the executable path:
+
+`target raw/wiki -> llm-wiki-loop runtime --repo-root -> run/batch/receipt state + canonical wiki changes`
+
+No procedure, batch, or pipeline executable is copied into the target vault.
 
 For Repo Docs retrieval the downstream flow is:
 

@@ -10,12 +10,22 @@ validated LLM Wiki. This public loop has one capability lane: `wiki-only`.
 SQLite retrieval may be enabled or disabled, but it remains derived and never
 changes the truth or completion boundary.
 
-The target repository owns its contracts and runtime:
+The target repository owns canonical Markdown, its local conventions, and
+durable run/receipt state. This skill owns the executable procedure, batch, and
+structural-check runtime. It runs that runtime from this skill directory with
+`--repo-root`; it never installs, overwrites, or deletes target-repository
+scripts.
 
-- `llm-wiki-bootstrap` creates `AGENTS.md`, scripts, validators, and state layout.
-- this skill detects those capabilities, freezes a plan, drives the available
-  runtime, repairs bounded blockers, and reports an honest terminal posture.
-- repo-local `AGENTS.md` remains authoritative when conventions differ.
+Resolve `SKILL_DIR` to the directory containing this loaded `SKILL.md`. Always
+invoke `"<SKILL_DIR>/scripts/wiki_loop.py"` explicitly, regardless of the
+current working directory. Never look for or execute `scripts/wiki_loop.py`
+inside the target repository, and never assume the current working directory is
+the skill directory. This rule applies equally to a project-local skill and an
+installed global skill.
+
+`llm-wiki-bootstrap` creates the base `raw/`/`wiki/` workspace and optional
+SQLite retrieval. This loop can then operate that workspace or any compatible
+existing wiki-only repository.
 
 Do not create a second workflow ledger or silently replace a missing semantic
 judgment owner.
@@ -33,8 +43,8 @@ exceptions, uncertainty, contradictions, and open questions. Map each unit to a
 wiki page/section or mark it omitted with a concrete reason. Never compress an
 unread remainder into a confident summary.
 
-Write one applied receipt under `wiki/_meta/ingest_reports/` from
-`templates/coverage_receipt_template.md`. A full run is not `ready` unless the
+Write one applied receipt under `wiki/_meta/ingest_reports/` using this skill's
+`assets/coverage_receipt_template.md`. A full run is not `ready` unless the
 receipt matches the source hash, the projected/omitted/deferred counts equal the
 total, and deferred is zero. If context or judgment runs out, keep the work
 `partial`, `not_ready`, or `blocked` and resume in another bounded batch.
@@ -87,24 +97,32 @@ Read:
 3. recent relevant entries in `wiki/_meta/log.md`
 
 Inventory repo-owned scripts and inspect their local help or documentation.
-Select only commands whose files exist; never invent a runner or flags.
+Run this skill's deterministic preflight first:
+
+```bash
+python3 "<SKILL_DIR>/scripts/wiki_loop.py" --repo-root <target-repo> preflight
+```
+
+It verifies the target's `AGENTS.md`, `raw/`, `wiki/`, wiki-only boundary, and
+optional SQLite posture. It may report legacy repo-local gate scripts, but this
+loop never executes or modifies them. Use only this skill's `wiki_loop.py`
+runtime entrypoint for procedure, batch, and structural gate commands.
 When `scripts/raw_retrieval.py` exists, use its status/rebuild/search commands as
 an optional routing aid for large raw corpora. Reopen the returned canonical
 raw byte ranges; the index is not evidence or a substitute for source reading.
 
 ### 2. Confirm The Wiki-Only Contract
 
-Confirm from repo-local `AGENTS.md` and generated scripts that:
+Confirm from repo-local `AGENTS.md` and preflight that:
 
 - Markdown under `wiki/` is the complete maintained knowledge truth surface
-- `scripts/wiki_workflow.py`, `scripts/wiki_batch.py`, and
-  `scripts/pipeline_check.py` own the deterministic gates
+- `llm-wiki-loop` owns the deterministic gates and can operate this target
 - SQLite is either `on` or `off`; both are valid and neither changes canonical
   truth
 
 Do not infer another product lane from source filenames, keywords, legacy
-directories, retrieval output, or YAML. Missing required gate scripts make the
-run `not_ready`; they do not authorize a prose checklist or an improvised
+directories, retrieval output, or YAML. A failed preflight makes the run
+`not_ready`; it does not authorize a prose checklist or an improvised
 replacement. If the repository explicitly requires ontology mutation, stop and
 route to its dedicated operator contract.
 
@@ -121,13 +139,19 @@ Before semantic mutation, present a compact plan with:
 - conditions that will end as `partial`, `not_ready`, or `blocked`
 - coverage mode (`full` by default), source-unit inventory strategy, and receipt path
 
-For a single source, start `scripts/wiki_workflow.py` before mutation and reuse
-`state/wiki_runs/`. Record the fixed stages in order. The semantic plan must
-precede mutation, and final review must bind to the latest mutation fingerprint.
-Use the default `--coverage-mode full`; pass `summary` only for explicit summary
-requests.
+For a single source, start the skill runtime before mutation and reuse
+`state/wiki_runs/`:
 
-For a batch, use `scripts/wiki_batch.py` to freeze the manifest and reuse
+```bash
+python3 "<SKILL_DIR>/scripts/wiki_loop.py" --repo-root <target-repo> workflow start \
+  --workflow ingest --source raw/inbox/<source>
+```
+
+Record the fixed stages in order. The semantic plan must precede mutation, and
+final review must bind to the latest mutation fingerprint. Use the default
+`--coverage-mode full`; pass `summary` only for explicit summary requests.
+
+For a batch, use `wiki_loop.py ... batch plan` to freeze the manifest and reuse
 `state/wiki_batches/`. Worker drafts stay in the batch draft area; exactly one
 writer may apply canonical files.
 
@@ -163,11 +187,17 @@ work.
 
 ### 6. Validate The Latest State
 
-Run the repository's structural pipeline gate. For the active wiki-only
-contract, its `ontology_integrity` field must be `not_applicable`; this explicit
-result proves the gate did not silently introduce or depend on ontology truth.
-An ontology-required result signals an incompatible legacy contract and keeps
-this loop `not_ready`.
+Run the skill runtime's structural gate:
+
+```bash
+python3 "<SKILL_DIR>/scripts/wiki_loop.py" --repo-root <target-repo> check \
+  --source raw/inbox/<source>
+```
+
+For the active wiki-only contract, its `ontology_integrity` field must be
+`not_applicable`; this explicit result proves the gate did not silently
+introduce or depend on ontology truth. An ontology-required result signals an
+incompatible legacy contract and keeps this loop `not_ready`.
 
 Complete the procedure run only after structural validation and final review
 both bind to the latest state. Any later relevant mutation makes those receipts
@@ -179,13 +209,18 @@ remain.
 
 ### 7. Certify A Batch
 
-When the repository provides the generated batch runtime, require:
+For a batch, require:
 
 1. every non-deferred source has a completed current source run
-2. `scripts/pipeline_check.py --strict --batch <manifest>` passes
+2. `wiki_loop.py ... check --strict --batch <manifest>` passes
 3. the one-writer apply event covers canonical mutations
 4. required representative-question receipts match the current corpus
 5. the final corpus fingerprint is certified after the last mutation
+
+If `wiki/_meta/representative_questions.json` is absent, create its target-local
+question contract from this skill's `assets/representative_questions_template.json`
+before recording question receipts. Tailor questions to the corpus; do not leave
+the placeholder text as evidence.
 
 Do not replace a missing gate with prose or a checklist and call the batch
 ready.
@@ -228,5 +263,8 @@ Return exactly one posture:
 
 Report the confirmed wiki-only contract, source set, wiki changes, SQLite
 posture, structural gate and explicit `ontology_integrity: not_applicable`
-result, final-review freshness, batch certification when applicable, blocker
-codes, uncertainties, and changed files.
+result, runtime version and contract digest, final-review freshness, batch
+certification when applicable, blocker codes, uncertainties, and changed files.
+
+For target-write and version details, read
+[the loop runtime contract](references/runtime-contract.md).

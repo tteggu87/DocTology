@@ -12,7 +12,7 @@ BATCH_PATH = (
     ROOT
     / ".agents"
     / "skills"
-    / "llm-wiki-bootstrap"
+    / "llm-wiki-loop"
     / "scripts"
     / "wiki_batch.py"
 )

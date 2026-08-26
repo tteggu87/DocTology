@@ -1,13 +1,18 @@
 ---
 status: Active
 source_of_truth: true
-last_updated: 2026-08-26
+last_updated: 2026-08-27
 superseded_by: N/A
 ---
 
 # Skills integration
 
-Use `llm-wiki-bootstrap` once to create a wiki and choose SQLite on or off. Use `llm-wiki-loop` for repeated source-to-wiki growth and certification. Use `repo-docs-intelligence-bootstrap` for code repositories whose docs and durable working context must evolve with implementation.
+Use `llm-wiki-bootstrap` once to create a wiki and choose SQLite on or off. Use
+`llm-wiki-loop` for repeated source-to-wiki growth and certification. Its gate
+runtime stays inside the loop skill and operates a target through `--repo-root`;
+it does not install gate executables in the target. Use
+`repo-docs-intelligence-bootstrap` for code repositories whose docs and durable
+working context must evolve with implementation.
 
 Install all three with `python3 scripts/manage_skills.py install`. Copying only a `SKILL.md` is unsupported because bootstrap and Repo Docs depend on sibling scripts, assets, references, or eval fixtures.
 

@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-08-26
+last_updated: 2026-08-27
 superseded_by: N/A
 ---
 
@@ -13,6 +13,10 @@ superseded_by: N/A
   front door around the two actual use cases: human-facing Obsidian LLM Wiki
   and agent-facing Repo Docs, joined by deterministic gates and derived SQLite.
   The removed workbench surface remains inactive.
+- Moved the LLM Wiki procedure, batch, and structural gate runtime into the
+  standalone `llm-wiki-loop` skill. Fresh bootstrap vaults keep only the base
+  wiki and optional retrieval helpers; certified ingest invokes the loop through
+  `--repo-root` and records no copied gate executables.
 - Upgraded the canonical Repo Docs retrieval script to schema v3 with stat-only
   status, exact doctor, unchecked one-connection discovery, exact one-result-per-
   document ranking, source line ranges, batch query attribution, peer-heading
@@ -63,7 +67,13 @@ superseded_by: N/A
 - `.agents/skills/llm-wiki-bootstrap/scripts/reindex_sqlite_operational.py`
 - `.agents/skills/llm-wiki-bootstrap/scripts/raw_retrieval.py`
 - `.agents/skills/llm-wiki-bootstrap/scripts/wiki_retrieval.py`
-- `.agents/skills/llm-wiki-bootstrap/scripts/wiki_workflow.py`
+- `.agents/skills/llm-wiki-loop/assets/coverage_receipt_template.md`
+- `.agents/skills/llm-wiki-loop/assets/representative_questions_template.json`
+- `.agents/skills/llm-wiki-loop/references/runtime-contract.md`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_loop.py`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_workflow.py`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_batch.py`
+- `.agents/skills/llm-wiki-loop/scripts/pipeline_check.py`
 - `.agents/skills/repo-docs-intelligence-bootstrap/assets/AGENTS.template.md`
 - `.agents/skills/repo-docs-intelligence-bootstrap/assets/docs/README.template.md`
 - `.agents/skills/repo-docs-intelligence-bootstrap/scripts/repo_docs_query.ps1`
@@ -74,6 +84,8 @@ superseded_by: N/A
 - `.codex/ralph/prd.json`
 - `.codex/ralph/progress.txt`
 - `docs/ARCHITECTURE.md`
+- `docs/adr/ADR-0001-loop-runtime-ownership.md`
+- `docs/adr/README.md`
 - `docs/CURRENT_STATE.md`
 - `docs/IMPACT_SUMMARY.md`
 - `docs/repo-map/MODULES.md`
@@ -85,6 +97,7 @@ superseded_by: N/A
 - `docs/ROADMAP.md`
 - `docs/SKILLS_INTEGRATION.md`
 - `docs/evidence/2026-08-26-repo-docs-sqlite-absorption.md`
+- `docs/evidence/2026-08-27-loop-runtime-ownership.md`
 - `docs/evidence/README.md`
 - `docs/repo-map/DATA_FLOW.md`
 - `docs/repo-map/ENTRYPOINTS.md`
@@ -99,6 +112,8 @@ superseded_by: N/A
 - `tests/test_wiki_workflow_gate.py`
 - `wiki/_meta/index.md`
 - `wiki/_meta/log.md`
+- `wiki/decisions/README.md`
+- `wiki/decisions/loop-runtime-ownership.md`
 
 ## Checked Not Changed
 
@@ -135,7 +150,8 @@ undefined until the owner selects one.
 
 ## Validator Summary
 
-The full suite passes 158/158, including raw-index rebuild/search/doctor and
+The full suite passes 163/163, including raw-index rebuild/search/doctor,
+standalone loop-runtime, and
 explicit wiki-first fallback checks,
 full-mode receipt requirements, deferred-unit ready rejection, resumable partial
 review, explicit summary opt-in, and prior Windows lock regressions. Changed

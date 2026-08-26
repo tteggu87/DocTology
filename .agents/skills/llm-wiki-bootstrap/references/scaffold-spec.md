@@ -26,22 +26,13 @@ SQLite retrieval is the only first-run option:
     notes/
   scripts/
     llm_wiki.py
-    pipeline_check.py
-    wiki_workflow.py
-    wiki_batch.py
-  state/
-    wiki_runs/
-    wiki_batches/
   templates/
-    coverage_receipt_template.md
     source_page_template.md
   wiki/
     _meta/
       dashboard.md
-      ingest_reports/
       index.md
       log.md
-      representative_questions.json
     analyses/
     concepts/
     entities/
@@ -75,7 +66,10 @@ templates/llm-wiki-three-layer/
   treating a result as evidence. `status` is the cheap stat gate; `doctor` is
   the exact content/vector gate.
 - `AGENTS.md` is the repo-local contract for future agents.
-- Ordinary ingest means coverage-preserving full ingest unless the user explicitly requests summary mode. Full runs account for every source heading/bounded chunk in an applied receipt and cannot finish with deferred units.
+- Certified source ingest is owned by `llm-wiki-loop`. The generated
+  `AGENTS.md` routes full coverage, batch work, and `ready` completion to that
+  standalone skill; its runtime remains inside the skill rather than being
+  copied into the target repository.
 - The reusable wiki workflow is enclosed by `LLM_WIKI_CONTRACT_START` and `LLM_WIKI_CONTRACT_END` markers.
 - The scaffold contains no ontology JSONL, `intelligence/` contract layer, DuckDB, helper-model configuration, or proposal/review registry.
 - The scaffold is usable without third-party Python dependencies.
@@ -93,6 +87,6 @@ templates/llm-wiki-three-layer/
 1. Open the folder as an Obsidian vault.
 2. Add the first source to `raw/inbox/`.
 3. Ask Codex to use the repo-local `AGENTS.md`.
-4. Register and synthesize the source with the local wiki workflow.
+4. Register the source, then invoke `llm-wiki-loop` for certified synthesis.
 5. If SQLite is enabled, run `python scripts/wiki_retrieval.py --repo-root . rebuild`.
 6. Add any future ontology system only through a separate, explicit product decision.

@@ -36,6 +36,11 @@ class DistributionTests(unittest.TestCase):
             self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
             self.assertEqual({path.name for path in target.iterdir()}, SKILLS)
             self.assertEqual(second.stdout.count("CURRENT "), 3)
+            loop = target / "llm-wiki-loop"
+            self.assertTrue((loop / "scripts" / "wiki_loop.py").is_file())
+            skill_text = (loop / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn('"<SKILL_DIR>/scripts/wiki_loop.py"', skill_text)
+            self.assertNotIn("python scripts/wiki_loop.py", skill_text)
 
     def test_install_rejects_canonical_source_as_target(self) -> None:
         source = ROOT / ".agents" / "skills"

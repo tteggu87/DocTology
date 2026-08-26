@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: true
-last_updated: 2026-08-26
+last_updated: 2026-08-27
 superseded_by: N/A
 ---
 
@@ -44,12 +44,15 @@ the wiki query when optional raw state is absent.
 
 Generated wiki lint treats `_meta` navigation links and self-links as non-semantic for orphan detection. Orphans are advisory unless `lint --strict-orphans` is requested.
 
-Generated workflow locks use `fcntl.flock` on Unix and `msvcrt.locking` on
-Windows, preserving run-finalization and SQLite-refresh serialization without
-adding a runtime dependency.
+The standalone LLM Wiki loop runtime uses `fcntl.flock` on Unix and
+`msvcrt.locking` on Windows, preserving run-finalization and SQLite-refresh
+serialization without adding a runtime dependency. It runs from
+`llm-wiki-loop`, never installs gate files in a target vault, and records its
+runtime identity plus contract digest in source runs.
 
-Generated wiki ingest now defaults to coverage-preserving `full` mode. Ordinary
-requests are expanded by `llm-wiki-loop` into heading/bounded-chunk accounting;
-explicit `summary` mode is the only reduced path. Full final review requires one
-applied ingest receipt bound to the raw source hash, balanced projected/omitted/
-deferred counts, and zero deferred units.
+Certified wiki ingest defaults to coverage-preserving `full` mode. The generated
+base `AGENTS.md` routes full coverage, batch work, and `ready` completion to
+`llm-wiki-loop`; the loop operates any compatible wiki-only target through its
+own runtime. Explicit `summary` is the only reduced path. Full final review
+requires one applied ingest receipt bound to the raw source hash, balanced
+projected/omitted/deferred counts, and zero deferred units.

@@ -62,6 +62,8 @@ POSTURES = {"ready", "partial", "not_ready", "blocked"}
 COVERAGE_MODES = {"full", "summary"}
 RETRIEVAL_REFRESH_TIMEOUT_SECONDS = 300
 SEMANTIC_REFRESH_STATUSES = {"ready", "partial", "pending", "unavailable"}
+RUNTIME_NAME = "llm-wiki-loop"
+RUNTIME_VERSION = 1
 
 
 class WorkflowError(RuntimeError):
@@ -98,7 +100,9 @@ def file_digest(path: Path) -> str:
 def procedure_contract_digest() -> str:
     return canonical_digest(
         {
-            "schema_version": 2,
+            "schema_version": 3,
+            "runtime": RUNTIME_NAME,
+            "runtime_version": RUNTIME_VERSION,
             "workflow": "INGEST",
             "stages": list(PROCEDURE_ORDER),
             "not_applicable_reasons": {key: sorted(value) for key, value in NA_REASONS.items()},
@@ -267,7 +271,9 @@ def start_run(root: Path, source: str, coverage_mode: str = "full") -> dict[str,
     run_id = "wiki-" + dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     fingerprint = state_fingerprint(root, source_relative)
     payload: dict[str, Any] = {
-        "schema_version": 2,
+        "schema_version": 3,
+        "runtime": RUNTIME_NAME,
+        "runtime_version": RUNTIME_VERSION,
         "run_id": run_id,
         "workflow": "INGEST",
         "status": "active",
@@ -495,6 +501,8 @@ def project_status(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
         }
     return {
         "schema_version": 1,
+        "runtime": RUNTIME_NAME,
+        "runtime_version": RUNTIME_VERSION,
         "workflow": "INGEST",
         "run_id": payload["run_id"],
         "source": payload["source"],

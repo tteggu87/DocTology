@@ -449,42 +449,36 @@ Guidelines:
 - Keep sections crisp and scannable
 - Use headings instead of long uninterrupted prose
 
-## Coverage-Preserving Ingest
+## Certified Source Ingest
 
-Source ingest defaults to `full` coverage. Use `summary` only when the user
-explicitly asks for a summary, overview, or intentionally reduced treatment.
+For raw source-to-wiki work that needs full coverage, batch processing, or a
+`ready` completion claim, invoke the installed `llm-wiki-loop` skill before
+semantic mutation. That skill owns the procedure, coverage, batch, and final
+review runtime; it runs from its own skill directory and records only receipts
+and state under this wiki.
 
-- Account for every source heading or bounded chunk as a source unit.
-- Preserve information rather than every sentence: definitions, facts, numbers,
-  conditions, examples, claims, evidence, exceptions, uncertainty,
-  contradictions, and open questions.
-- Map each source unit to a wiki page and section, or mark it omitted with a
-  concrete reason. Do not silently drop material.
-- Process oversized sources in bounded batches instead of compressing unread
-  sections into a short source-page summary.
-- Record the accounting in `wiki/_meta/ingest_reports/ingest-<source>.md` using
-  `templates/coverage_receipt_template.md`.
-- A `full` final review must reference exactly one applied receipt whose source
-  hash matches the run, whose unit counts balance, and whose deferred count is
-  zero. Otherwise use `partial`, `not_ready`, or `blocked`; do not claim `ready`.
+If the loop skill is unavailable, you may make clearly labelled draft or manual
+wiki edits, but do not claim `full` coverage or `ready` ingest completion.
 
 ## Source Ingest Workflow
 
 When the user asks to ingest a source:
 
-1. Read the raw source from `raw/inbox/`, `raw/processed/`, or `raw/notes/`.
-2. Locate the matching page in `wiki/sources/`. If it does not exist, create it.
-3. Write or update:
+1. For certified ingest, invoke `llm-wiki-loop`; otherwise state that the work
+   is an uncertified draft before editing.
+2. Read the raw source from `raw/inbox/`, `raw/processed/`, or `raw/notes/`.
+3. Locate the matching page in `wiki/sources/`. If it does not exist, create it.
+4. Write or update:
    - concise overview plus coverage-preserving section synthesis
    - key facts
    - important claims
    - contradictions or uncertainties
    - open questions
    - links to affected wiki pages
-4. Update every affected concept, entity, person, project, or timeline page.
-5. Create missing pages when a concept or entity clearly deserves its own page.
-6. Rebuild or refresh `wiki/_meta/index.md` if page inventory changed.
-7. Append an entry to `wiki/_meta/log.md`.
+5. Update every affected concept, entity, person, project, or timeline page.
+6. Create missing pages when a concept or entity clearly deserves its own page.
+7. Rebuild or refresh `wiki/_meta/index.md` if page inventory changed.
+8. Append an entry to `wiki/_meta/log.md`.
 
 ## Query Workflow
 
@@ -536,6 +530,7 @@ For this repository:
 - Prefer a reusable skill only if the behavior should work across many repositories or outside this specific vault.
 - Do not assume a custom skill will auto-activate in future conversations unless the environment explicitly exposes and triggers that skill.
 - Therefore, if reliability for the next agent is the goal, encode the rule here in `AGENTS.md` and keep examples in `README.md` or `wiki/_meta/`.
+- Certified raw ingest is the explicit exception: it requires `llm-wiki-loop`.
 
 ## Lint Workflow
 
@@ -598,21 +593,12 @@ Default assumption:
 If unsure whether something belongs in the wiki, prefer asking:
 `Should I save this as a wiki page?`
 
-## Procedure And Batch Completion Gate
+## Loop Runtime Boundary
 
-Source ingest must use `scripts/wiki_workflow.py`. Start an INGEST run before semantic work, record the fixed stages in order, and finalize only after structural validation and a final review bound to the latest mutation fingerprint.
-
-`scripts/wiki_workflow.py start` defaults to `--coverage-mode full`. Pass
-`--coverage-mode summary` only when the user explicitly requests reduced
-coverage. Full-mode final review must include the applied ingest report as a
-`--ref`; the workflow rejects missing, unbalanced, stale-source, or deferred
-coverage receipts.
-
-`scripts/pipeline_check.py` must report `ontology_integrity: not_applicable` for this wiki-only profile.
-
-Large-source work must use `scripts/wiki_batch.py`: freeze the source manifest, stage worker drafts under `state/wiki_batches/`, let exactly one writer apply canonical changes, run `scripts/pipeline_check.py --strict --batch ...`, and certify representative questions against the resulting corpus fingerprint.
-
-Missing or stale stages keep the run active. Pending sources, unobserved canonical mutations, writer conflicts, stale question receipts, or stale corpus fingerprints block completion. Repair them or report the work as partial/pending; never describe a blocked gate as complete.
+Do not expect `scripts/wiki_workflow.py`, `scripts/wiki_batch.py`, or
+`scripts/pipeline_check.py` in this repository. They are intentionally owned and
+executed by `llm-wiki-loop`. The skill validates this wiki with its own runtime,
+then writes only durable run state, receipts, and canonical wiki changes here.
 
 <!-- LLM_WIKI_CONTRACT_END -->
 """ + retrieval_contract("wiki-only", sqlite_enabled)
@@ -1349,10 +1335,13 @@ The operating rules I should follow are in `AGENTS.md`.
 
 1. Put many files into `raw/inbox/`
 2. Register each source with the CLI
-3. Ask me to use `llm-wiki-loop` to process them through the batch workflow
+3. Ask me to use `llm-wiki-loop` to process them through the certified batch workflow
 4. Ask me to run `lint` and clean up gaps afterward
 
-The completion path is stricter than lint: use `wiki_batch.py plan`, source procedure runs, staged drafts, one writer `apply`, `pipeline_check.py --strict --batch`, representative-question receipts, and `wiki_batch.py certify`.
+The completion path is stricter than lint. `llm-wiki-loop` supplies the full
+coverage receipt, source procedure, one-writer batch, structural check, and
+certification runtime from the installed skill; this repository keeps only its
+resulting state and Markdown artifacts.
 
 ## Commands
 
@@ -1659,66 +1648,6 @@ TBD.
 
 - TBD
 """
-
-
-def coverage_receipt_template() -> str:
-    return """---
-title: "Ingest coverage for {{title}}"
-type: meta
-status: applied
-coverage_mode: full
-raw_path: "{{raw_path}}"
-source_sha256: "{{source_sha256}}"
-source_units_total: 0
-source_units_projected: 0
-source_units_omitted: 0
-source_units_deferred: 0
----
-
-# Ingest Coverage: {{title}}
-
-- Raw path: `{{raw_path}}`
-
-Split the source by Markdown heading. When a section is too large or the source
-has no useful headings, use deterministic bounded chunks. Every unit must occur
-exactly once below.
-
-## Projected Units
-
-- `unit-id` -> `wiki/path.md#section` - preserved information
-
-## Omitted Units
-
-- None. If non-zero, list every unit and a concrete boilerplate/duplicate reason.
-
-## Deferred Units
-
-- None. A full run cannot finish ready while this section is non-empty.
-"""
-
-
-def representative_questions_json() -> str:
-    return json.dumps(
-        {
-            "schema_version": 1,
-            "cases": [
-                {
-                    "id": "direct_lookup",
-                    "question": "Replace with a corpus-specific direct lookup question.",
-                    "required": False,
-                    "expected_posture": "supported",
-                },
-                {
-                    "id": "evidence_refusal",
-                    "question": "Replace with a question the corpus should refuse when evidence is absent.",
-                    "required": False,
-                    "expected_posture": "abstain",
-                },
-            ],
-        },
-        ensure_ascii=False,
-        indent=2,
-    ) + "\n"
 
 
 def dashboard_md(date: str) -> str:
@@ -2760,7 +2689,6 @@ def _scaffold_impl(
         target / "scripts",
         target / "templates",
         target / "wiki" / "_meta",
-        target / "wiki" / "_meta" / "ingest_reports",
         target / "wiki" / "analyses",
         target / "wiki" / "concepts",
         target / "wiki" / "entities",
@@ -2768,8 +2696,6 @@ def _scaffold_impl(
         target / "wiki" / "projects",
         target / "wiki" / "sources",
         target / "wiki" / "timelines",
-        target / "state" / "wiki_runs",
-        target / "state" / "wiki_batches",
     ]
 
     if sqlite_enabled:
@@ -2808,9 +2734,6 @@ def _scaffold_impl(
     write_text(target / "README.md", readme(target, profile, sqlite_enabled))
     write_text(target / ".gitignore", gitignore_text(profile))
     write_text(target / "scripts" / "llm_wiki.py", llm_wiki_py())
-    write_text(target / "scripts" / "pipeline_check.py", generated_helper_script("pipeline_check.py"))
-    write_text(target / "scripts" / "wiki_workflow.py", generated_helper_script("wiki_workflow.py"))
-    write_text(target / "scripts" / "wiki_batch.py", generated_helper_script("wiki_batch.py"))
     if sqlite_enabled:
         write_text(target / "scripts" / "reindex_sqlite_operational.py", generated_helper_script("reindex_sqlite_operational.py"))
         write_text(target / "scripts" / "wiki_retrieval.py", generated_helper_script("wiki_retrieval.py"))
@@ -2833,14 +2756,9 @@ def _scaffold_impl(
         if sqlite_template_dir.is_dir() and not any(sqlite_template_dir.iterdir()):
             sqlite_template_dir.rmdir()
     write_text(target / "templates" / "source_page_template.md", source_template())
-    write_text(
-        target / "templates" / "coverage_receipt_template.md",
-        coverage_receipt_template(),
-    )
     write_text(target / "wiki" / "_meta" / "dashboard.md", dashboard_md(date))
     write_text(target / "wiki" / "_meta" / "index.md", index_md(date))
     write_text(target / "wiki" / "_meta" / "log.md", log_md(date))
-    write_text(target / "wiki" / "_meta" / "representative_questions.json", representative_questions_json())
     if profile == "llm-first-ontology":
         write_text(target / "wikiconfig.example.json", wikiconfig_example_json())
         write_text(target / "wikiconfig.json", wikiconfig_example_json())

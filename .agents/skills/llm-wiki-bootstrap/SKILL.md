@@ -9,6 +9,10 @@ description: Use this skill when the user wants to scaffold a new Obsidian-first
 
 Create a fresh markdown-first LLM Wiki workspace that is ready for Codex-style maintenance. The skill has one active product shape: `wiki-only`. It scaffolds the folder structure, `AGENTS.md`, starter `README.md`, local CLI, template files, and meta pages so the next agent can operate the vault consistently.
 
+Certified source ingest is intentionally owned by `llm-wiki-loop`, not this
+scaffold. The generated `AGENTS.md` routes full-coverage or `ready` ingest to
+that standalone skill; bootstrap does not install gate executables in the vault.
+
 SQLite retrieval is an independent optional choice. It is disposable, derived from Markdown, and never changes the wiki-only truth boundary. The archived `llm-first-ontology` and `wiki-plus-ontology` profiles are not active bootstrap choices.
 
 This is the recommended **start here** skill for DocTology-style wiki-first repos.
@@ -38,15 +42,8 @@ Do not use this skill when the user only wants to ingest one source into an exis
    - `raw/`
    - `wiki/`
    - `scripts/llm_wiki.py`
-   - `scripts/pipeline_check.py`
-   - `scripts/wiki_workflow.py`
-   - `scripts/wiki_batch.py`
    - `templates/source_page_template.md`
-   - `templates/coverage_receipt_template.md`
    - `wiki/_meta/index.md`, `dashboard.md`, `log.md`
-   - `wiki/_meta/representative_questions.json`
-   - `wiki/_meta/ingest_reports/`
-   - `state/wiki_runs/`, `state/wiki_batches/`
    - when SQLite is enabled, also verify:
      - `scripts/reindex_sqlite_operational.py`
      - `scripts/wiki_retrieval.py`
@@ -82,13 +79,11 @@ Add `--force` only when the user explicitly wants overwrites.
 - repo-local `AGENTS.md`
 - starter `README.md`
 - minimal CLI for `ingest`, `reindex`, `lint`, `status`, `log`
-- DuckCrab-style source procedure gate, strict source/batch pipeline checker, and one-writer corpus certification runtime
 - source-page template
 - starter dashboard, index, and log pages
 - optional Markdown-derived SQLite/FTS5 retrieval helpers
 - an independent incremental lexical index for `raw/**/*.md` when SQLite is enabled; no raw vectors or blended ranking
-- persistent bounded run/batch receipts under `state/`, plus a representative-question contract under `wiki/_meta/`
-- coverage-preserving full ingest by default, with applied per-source receipts and explicit summary opt-in
+- explicit routing to `llm-wiki-loop` for certified full-coverage ingest, receipts, batch certification, and completion posture
 
 ## Three-Layer Follow-On Guidance
 
@@ -114,7 +109,7 @@ The active bootstrap does not generate canonical ontology JSONL, DuckDB, helper-
 - The scaffold should teach source registration before semantic promotion, overlapping-scope checks before page creation, and `wiki/_meta/index.md` plus `wiki/_meta/log.md` refresh after meaningful work.
 - The generated wiki workflow must stay inside the `LLM_WIKI_CONTRACT` managed markers so later repository-guidance tools can preserve it.
 - The generated contract must block source completion on missing/stale procedure stages and block batch completion on pending sources, unobserved writes, writer conflicts, or stale corpus/question fingerprints.
-- Ordinary ingest defaults to full source-unit accounting; summary mode requires explicit user intent, and full final review rejects missing, unbalanced, stale-source, or deferred coverage receipts.
+- The generated contract must route certified raw ingest to `llm-wiki-loop`; if it is unavailable, the agent must not claim full coverage or `ready` completion.
 - The scaffold must describe Markdown as canonical and SQLite as optional derived state when enabled.
 - With SQLite enabled, the scaffold must teach wiki-first lookup, explicit raw
   fallback only after an empty wiki lexical result, and direct raw search for
@@ -140,9 +135,8 @@ After changes to this skill:
 5. Verify SQLite scripts/schema/database are absent in the off scaffold and ontology folders are absent in both.
 6. Verify `--profile` and archived ontology profile names are not active CLI choices.
 7. Spot-check `AGENTS.md`, `README.md`, and `scripts/llm_wiki.py`.
-8. Run source procedure missing/stale/repair-to-PASS tests and batch one-writer/fingerprint/certification tests.
-9. Confirm `pipeline_check.py --strict` returns nonzero for pending work.
+8. Verify a generated vault contains no loop gate executables and its `AGENTS.md` routes certified ingest to `llm-wiki-loop`.
+9. Run the standalone loop runtime against that vault through its `preflight`, source procedure, and batch tests.
 10. Confirm the generated wording does not imply markdown pages, SQLite, or DuckDB are canonical semantic truth.
-11. Confirm default full ingest rejects missing/deferred coverage receipts and explicit summary mode remains available.
 
 Prefer deterministic script validation over vague chat-only claims.
