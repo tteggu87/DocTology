@@ -787,7 +787,10 @@ def render_human(result: dict[str, Any]) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="DocTology structural source ingest route checker.")
+    parser = argparse.ArgumentParser(
+        description="DocTology structural source ingest route checker.",
+        allow_abbrev=False,
+    )
     parser.add_argument("--root", default=".", help="DocTology repo root. Defaults to current directory.")
     scope = parser.add_mutually_exclusive_group(required=True)
     scope.add_argument("--source", help="Source path to inspect.")

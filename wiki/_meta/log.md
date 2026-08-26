@@ -13,7 +13,9 @@ updated: 2026-08-27
   `--repo-root` and writes only bounded state, receipts, and wiki changes. The
   invocation contract now anchors `wiki_loop.py` to the loaded skill directory,
   preventing project or global installs from resolving it inside the target
-  repository by mistake.
+  repository by mistake. Exact `--repo-root` validation and nested `--root`
+  rejection also prevent a child runtime from redirecting work to another
+  repository after preflight.
 - 2026-08-26: Restored the original cropped DocTology logo and rewrote the root
   README around the human-facing Obsidian LLM Wiki, agent-facing Repo Docs,
   deterministic gates, optional SQLite, and copyable skill-first workflows.

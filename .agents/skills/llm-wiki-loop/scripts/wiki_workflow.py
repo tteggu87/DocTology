@@ -674,7 +674,10 @@ def finish_run(root: Path, run_id: str) -> dict[str, Any]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="DuckCrab-style procedure gate for LLM Wiki ingest.")
+    parser = argparse.ArgumentParser(
+        description="DuckCrab-style procedure gate for LLM Wiki ingest.",
+        allow_abbrev=False,
+    )
     parser.add_argument("--root", default=".")
     sub = parser.add_subparsers(dest="command", required=True)
 

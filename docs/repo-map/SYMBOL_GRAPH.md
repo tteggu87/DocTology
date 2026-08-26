@@ -14,7 +14,9 @@ superseded_by: N/A
 - `wiki_loop.preflight`: validates a target wiki-only repository and reports
   legacy local gate files without installing or executing them.
 - `wiki_loop.dispatch`: runs the loop-owned procedure, batch, or structural
-  checker against `--repo-root`.
+  checker against the exact `--repo-root`, rejects nested root overrides, and
+  relies on non-abbreviating child parsers so shortened flags cannot redirect
+  the target after preflight.
 - `wiki_workflow.start_run`: freezes `full` coverage by default or an explicit
   user-requested `summary` mode into the source run.
 - `wiki_workflow.validate_full_coverage_receipt`: binds full final review to one

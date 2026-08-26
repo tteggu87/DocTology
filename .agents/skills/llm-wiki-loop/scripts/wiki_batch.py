@@ -466,7 +466,10 @@ def batch_status(root: Path, batch_id: str) -> dict[str, Any]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Batch and corpus gate for LLM Wiki.")
+    parser = argparse.ArgumentParser(
+        description="Batch and corpus gate for LLM Wiki.",
+        allow_abbrev=False,
+    )
     parser.add_argument("--root", default=".")
     sub = parser.add_subparsers(dest="command", required=True)
 

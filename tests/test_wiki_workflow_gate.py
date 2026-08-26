@@ -185,6 +185,65 @@ class WikiWorkflowGateTest(unittest.TestCase):
                 ],
             )
 
+    def test_dispatch_rejects_nested_root_override_for_every_lane(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root, _source = self.make_vault(base)
+            other = base / "other"
+            other.mkdir()
+            for command in ("workflow", "batch", "check"):
+                with self.subTest(command=command):
+                    result = subprocess.run(
+                        [
+                            sys.executable,
+                            str(LOOP_ENTRYPOINT),
+                            "--repo-root",
+                            str(root),
+                            command,
+                            "--root",
+                            str(other),
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+
+                    payload = json.loads(result.stderr)
+                    self.assertEqual(result.returncode, 2)
+                    self.assertEqual(payload["state"], "not_ready")
+                    self.assertIn("nested --root is forbidden", payload["reason"])
+            for command in ("workflow", "batch", "check"):
+                with self.subTest(command=command, spelling="abbreviated"):
+                    required = {
+                        "workflow": [
+                            "start",
+                            "--workflow",
+                            "ingest",
+                            "--source",
+                            "raw/inbox/example.md",
+                        ],
+                        "batch": ["plan", "--source", "raw/inbox/example.md"],
+                        "check": ["--source", "raw/inbox/example.md"],
+                    }[command]
+                    result = subprocess.run(
+                        [
+                            sys.executable,
+                            str(LOOP_ENTRYPOINT),
+                            "--repo-root",
+                            str(root),
+                            command,
+                            f"--roo={other}",
+                            *required,
+                        ],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+
+                    self.assertEqual(result.returncode, 2)
+                    self.assertIn("unrecognized arguments", result.stderr)
+            self.assertEqual(list(other.iterdir()), [])
+
     def write_coverage_receipt(
         self,
         root: Path,

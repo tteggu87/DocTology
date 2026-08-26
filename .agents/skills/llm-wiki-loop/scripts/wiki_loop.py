@@ -82,6 +82,21 @@ def dispatch(repo_root: Path, command: str, remainder: list[str]) -> int:
     if status["state"] != "ready":
         print(json.dumps(status, ensure_ascii=False, indent=2), file=sys.stderr)
         return 2
+    if any(argument == "--root" or argument.startswith("--root=") for argument in remainder):
+        print(
+            json.dumps(
+                {
+                    "state": "not_ready",
+                    "runtime": RUNTIME_NAME,
+                    "runtime_version": RUNTIME_VERSION,
+                    "reason": "nested --root is forbidden; use only wiki_loop.py --repo-root",
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            file=sys.stderr,
+        )
+        return 2
     script_name = {
         "workflow": "wiki_workflow.py",
         "batch": "wiki_batch.py",
