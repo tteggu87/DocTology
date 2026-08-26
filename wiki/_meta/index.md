@@ -2,7 +2,7 @@
 title: DocTology repository memory
 type: meta
 status: active
-updated: 2026-08-25
+updated: 2026-08-26
 ---
 
 # Repository memory index
@@ -10,3 +10,5 @@ updated: 2026-08-25
 Canonical reading starts at the [documentation portal](../../docs/README.md), [current state](../../docs/CURRENT_STATE.md), and [repository map](../../docs/repo-map/README.md).
 
 This wiki is derived repository memory. It contains no personal corpus and does not override code, tests, `AGENTS.md`, or current docs.
+
+Current structural evidence is indexed from the [documentation portal](../../docs/README.md); this repository keeps the reusable SQLite absorption record canonical under `docs/evidence/` rather than duplicating it as an ignored local analysis page.

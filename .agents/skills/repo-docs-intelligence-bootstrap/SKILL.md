@@ -149,11 +149,17 @@ Include the dependency-light retrieval script in the Repo Docs scaffold. Keep
 its SQLite index disposable and non-blocking: a missing or stale index never
 changes documentation truth or validator completion.
 
-Copy the bundled `scripts/repo_docs_retrieval.py` into the target repository's
-`scripts/` directory. It reads only root `AGENTS.md`,
+Copy the bundled `scripts/repo_docs_retrieval.py`, `repo_docs_query.sh`,
+`repo_docs_query.ps1`, `repo_docs_search.sql`, and `repo_docs_traverse.sql` into
+the target repository's `scripts/` directory. Keep the POSIX wrapper executable.
+The Python entrypoint remains the dependency-light portable owner of rebuild,
+status, exact doctor, search, batch search, and traversal. The optional native
+wrappers call `sqlite3`/`sqlite3.exe` directly and share the same SQL files; they
+own no canonical truth or index mutation. The indexer reads only root `AGENTS.md`,
 `docs/**/*.md`, and `wiki/**/*.md`; it never indexes source-code bodies. Its
-heading chunks, relative Markdown-link edges, fingerprints, and FTS5 rows live
-in the atomically replaced `state/repo_docs_index.sqlite` derived index.
+heading chunks, relative Markdown-link edges, fingerprints, token FTS5 rows,
+and default contentless trigram rows live in the atomically replaced
+`state/repo_docs_index.sqlite` derived index.
 
 Typical commands are:
 
@@ -161,16 +167,38 @@ Typical commands are:
 python scripts/repo_docs_retrieval.py --repo-root . rebuild
 python scripts/repo_docs_retrieval.py --repo-root . status
 python scripts/repo_docs_retrieval.py --repo-root . search "runtime boundary"
+python scripts/repo_docs_retrieval.py --repo-root . search-batch "runtime boundary" "storage owner"
 python scripts/repo_docs_retrieval.py --repo-root . traverse docs/README.md --hops 2 --limit 12
 python scripts/repo_docs_retrieval.py --repo-root . doctor
+scripts/repo_docs_query.sh --repo-root . search "literal text"
+scripts/repo_docs_query.sh --repo-root . search --terms "strict token terms"
 ```
 
 `rebuild` is the only mutating command and publishes through atomic replacement.
-`status`, `search`, `traverse`, and `doctor` are read-only. Search and link
-results are discovery candidates, not truth or validator evidence. Delete the
-database at any time and rebuild it entirely from Markdown. Retrieval refresh
-failure must be reported separately but must not block canonical docs or the
-validator completion gate.
+It checks the Markdown snapshot again at the publication boundary so a failed or
+concurrent rebuild preserves the prior index. `status` uses a cheap path/size/
+mtime fingerprint; `doctor` performs the explicit content-exact, row, payload,
+and SQLite-integrity check. `search`, `search-batch`, and `traverse` deliberately
+return `freshness: unchecked` candidates without hashing Markdown. Run `status`
+before substantial discovery and `doctor` when exact proof is required; a stale
+index may still select canonical Markdown to open and verify.
+
+The default rebuild includes a contentless trigram index for literal substring
+discovery. This improves native literal lookup but can materially enlarge a
+multi-gigabyte derived database. Use `rebuild --no-trigram` for the compact token-
+FTS profile; native literal search then falls back to whole-token/phrase matching,
+while `--terms` remains strict quoted-token AND matching rather than raw FTS5
+syntax. A SQLite build without the trigram tokenizer automatically uses the same
+compact fallback instead of making the portable rebuild fail. Delete the database
+at any time and rebuild it entirely from Markdown.
+Retrieval refresh failure must be reported separately but must not block canonical
+docs or the validator completion gate.
+
+`status`, `search`, `search-batch`, `traverse`, and `doctor` are read-only. Search
+returns exactly one best chunk per document with source line ranges, so a long
+document cannot consume the candidate set. Use `search-batch` for related queries
+that benefit from one connection and cross-query attribution. Search and link
+results are discovery candidates, not truth or validator evidence.
 
 Keep CodeGraph, LSP, and `rg` responsible for code navigation. This derived
 surface is lexical document retrieval plus bounded Markdown-link traversal
@@ -735,6 +763,8 @@ Use these bundled files when useful:
 
 - `scripts/validate_repo_docs_intelligence.py`
 - `scripts/repo_docs_retrieval.py` (derived Markdown retrieval only)
+- `scripts/repo_docs_query.sh` and `scripts/repo_docs_query.ps1` (optional native SQLite readers)
+- `scripts/repo_docs_search.sql` and `scripts/repo_docs_traverse.sql` (shared native query contract)
 - `scripts/repo_docs_dogfood.py` (read-only compatibility inventory plus validator run)
 
 Adapt the templates to the repo. Do not paste them blindly.

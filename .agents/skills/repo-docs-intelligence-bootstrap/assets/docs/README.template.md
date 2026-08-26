@@ -36,9 +36,14 @@ Start here.
 
 ## Derived Retrieval
 
-- `scripts/repo_docs_retrieval.py` rebuilds disposable heading, FTS5,
-  fingerprint, and Markdown-link state from `AGENTS.md`, `docs/**/*.md`, and
-  `wiki/**/*.md` only.
+- `scripts/repo_docs_retrieval.py` rebuilds disposable heading, token/trigram
+  FTS5, stat/content fingerprint, and Markdown-link state from `AGENTS.md`,
+  `docs/**/*.md`, and `wiki/**/*.md` only. `status` is a cheap freshness hint;
+  `doctor` is the explicit content-exact check.
+- Python search/batch/traversal and the optional native `repo_docs_query.sh` or
+  `.ps1` readers return document-deduplicated candidates without hashing source
+  Markdown. Use `rebuild --no-trigram` when compact multi-gigabyte storage is
+  more important than literal substring recall.
 - Search results are non-canonical discovery candidates. A missing or stale
   derived index does not change documentation truth or validator status.
 

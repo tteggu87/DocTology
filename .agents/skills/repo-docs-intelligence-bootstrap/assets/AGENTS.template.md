@@ -18,7 +18,8 @@
 - Treat current docs as human-readable truth only when they match live code and registered contracts.
 - Treat intelligence manifests as reusable machine-readable contracts.
 - Treat generated indexes, search outputs, graph projections, and wiki memory as derived aids unless this repository explicitly defines them as canonical.
-- Keep Repo Docs retrieval derived and non-blocking. Use `scripts/repo_docs_retrieval.py` for heading search and bounded Markdown-link traversal; a missing or stale index remains rebuildable and never changes canonical truth.
+- Keep Repo Docs retrieval derived and non-blocking. Before substantial discovery run `python scripts/repo_docs_retrieval.py --repo-root . status`; use its Python search/batch/traversal or the optional native `repo_docs_query.sh`/`.ps1` readers for candidates, and reserve exact content/integrity verification for `doctor`. A missing or stale index remains rebuildable and never changes canonical truth.
+- Treat `search`, `search-batch`, and `traverse` freshness as unchecked. A stale index remains usable only to select canonical Markdown to open next. For multi-gigabyte corpora, `rebuild --no-trigram` keeps the derived index smaller at the cost of substring recall.
 - Treat Repo Docs retrieval results as discovery candidates and verify canonical targets before relying on them. Keep CodeGraph, LSP, and `rg` responsible for code navigation because source-code bodies are not part of the document index.
 - Use this authority order when artifacts disagree: live code and tests; current canonical docs and accepted ADRs; intelligence contracts; plans, evidence, and reviews; derived wiki memory; derived search indexes.
 - Prefer thin wrappers and a thick core package.

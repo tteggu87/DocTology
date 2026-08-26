@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: true
-last_updated: 2026-08-25
+last_updated: 2026-08-26
 superseded_by: N/A
 ---
 
@@ -15,3 +15,8 @@ The repository is a skill pack, not a running knowledge system.
 4. `docs/`, `intelligence/`, and `wiki/` describe and remember this repository itself.
 
 Generated wiki vaults are downstream products. Their Markdown is canonical; optional SQLite is disposable. Repo Docs repositories use relative Markdown links and a separate disposable docs index.
+
+The Repo Docs skill owns that index builder plus optional native SQLite read
+adapters as sibling skill files. Python owns rebuild/status/doctor and remains
+the portable fallback; the shell and PowerShell adapters share SQL and own no
+freshness, mutation, or canonical-truth decisions.

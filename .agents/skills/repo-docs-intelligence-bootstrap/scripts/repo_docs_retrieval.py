@@ -11,19 +11,30 @@ import re
 import sqlite3
 import sys
 import tempfile
+from bisect import bisect_right
 from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from urllib.parse import unquote
 
 
-SCHEMA_VERSION = "repo-docs-heading-index-v1"
+SCHEMA_VERSION = "repo-docs-heading-index-v3"
 DEFAULT_DB = "state/repo_docs_index.sqlite"
 DEFAULT_CHUNK_BYTES = 64 * 1024
 MAX_RESULTS = 100
 MAX_HOPS = 2
 MAX_PAGES = 12
 SQLITE_HEADER = b"SQLite format 3\x00"
+DISCOVERY_TABLES = frozenset(
+    {
+        "index_metadata",
+        "documents",
+        "chunks",
+        "markdown_links",
+        "chunk_fts",
+        "chunk_trigram",
+    }
+)
 HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)\s*$", re.MULTILINE)
 LINK_START_RE = re.compile(r"(?<!!)\[([^]\n]+)\]\(")
 
@@ -66,6 +77,20 @@ CREATE VIRTUAL TABLE chunk_fts USING fts5(
   title,
   heading_path,
   content,
+  tokenize = 'unicode61'
+);
+"""
+TRIGRAM_SCHEMA = """
+CREATE VIRTUAL TABLE chunk_trigram USING fts5(
+  content,
+  content = '',
+  tokenize = 'trigram'
+);
+"""
+TRIGRAM_FALLBACK_SCHEMA = """
+CREATE VIRTUAL TABLE chunk_trigram USING fts5(
+  content,
+  content = '',
   tokenize = 'unicode61'
 );
 """
@@ -125,24 +150,23 @@ def title_for(path: Path, text: str) -> str:
     return match.group(1).strip() if match else path.stem.replace("-", " ").title()
 
 
+def document_for(repo_root: Path, path: Path) -> Document:
+    raw = path.read_bytes()
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise RetrievalError(f"Markdown is not UTF-8: {path}") from exc
+    return Document(
+        path.relative_to(repo_root).as_posix(),
+        title_for(path, text),
+        digest(raw),
+        len(raw),
+        text,
+    )
+
+
 def documents(repo_root: Path) -> list[Document]:
-    records = []
-    for path in markdown_paths(repo_root):
-        raw = path.read_bytes()
-        try:
-            text = raw.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise RetrievalError(f"Markdown is not UTF-8: {path}") from exc
-        records.append(
-            Document(
-                path.relative_to(repo_root).as_posix(),
-                title_for(path, text),
-                digest(raw),
-                len(raw),
-                text,
-            )
-        )
-    return records
+    return [document_for(repo_root, path) for path in markdown_paths(repo_root)]
 
 
 def corpus_fingerprint(records: list[Document]) -> str:
@@ -153,11 +177,39 @@ def corpus_fingerprint(records: list[Document]) -> str:
     return digest(material.encode("utf-8"))
 
 
-def line_number(text: str, offset: int) -> int:
-    return text.count("\n", 0, offset) + 1
+def corpus_fingerprint_from_disk(repo_root: Path) -> str:
+    """Stream an exact corpus fingerprint without retaining document bodies."""
+    records = []
+    for path in markdown_paths(repo_root):
+        content_digest = hashlib.sha256()
+        byte_size = 0
+        with path.open("rb") as handle:
+            for block in iter(lambda: handle.read(1024 * 1024), b""):
+                content_digest.update(block)
+                byte_size += len(block)
+        records.append(
+            f"{path.relative_to(repo_root).as_posix()}\0{content_digest.hexdigest()}\0{byte_size}"
+        )
+    return digest("\n".join(records).encode("utf-8"))
 
 
-def split_span(text: str, start: int, end: int, byte_limit: int) -> list[tuple[int, int]]:
+def source_stat_fingerprint(repo_root: Path) -> str:
+    """Return a cheap source-change marker without reading Markdown bodies."""
+    records = []
+    for path in markdown_paths(repo_root):
+        try:
+            stat = path.stat()
+        except OSError as exc:
+            raise RetrievalError(f"Markdown changed during stat scan: {path}") from exc
+        records.append(
+            f"{path.relative_to(repo_root).as_posix()}\0{stat.st_size}\0{stat.st_mtime_ns}"
+        )
+    return digest("\n".join(records).encode("utf-8"))
+
+
+def split_span(
+    text: str, start: int, end: int, byte_limit: int
+) -> list[tuple[int, int]]:
     if byte_limit <= 0:
         raise RetrievalError("chunk byte limit must be positive")
     spans: list[tuple[int, int]] = []
@@ -183,13 +235,22 @@ def split_span(text: str, start: int, end: int, byte_limit: int) -> list[tuple[i
 
 
 def chunks_for(document: Document, byte_limit: int) -> list[Chunk]:
+    line_starts = [0]
+    line_starts.extend(
+        index + 1 for index, character in enumerate(document.text) if character == "\n"
+    )
+
+    def line_at(offset: int) -> int:
+        return bisect_right(line_starts, offset)
+
     headings: list[tuple[int, int, str]] = []
-    stack: list[str] = []
+    stack: list[tuple[int, str]] = []
     for match in HEADING_RE.finditer(document.text):
         level = len(match.group(1))
-        stack = stack[: level - 1]
-        stack.append(match.group(2).strip())
-        headings.append((match.start(), level, " > ".join(stack)))
+        while stack and stack[-1][0] >= level:
+            stack.pop()
+        stack.append((level, match.group(2).strip()))
+        headings.append((match.start(), level, " > ".join(title for _, title in stack)))
     sections: list[tuple[int, int, str]] = []
     if not headings:
         sections = [(0, len(document.text), "")]
@@ -199,7 +260,9 @@ def chunks_for(document: Document, byte_limit: int) -> list[Chunk]:
         sections.extend(
             (
                 start,
-                headings[index + 1][0] if index + 1 < len(headings) else len(document.text),
+                headings[index + 1][0]
+                if index + 1 < len(headings)
+                else len(document.text),
                 heading,
             )
             for index, (start, _level, heading) in enumerate(headings)
@@ -216,8 +279,8 @@ def chunks_for(document: Document, byte_limit: int) -> list[Chunk]:
                     document_path=document.path,
                     chunk_index=index,
                     heading_path=heading,
-                    line_start=line_number(document.text, chunk_start),
-                    line_end=max(line_number(document.text, chunk_end), line_number(document.text, chunk_start)),
+                    line_start=line_at(chunk_start),
+                    line_end=line_at(chunk_end - 1),
                     content=content,
                     content_fingerprint=fingerprint,
                 )
@@ -294,7 +357,11 @@ def markdown_link_pairs(text: str) -> list[tuple[str, str]]:
 
 def resolve_link(repo_root: Path, source: str, target: str) -> tuple[str | None, str]:
     target = target.split("#", 1)[0].split("?", 1)[0].strip()
-    if not target or target.startswith("//") or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", target):
+    if (
+        not target
+        or target.startswith("//")
+        or re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", target)
+    ):
         return None, "skip"
     candidate = ((repo_root / source).parent / unquote(target)).resolve()
     try:
@@ -320,12 +387,11 @@ def database_path(repo_root: Path, override: str | None) -> Path:
     return path if path.is_absolute() else repo_root / path
 
 
-def rebuild(repo_root: Path, db_path: Path, byte_limit: int) -> dict[str, object]:
-    before = documents(repo_root)
-    chunks = [chunk for document in before for chunk in chunks_for(document, byte_limit)]
-    links = links_for(repo_root, before)
-    if corpus_fingerprint(before) != corpus_fingerprint(documents(repo_root)):
-        raise RetrievalError("Markdown changed during rebuild; prior index was not replaced")
+def rebuild(
+    repo_root: Path, db_path: Path, byte_limit: int, trigram: bool = True
+) -> dict[str, object]:
+    paths = markdown_paths(repo_root)
+    stat_fingerprint = source_stat_fingerprint(repo_root)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{db_path.stem}.", suffix=".tmp", dir=db_path.parent
@@ -333,44 +399,102 @@ def rebuild(repo_root: Path, db_path: Path, byte_limit: int) -> dict[str, object
     os.close(descriptor)
     temporary = Path(temporary_name)
     temporary.unlink()
+    trigram_enabled = trigram
+    corpus_rows: list[str] = []
+    chunk_count = 0
+    link_count = 0
     try:
         connection = sqlite3.connect(temporary)
         try:
             connection.executescript(SCHEMA)
-            connection.executemany(
-                "INSERT INTO documents VALUES (?, ?, ?, ?)",
-                [(row.path, row.title, row.content_fingerprint, row.byte_size) for row in before],
-            )
-            connection.executemany(
-                "INSERT INTO chunks VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                [tuple(asdict(row).values()) for row in chunks],
-            )
-            connection.executemany(
-                "INSERT OR IGNORE INTO markdown_links VALUES (?, ?, ?, ?, ?)",
-                [tuple(asdict(row).values()) for row in links],
-            )
-            titles = {row.path: row.title for row in before}
-            connection.executemany(
-                "INSERT INTO chunk_fts VALUES (?, ?, ?, ?, ?)",
-                [(row.id, row.document_path, titles[row.document_path], row.heading_path, row.content) for row in chunks],
-            )
+            if trigram:
+                try:
+                    connection.executescript(TRIGRAM_SCHEMA)
+                except sqlite3.OperationalError as exc:
+                    if "no such tokenizer" not in str(exc).lower():
+                        raise
+                    connection.executescript(TRIGRAM_FALLBACK_SCHEMA)
+                    trigram_enabled = False
+            else:
+                connection.executescript(TRIGRAM_FALLBACK_SCHEMA)
+            for path in paths:
+                document = document_for(repo_root, path)
+                chunks = chunks_for(document, byte_limit)
+                links = list(dict.fromkeys(links_for(repo_root, [document])))
+                connection.execute(
+                    "INSERT INTO documents VALUES (?, ?, ?, ?)",
+                    (
+                        document.path,
+                        document.title,
+                        document.content_fingerprint,
+                        document.byte_size,
+                    ),
+                )
+                connection.executemany(
+                    "INSERT INTO chunks VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    [tuple(asdict(row).values()) for row in chunks],
+                )
+                connection.executemany(
+                    "INSERT OR IGNORE INTO markdown_links VALUES (?, ?, ?, ?, ?)",
+                    [tuple(asdict(row).values()) for row in links],
+                )
+                connection.executemany(
+                    "INSERT INTO chunk_fts VALUES (?, ?, ?, ?, ?)",
+                    [
+                        (
+                            row.id,
+                            row.document_path,
+                            document.title,
+                            row.heading_path,
+                            row.content,
+                        )
+                        for row in chunks
+                    ],
+                )
+                corpus_rows.append(
+                    f"{document.path}\0{document.content_fingerprint}\0{document.byte_size}"
+                )
+                chunk_count += len(chunks)
+            if trigram_enabled:
+                connection.execute(
+                    "INSERT INTO chunk_trigram(rowid, content) "
+                    "SELECT rowid, content FROM chunks"
+                )
+            corpus_fingerprint_value = digest("\n".join(corpus_rows).encode("utf-8"))
+            link_count = connection.execute(
+                "SELECT count(*) FROM markdown_links"
+            ).fetchone()[0]
             metadata = {
                 "schema_version": SCHEMA_VERSION,
                 "truth_source": "AGENTS.md, docs/**/*.md, wiki/**/*.md",
                 "canonical": "false",
-                "corpus_fingerprint": corpus_fingerprint(before),
-                "document_count": str(len(before)),
-                "chunk_count": str(len(chunks)),
-                "link_count": str(len(links)),
+                "corpus_fingerprint": corpus_fingerprint_value,
+                "source_stat_fingerprint": stat_fingerprint,
+                "trigram_index": "enabled" if trigram_enabled else "disabled",
+                "document_count": str(len(paths)),
+                "chunk_count": str(chunk_count),
+                "link_count": str(link_count),
                 "chunk_byte_limit": str(byte_limit),
             }
-            connection.executemany("INSERT INTO index_metadata VALUES (?, ?)", metadata.items())
+            connection.executemany(
+                "INSERT INTO index_metadata VALUES (?, ?)", metadata.items()
+            )
             connection.commit()
             integrity = connection.execute("PRAGMA integrity_check").fetchone()[0]
             if integrity != "ok":
-                raise RetrievalError(f"temporary index failed integrity check: {integrity}")
+                raise RetrievalError(
+                    f"temporary index failed integrity check: {integrity}"
+                )
         finally:
             connection.close()
+        final_stat_fingerprint = source_stat_fingerprint(repo_root)
+        if (
+            corpus_fingerprint_value != corpus_fingerprint_from_disk(repo_root)
+            or stat_fingerprint != final_stat_fingerprint
+        ):
+            raise RetrievalError(
+                "Markdown changed during rebuild; prior index was not replaced"
+            )
         os.replace(temporary, db_path)
         Path(f"{db_path}-wal").unlink(missing_ok=True)
         Path(f"{db_path}-shm").unlink(missing_ok=True)
@@ -379,18 +503,24 @@ def rebuild(repo_root: Path, db_path: Path, byte_limit: int) -> dict[str, object
     return {
         "state": "ready",
         "database": str(db_path),
-        "documents": len(before),
-        "chunks": len(chunks),
-        "links": len(links),
-        "corpus_fingerprint": corpus_fingerprint(before),
+        "documents": len(paths),
+        "chunks": chunk_count,
+        "links": link_count,
+        "corpus_fingerprint": corpus_fingerprint_value,
+        "source_stat_fingerprint": stat_fingerprint,
+        "trigram_index": "enabled" if trigram_enabled else "disabled",
         "canonical": False,
     }
 
 
 def open_read_only(db_path: Path) -> sqlite3.Connection:
     if not db_path.is_file():
-        raise RetrievalError("derived retrieval index is not enabled or has not been built")
-    if db_path.read_bytes()[: len(SQLITE_HEADER)] != SQLITE_HEADER:
+        raise RetrievalError(
+            "derived retrieval index is not enabled or has not been built"
+        )
+    with db_path.open("rb") as handle:
+        header = handle.read(len(SQLITE_HEADER))
+    if header != SQLITE_HEADER:
         raise RetrievalError("derived retrieval index is malformed")
     connection = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     connection.row_factory = sqlite3.Row
@@ -398,32 +528,57 @@ def open_read_only(db_path: Path) -> sqlite3.Connection:
 
 
 def health(repo_root: Path, db_path: Path, deep: bool = False) -> dict[str, object]:
+    """Check stat freshness normally and content-exact integrity when deep."""
     if not db_path.exists():
         return {"state": "off", "database": str(db_path), "canonical": False}
     try:
         connection = open_read_only(db_path)
     except (OSError, sqlite3.Error, RetrievalError) as exc:
-        return {"state": "malformed", "database": str(db_path), "error": str(exc), "canonical": False}
+        return {
+            "state": "malformed",
+            "database": str(db_path),
+            "error": str(exc),
+            "canonical": False,
+        }
     reasons: list[str] = []
     try:
         metadata = dict(connection.execute("SELECT key, value FROM index_metadata"))
         if metadata.get("schema_version") != SCHEMA_VERSION:
             reasons.append("schema_version")
-        current = documents(repo_root)
-        if metadata.get("corpus_fingerprint") != corpus_fingerprint(current):
-            reasons.append("corpus_fingerprint")
+        try:
+            current_stat_fingerprint = source_stat_fingerprint(repo_root)
+        except RetrievalError:
+            reasons.append("source_stat_fingerprint")
+        else:
+            if metadata.get("source_stat_fingerprint") != current_stat_fingerprint:
+                reasons.append("source_stat_fingerprint")
         counts = {
-            "documents": connection.execute("SELECT count(*) FROM documents").fetchone()[0],
+            "documents": connection.execute(
+                "SELECT count(*) FROM documents"
+            ).fetchone()[0],
             "chunks": connection.execute("SELECT count(*) FROM chunks").fetchone()[0],
-            "links": connection.execute("SELECT count(*) FROM markdown_links").fetchone()[0],
+            "links": connection.execute(
+                "SELECT count(*) FROM markdown_links"
+            ).fetchone()[0],
             "fts": connection.execute("SELECT count(*) FROM chunk_fts").fetchone()[0],
+            "trigram": connection.execute(
+                "SELECT count(*) FROM chunk_trigram"
+            ).fetchone()[0],
         }
         if counts["chunks"] != counts["fts"]:
             reasons.append("fts_rows")
+        trigram_enabled = metadata.get("trigram_index") == "enabled"
+        if counts["trigram"] != (counts["chunks"] if trigram_enabled else 0):
+            reasons.append("trigram_rows")
         for key in ("documents", "chunks", "links"):
-            if str(counts[key]) != metadata.get(f"{key[:-1] if key.endswith('s') else key}_count"):
+            if str(counts[key]) != metadata.get(
+                f"{key[:-1] if key.endswith('s') else key}_count"
+            ):
                 reasons.append(f"{key}_count")
         if deep:
+            current = documents(repo_root)
+            if metadata.get("corpus_fingerprint") != corpus_fingerprint(current):
+                reasons.append("corpus_fingerprint")
             if connection.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                 reasons.append("integrity")
             if metadata.get("canonical") != "false":
@@ -431,7 +586,11 @@ def health(repo_root: Path, db_path: Path, deep: bool = False) -> dict[str, obje
             if metadata.get("truth_source") != "AGENTS.md, docs/**/*.md, wiki/**/*.md":
                 reasons.append("truth_source")
             indexed_documents = {
-                row["path"]: (row["title"], row["content_fingerprint"], row["byte_size"])
+                row["path"]: (
+                    row["title"],
+                    row["content_fingerprint"],
+                    row["byte_size"],
+                )
                 for row in connection.execute(
                     "SELECT path, title, content_fingerprint, byte_size FROM documents"
                 )
@@ -462,7 +621,9 @@ def health(repo_root: Path, db_path: Path, deep: bool = False) -> dict[str, obje
                 reasons.append("chunk_byte_limit")
             if indexed_chunks != expected_chunks:
                 reasons.append("chunk_rows")
-            for row in connection.execute("SELECT content, content_fingerprint FROM chunks"):
+            for row in connection.execute(
+                "SELECT content, content_fingerprint FROM chunks"
+            ):
                 if digest(row["content"].encode("utf-8")) != row["content_fingerprint"]:
                     reasons.append("chunk_fingerprint")
                     break
@@ -472,6 +633,14 @@ def health(repo_root: Path, db_path: Path, deep: bool = False) -> dict[str, obje
             ).fetchone()
             if mismatch:
                 reasons.append("fts_payload")
+            if trigram_enabled:
+                trigram_mismatch = connection.execute(
+                    """SELECT 1 FROM chunks c
+                       LEFT JOIN chunk_trigram t ON t.rowid = c.rowid
+                       WHERE t.rowid IS NULL LIMIT 1"""
+                ).fetchone()
+                if trigram_mismatch:
+                    reasons.append("trigram_rowids")
             indexed_links = {
                 tuple(row)
                 for row in connection.execute(
@@ -488,21 +657,46 @@ def health(repo_root: Path, db_path: Path, deep: bool = False) -> dict[str, obje
             "database": str(db_path),
             **counts,
             "stale_reasons": sorted(set(reasons)),
+            "freshness": "content" if deep else "stat",
+            "trigram_index": metadata.get("trigram_index", "unknown"),
             "canonical": False,
         }
     except sqlite3.Error as exc:
-        return {"state": "malformed", "database": str(db_path), "error": str(exc), "canonical": False}
+        return {
+            "state": "malformed",
+            "database": str(db_path),
+            "error": str(exc),
+            "canonical": False,
+        }
     finally:
         connection.close()
 
 
 def require_ready(repo_root: Path, db_path: Path) -> sqlite3.Connection:
-    status = health(repo_root, db_path)
-    if status["state"] != "ready":
-        if status["state"] == "off":
-            raise RetrievalError("derived retrieval index is not enabled; run rebuild")
-        raise RetrievalError(f"derived retrieval index is {status['state']}; run rebuild")
-    return open_read_only(db_path)
+    """Open a structurally compatible discovery index without source hashing."""
+    if not db_path.exists():
+        raise RetrievalError("derived retrieval index is not enabled; run rebuild")
+    connection: sqlite3.Connection | None = None
+    try:
+        connection = open_read_only(db_path)
+        tables = {
+            row[0]
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        if not DISCOVERY_TABLES.issubset(tables):
+            raise RetrievalError("derived retrieval index is missing discovery tables")
+        metadata = dict(connection.execute("SELECT key, value FROM index_metadata"))
+        if metadata.get("schema_version") != SCHEMA_VERSION:
+            raise RetrievalError("derived retrieval index schema is stale")
+        return connection
+    except (OSError, sqlite3.Error, RetrievalError) as exc:
+        if connection is not None:
+            connection.close()
+        raise RetrievalError(
+            "derived retrieval index is malformed or incompatible; run rebuild"
+        ) from exc
 
 
 def fts_query(query: str) -> str:
@@ -512,35 +706,90 @@ def fts_query(query: str) -> str:
     return " AND ".join(f'"{token.replace(chr(34), chr(34) * 2)}"' for token in tokens)
 
 
+def search_results(
+    connection: sqlite3.Connection, query: str, limit: int
+) -> list[dict[str, object]]:
+    """Return exactly one best-ranked matching chunk per document."""
+    rows = connection.execute(
+        """WITH matched AS (
+             SELECT chunk_fts.document_path, chunk_fts.title,
+                    chunk_fts.heading_path, chunk_fts.content,
+                    chunks.line_start, chunks.line_end, chunks.chunk_index,
+                    bm25(chunk_fts) AS score
+             FROM chunk_fts JOIN chunks ON chunks.id = chunk_fts.chunk_id
+             WHERE chunk_fts MATCH ?
+           ), ranked AS (
+             SELECT *, row_number() OVER (
+               PARTITION BY document_path ORDER BY score, chunk_index
+             ) AS document_rank
+             FROM matched
+           )
+           SELECT document_path, title, heading_path, content,
+                  line_start, line_end, score
+           FROM ranked WHERE document_rank = 1
+           ORDER BY score, document_path LIMIT ?""",
+        (fts_query(query), limit),
+    ).fetchall()
+    return [
+        {
+            "path": row["document_path"],
+            "title": row["title"],
+            "heading_path": row["heading_path"],
+            "line_start": row["line_start"],
+            "line_end": row["line_end"],
+            "score": row["score"],
+            "snippet": row["content"][:320],
+        }
+        for row in rows
+    ]
+
+
 def search(repo_root: Path, db_path: Path, query: str, limit: int) -> dict[str, object]:
     connection = require_ready(repo_root, db_path)
     try:
-        rows = connection.execute(
-            """SELECT document_path, title, heading_path, content,
-                      bm25(chunk_fts) AS score
-               FROM chunk_fts WHERE chunk_fts MATCH ?
-               ORDER BY score, document_path LIMIT ?""",
-            (fts_query(query), limit),
-        ).fetchall()
         return {
             "query": query,
-            "results": [
-                {
-                    "path": row["document_path"],
-                    "title": row["title"],
-                    "heading_path": row["heading_path"],
-                    "score": row["score"],
-                    "snippet": row["content"][:320],
-                }
-                for row in rows
-            ],
+            "results": search_results(connection, query, limit),
+            "freshness": "unchecked",
             "canonical": False,
         }
     finally:
         connection.close()
 
 
-def traverse(repo_root: Path, db_path: Path, start: str, hops: int, limit: int) -> dict[str, object]:
+def search_batch(
+    repo_root: Path, db_path: Path, queries: list[str], limit: int
+) -> dict[str, object]:
+    """Search related questions with one connection and document attribution."""
+    if not queries:
+        raise RetrievalError("search batch requires at least one query")
+    connection = require_ready(repo_root, db_path)
+    try:
+        query_results = []
+        documents_by_path: dict[str, dict[str, object]] = {}
+        for query in queries:
+            results = search_results(connection, query, limit)
+            query_results.append({"query": query, "results": results})
+            for result in results:
+                path = str(result["path"])
+                existing = documents_by_path.get(path)
+                if existing is None:
+                    documents_by_path[path] = {**result, "queries": [query]}
+                else:
+                    existing["queries"].append(query)
+        return {
+            "queries": query_results,
+            "documents": list(documents_by_path.values()),
+            "freshness": "unchecked",
+            "canonical": False,
+        }
+    finally:
+        connection.close()
+
+
+def traverse(
+    repo_root: Path, db_path: Path, start: str, hops: int, limit: int
+) -> dict[str, object]:
     connection = require_ready(repo_root, db_path)
     try:
         matched = connection.execute(
@@ -569,11 +818,25 @@ def traverse(repo_root: Path, db_path: Path, start: str, hops: int, limit: int) 
                 if target in seen:
                     continue
                 seen.add(target)
-                results.append({"path": target, "title": row["title"], "label": row["label"], "depth": depth + 1})
+                results.append(
+                    {
+                        "path": target,
+                        "title": row["title"],
+                        "label": row["label"],
+                        "depth": depth + 1,
+                    }
+                )
                 queue.append((target, depth + 1))
                 if len(results) >= limit:
                     break
-        return {"start": start_path, "hops": hops, "limit": limit, "results": results, "canonical": False}
+        return {
+            "start": start_path,
+            "hops": hops,
+            "limit": limit,
+            "results": results,
+            "freshness": "unchecked",
+            "canonical": False,
+        }
     finally:
         connection.close()
 
@@ -591,10 +854,18 @@ def parser() -> argparse.ArgumentParser:
     commands = result.add_subparsers(dest="command", required=True)
     rebuild_parser = commands.add_parser("rebuild")
     rebuild_parser.add_argument("--chunk-bytes", type=int, default=DEFAULT_CHUNK_BYTES)
+    rebuild_parser.add_argument(
+        "--no-trigram",
+        action="store_true",
+        help="skip the larger substring index and retain token FTS only",
+    )
     commands.add_parser("status")
     search_parser = commands.add_parser("search")
     search_parser.add_argument("query")
     search_parser.add_argument("--limit", type=int, default=10)
+    batch_parser = commands.add_parser("search-batch")
+    batch_parser.add_argument("query", nargs="+")
+    batch_parser.add_argument("--limit", type=int, default=10)
     traverse_parser = commands.add_parser("traverse")
     traverse_parser.add_argument("start")
     traverse_parser.add_argument("--hops", type=int, default=MAX_HOPS)
@@ -609,13 +880,27 @@ def main() -> int:
     db_path = database_path(repo_root, args.database)
     try:
         if args.command == "rebuild":
-            payload = rebuild(repo_root, db_path, args.chunk_bytes)
+            payload = rebuild(
+                repo_root, db_path, args.chunk_bytes, trigram=not args.no_trigram
+            )
         elif args.command == "status":
             payload = health(repo_root, db_path)
         elif args.command == "doctor":
             payload = health(repo_root, db_path, deep=True)
         elif args.command == "search":
-            payload = search(repo_root, db_path, args.query, bounded(args.limit, "limit", MAX_RESULTS))
+            payload = search(
+                repo_root,
+                db_path,
+                args.query,
+                bounded(args.limit, "limit", MAX_RESULTS),
+            )
+        elif args.command == "search-batch":
+            payload = search_batch(
+                repo_root,
+                db_path,
+                args.query,
+                bounded(args.limit, "limit", MAX_RESULTS),
+            )
         else:
             payload = traverse(
                 repo_root,
@@ -628,7 +913,11 @@ def main() -> int:
         print(f"repo docs retrieval error: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 1 if args.command == "doctor" and payload["state"] in {"stale", "malformed"} else 0
+    return (
+        1
+        if args.command == "doctor" and payload["state"] in {"stale", "malformed"}
+        else 0
+    )
 
 
 if __name__ == "__main__":
