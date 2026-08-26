@@ -31,10 +31,12 @@ SQLite retrieval is the only first-run option:
     wiki_runs/
     wiki_batches/
   templates/
+    coverage_receipt_template.md
     source_page_template.md
   wiki/
     _meta/
       dashboard.md
+      ingest_reports/
       index.md
       log.md
       representative_questions.json
@@ -67,6 +69,7 @@ templates/llm-wiki-three-layer/
   treating a result as evidence. `status` is the cheap stat gate; `doctor` is
   the exact content/vector gate.
 - `AGENTS.md` is the repo-local contract for future agents.
+- Ordinary ingest means coverage-preserving full ingest unless the user explicitly requests summary mode. Full runs account for every source heading/bounded chunk in an applied receipt and cannot finish with deferred units.
 - The reusable wiki workflow is enclosed by `LLM_WIKI_CONTRACT_START` and `LLM_WIKI_CONTRACT_END` markers.
 - The scaffold contains no ontology JSONL, `intelligence/` contract layer, DuckDB, helper-model configuration, or proposal/review registry.
 - The scaffold is usable without third-party Python dependencies.

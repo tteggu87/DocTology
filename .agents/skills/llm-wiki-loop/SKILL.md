@@ -20,6 +20,25 @@ The target repository owns its contracts and runtime:
 Do not create a second workflow ledger or silently replace a missing semantic
 judgment owner.
 
+## Coverage Contract
+
+Treat ordinary requests such as "ingest these files" or "turn these sources
+into a wiki" as `coverage_mode=full`. Use `summary` only when the user explicitly
+asks for a summary, overview, or reduced treatment. Full coverage preserves
+information, not every original sentence.
+
+For every source, account for each Markdown heading or bounded chunk. Preserve
+definitions, facts, numbers, conditions, examples, claims, evidence,
+exceptions, uncertainty, contradictions, and open questions. Map each unit to a
+wiki page/section or mark it omitted with a concrete reason. Never compress an
+unread remainder into a confident summary.
+
+Write one applied receipt under `wiki/_meta/ingest_reports/` from
+`templates/coverage_receipt_template.md`. A full run is not `ready` unless the
+receipt matches the source hash, the projected/omitted/deferred counts equal the
+total, and deferred is zero. If context or judgment runs out, keep the work
+`partial`, `not_ready`, or `blocked` and resume in another bounded batch.
+
 ## Use This Skill For
 
 - processing one or more sources under `raw/`
@@ -97,10 +116,13 @@ Before semantic mutation, present a compact plan with:
 - SQLite posture (`on`, `off`, or `stale`) as non-canonical operational state
 - validation, final-review, and certification commands
 - conditions that will end as `partial`, `not_ready`, or `blocked`
+- coverage mode (`full` by default), source-unit inventory strategy, and receipt path
 
 For a single source, start `scripts/wiki_workflow.py` before mutation and reuse
 `state/wiki_runs/`. Record the fixed stages in order. The semantic plan must
 precede mutation, and final review must bind to the latest mutation fingerprint.
+Use the default `--coverage-mode full`; pass `summary` only for explicit summary
+requests.
 
 For a batch, use `scripts/wiki_batch.py` to freeze the manifest and reuse
 `state/wiki_batches/`. Worker drafts stay in the batch draft area; exactly one
@@ -121,6 +143,11 @@ Update the source page and every clearly affected durable page. Prefer extending
 existing scope over creating duplicates for weak or passing mentions. Preserve
 uncertainty and contradictions and cite the source page from claim-heavy pages.
 
+For full coverage, work through the frozen source-unit inventory in bounded
+batches and update the ingest receipt as units are projected or intentionally
+omitted. A concise overview may lead the source page, but it never substitutes
+for unit accounting and affected-page projection.
+
 Refresh `wiki/_meta/index.md` and append `wiki/_meta/log.md` after meaningful
 work.
 
@@ -135,6 +162,10 @@ this loop `not_ready`.
 Complete the procedure run only after structural validation and final review
 both bind to the latest state. Any later relevant mutation makes those receipts
 stale.
+
+Reference the applied ingest receipt in `final_review_completed`. Do not use
+`ready` when its source hash is stale, counts do not balance, or deferred units
+remain.
 
 ### 7. Certify A Batch
 

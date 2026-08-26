@@ -11,6 +11,10 @@ superseded_by: N/A
 - `scripts.manage_skills.validate_source`: rejects missing or extra active skills.
 - `scripts.manage_skills.install`: synchronizes each complete skill tree.
 - `bootstrap_llm_wiki.scaffold`: creates downstream wiki workspaces.
+- `wiki_workflow.start_run`: freezes `full` coverage by default or an explicit
+  user-requested `summary` mode into the source run.
+- `wiki_workflow.validate_full_coverage_receipt`: binds full final review to one
+  applied raw-source receipt with balanced accounting and no deferred units.
 - `reindex_sqlite_operational.rebuild`: streams generated-wiki page bodies,
   retains only page metadata, and checks exact source content before atomic
   publication.

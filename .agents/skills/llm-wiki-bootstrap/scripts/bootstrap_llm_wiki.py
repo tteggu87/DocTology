@@ -424,6 +424,25 @@ Guidelines:
 - Keep sections crisp and scannable
 - Use headings instead of long uninterrupted prose
 
+## Coverage-Preserving Ingest
+
+Source ingest defaults to `full` coverage. Use `summary` only when the user
+explicitly asks for a summary, overview, or intentionally reduced treatment.
+
+- Account for every source heading or bounded chunk as a source unit.
+- Preserve information rather than every sentence: definitions, facts, numbers,
+  conditions, examples, claims, evidence, exceptions, uncertainty,
+  contradictions, and open questions.
+- Map each source unit to a wiki page and section, or mark it omitted with a
+  concrete reason. Do not silently drop material.
+- Process oversized sources in bounded batches instead of compressing unread
+  sections into a short source-page summary.
+- Record the accounting in `wiki/_meta/ingest_reports/ingest-<source>.md` using
+  `templates/coverage_receipt_template.md`.
+- A `full` final review must reference exactly one applied receipt whose source
+  hash matches the run, whose unit counts balance, and whose deferred count is
+  zero. Otherwise use `partial`, `not_ready`, or `blocked`; do not claim `ready`.
+
 ## Source Ingest Workflow
 
 When the user asks to ingest a source:
@@ -431,7 +450,7 @@ When the user asks to ingest a source:
 1. Read the raw source from `raw/inbox/`, `raw/processed/`, or `raw/notes/`.
 2. Locate the matching page in `wiki/sources/`. If it does not exist, create it.
 3. Write or update:
-   - concise summary
+   - concise overview plus coverage-preserving section synthesis
    - key facts
    - important claims
    - contradictions or uncertainties
@@ -552,6 +571,12 @@ If unsure whether something belongs in the wiki, prefer asking:
 ## Procedure And Batch Completion Gate
 
 Source ingest must use `scripts/wiki_workflow.py`. Start an INGEST run before semantic work, record the fixed stages in order, and finalize only after structural validation and a final review bound to the latest mutation fingerprint.
+
+`scripts/wiki_workflow.py start` defaults to `--coverage-mode full`. Pass
+`--coverage-mode summary` only when the user explicitly requests reduced
+coverage. Full-mode final review must include the applied ingest report as a
+`--ref`; the workflow rejects missing, unbalanced, stale-source, or deferred
+coverage receipts.
 
 `scripts/pipeline_check.py` must report `ontology_integrity: not_applicable` for this wiki-only profile.
 
@@ -1603,6 +1628,42 @@ TBD.
 ## Affected Pages
 
 - TBD
+"""
+
+
+def coverage_receipt_template() -> str:
+    return """---
+title: "Ingest coverage for {{title}}"
+type: meta
+status: applied
+coverage_mode: full
+raw_path: "{{raw_path}}"
+source_sha256: "{{source_sha256}}"
+source_units_total: 0
+source_units_projected: 0
+source_units_omitted: 0
+source_units_deferred: 0
+---
+
+# Ingest Coverage: {{title}}
+
+- Raw path: `{{raw_path}}`
+
+Split the source by Markdown heading. When a section is too large or the source
+has no useful headings, use deterministic bounded chunks. Every unit must occur
+exactly once below.
+
+## Projected Units
+
+- `unit-id` -> `wiki/path.md#section` - preserved information
+
+## Omitted Units
+
+- None. If non-zero, list every unit and a concrete boilerplate/duplicate reason.
+
+## Deferred Units
+
+- None. A full run cannot finish ready while this section is non-empty.
 """
 
 
@@ -2669,6 +2730,7 @@ def _scaffold_impl(
         target / "scripts",
         target / "templates",
         target / "wiki" / "_meta",
+        target / "wiki" / "_meta" / "ingest_reports",
         target / "wiki" / "analyses",
         target / "wiki" / "concepts",
         target / "wiki" / "entities",
@@ -2738,6 +2800,10 @@ def _scaffold_impl(
         if sqlite_template_dir.is_dir() and not any(sqlite_template_dir.iterdir()):
             sqlite_template_dir.rmdir()
     write_text(target / "templates" / "source_page_template.md", source_template())
+    write_text(
+        target / "templates" / "coverage_receipt_template.md",
+        coverage_receipt_template(),
+    )
     write_text(target / "wiki" / "_meta" / "dashboard.md", dashboard_md(date))
     write_text(target / "wiki" / "_meta" / "index.md", index_md(date))
     write_text(target / "wiki" / "_meta" / "log.md", log_md(date))

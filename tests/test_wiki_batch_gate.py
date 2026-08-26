@@ -154,9 +154,29 @@ class WikiBatchGateTest(unittest.TestCase):
                 "---\ntitle: Example\ntype: source\nstatus: active\nraw_path: raw/inbox/example.md\n---\n\n# Example\n\n## Summary\n\nEvidence summary.\n",
                 encoding="utf-8",
             )
+            receipt = draft / "wiki" / "_meta" / "ingest_reports" / "ingest-example.md"
+            receipt.parent.mkdir(parents=True, exist_ok=True)
+            receipt.write_text(
+                "---\n"
+                'title: "Ingest coverage for Example"\n'
+                "type: meta\n"
+                "status: applied\n"
+                "coverage_mode: full\n"
+                "raw_path: raw/inbox/example.md\n"
+                f'source_sha256: "{self.batch.workflow.file_digest(root / source)}"\n'
+                "source_units_total: 1\n"
+                "source_units_projected: 1\n"
+                "source_units_omitted: 0\n"
+                "source_units_deferred: 0\n"
+                "---\n\n# Coverage\n\n- Raw path: `raw/inbox/example.md`\n",
+                encoding="utf-8",
+            )
             index = draft / "wiki" / "_meta" / "index.md"
             index.parent.mkdir(parents=True, exist_ok=True)
-            index.write_text("# Index\n\n- [[source-example]]\n", encoding="utf-8")
+            index.write_text(
+                "# Index\n\n- [[source-example]]\n- [[ingest-example]]\n",
+                encoding="utf-8",
+            )
             (draft / "wiki" / "_meta" / "log.md").write_text(
                 "# Log\n\n- Ingested `raw/inbox/example.md` through [[source-example]].\n",
                 encoding="utf-8",
@@ -174,7 +194,7 @@ class WikiBatchGateTest(unittest.TestCase):
                 na_reason="no_affected_page_promotion", result=None, posture=None, reviewed_fingerprint=None,
             )
             self.batch.workflow.record_stage(
-                root, run_id, "refresh_index_and_log", refs=["wiki/_meta/index.md", "wiki/_meta/log.md"],
+                root, run_id, "refresh_index_and_log", refs=["wiki/_meta/index.md", "wiki/_meta/log.md", "wiki/_meta/ingest_reports/ingest-example.md"],
                 na_reason="meta_current_after_batch_apply", result=None, posture=None, reviewed_fingerprint=None,
             )
             self.batch.workflow.record_stage(
@@ -183,7 +203,7 @@ class WikiBatchGateTest(unittest.TestCase):
             )
             fingerprint = self.batch.workflow.state_fingerprint(root, source)
             self.batch.workflow.record_stage(
-                root, run_id, "final_review_completed", refs=["wiki/sources/source-example.md"],
+                root, run_id, "final_review_completed", refs=["wiki/sources/source-example.md", "wiki/_meta/ingest_reports/ingest-example.md"],
                 na_reason=None, result=None, posture="ready", reviewed_fingerprint=fingerprint,
             )
             self.assertEqual(self.batch.workflow.finish_run(root, run_id)["status"], "pass")

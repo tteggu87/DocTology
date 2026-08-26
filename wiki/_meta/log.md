@@ -7,6 +7,10 @@ updated: 2026-08-26
 
 # Maintenance log
 
+- 2026-08-26: Made coverage-preserving ingest the default generated contract.
+  Short ingest requests now compile to `full` heading/bounded-chunk accounting;
+  `summary` requires explicit intent. Full final review must reference one
+  applied source-hash receipt with balanced counts and zero deferred units.
 - 2026-08-26: Made generated `wiki_workflow.py` process locks portable. Unix
   keeps `fcntl.flock`; Windows now uses the standard-library `msvcrt.locking`
   backend, locks byte zero directly without a first-use write race, and closes

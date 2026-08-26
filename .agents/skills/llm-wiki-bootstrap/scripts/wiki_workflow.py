@@ -59,6 +59,7 @@ NA_REASONS = {
     "refresh_index_and_log": {"meta_current_after_batch_apply"},
 }
 POSTURES = {"ready", "partial", "not_ready", "blocked"}
+COVERAGE_MODES = {"full", "summary"}
 RETRIEVAL_REFRESH_TIMEOUT_SECONDS = 300
 SEMANTIC_REFRESH_STATUSES = {"ready", "partial", "pending", "unavailable"}
 
@@ -97,10 +98,11 @@ def file_digest(path: Path) -> str:
 def procedure_contract_digest() -> str:
     return canonical_digest(
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "workflow": "INGEST",
             "stages": list(PROCEDURE_ORDER),
             "not_applicable_reasons": {key: sorted(value) for key, value in NA_REASONS.items()},
+            "coverage_modes": sorted(COVERAGE_MODES),
         }
     )
 
@@ -254,8 +256,10 @@ def relative_refs(root: Path, refs: list[str]) -> list[dict[str, str]]:
     return evidence
 
 
-def start_run(root: Path, source: str) -> dict[str, Any]:
+def start_run(root: Path, source: str, coverage_mode: str = "full") -> dict[str, Any]:
     root = root.resolve()
+    if coverage_mode not in COVERAGE_MODES:
+        raise WorkflowError(f"unsupported coverage mode: {coverage_mode}")
     source_path = resolve_inside(root, source)
     if not source_path.is_file():
         raise WorkflowError(f"source not found: {source}")
@@ -263,7 +267,7 @@ def start_run(root: Path, source: str) -> dict[str, Any]:
     run_id = "wiki-" + dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
     fingerprint = state_fingerprint(root, source_relative)
     payload: dict[str, Any] = {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": run_id,
         "workflow": "INGEST",
         "status": "active",
@@ -271,6 +275,7 @@ def start_run(root: Path, source: str) -> dict[str, Any]:
         "updated_at": utc_now(),
         "source": source_relative,
         "source_sha256": file_digest(source_path),
+        "coverage_mode": coverage_mode,
         "contract_digest": procedure_contract_digest(),
         "baseline_fingerprint": fingerprint,
         "last_observed_fingerprint": fingerprint,
@@ -281,6 +286,73 @@ def start_run(root: Path, source: str) -> dict[str, Any]:
     }
     write_json(run_path(root, run_id), payload)
     return payload
+
+
+def frontmatter_values(path: Path) -> dict[str, str]:
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        raise WorkflowError("coverage receipt requires YAML frontmatter")
+    frontmatter = text.split("---", 2)[1]
+    values: dict[str, str] = {}
+    for line in frontmatter.splitlines():
+        if ":" not in line or line[:1].isspace():
+            continue
+        key, value = line.split(":", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def validate_full_coverage_receipt(
+    root: Path, payload: dict[str, Any], refs: list[str], posture: str
+) -> None:
+    if payload.get("coverage_mode", "full") != "full":
+        return
+    receipts: list[Path] = []
+    for raw in refs:
+        path = resolve_inside(root, raw)
+        relative = path.relative_to(root.resolve()).as_posix()
+        if relative.startswith("wiki/_meta/ingest_reports/ingest-") and path.suffix == ".md":
+            receipts.append(path)
+    if len(receipts) != 1:
+        raise WorkflowError(
+            "full coverage final review requires exactly one ingest report reference"
+        )
+
+    values = frontmatter_values(receipts[0])
+    expected = {
+        "status": "applied",
+        "coverage_mode": "full",
+        "raw_path": str(payload["source"]),
+        "source_sha256": str(payload["source_sha256"]),
+    }
+    for field, value in expected.items():
+        if values.get(field) != value:
+            raise WorkflowError(f"coverage receipt {field} must be {value!r}")
+
+    counts: dict[str, int] = {}
+    for field in (
+        "source_units_total",
+        "source_units_projected",
+        "source_units_omitted",
+        "source_units_deferred",
+    ):
+        try:
+            counts[field] = int(values[field])
+        except (KeyError, ValueError) as exc:
+            raise WorkflowError(f"coverage receipt requires integer {field}") from exc
+        if counts[field] < 0:
+            raise WorkflowError(f"coverage receipt {field} must be non-negative")
+    if counts["source_units_total"] <= 0:
+        raise WorkflowError("coverage receipt must account for at least one source unit")
+    accounted = (
+        counts["source_units_projected"]
+        + counts["source_units_omitted"]
+        + counts["source_units_deferred"]
+    )
+    if accounted != counts["source_units_total"]:
+        raise WorkflowError("coverage receipt unit counts do not balance")
+    if counts["source_units_deferred"] and posture == "ready":
+        raise WorkflowError("ready final review cannot leave deferred source units")
 
 
 def next_missing_stage(payload: dict[str, Any]) -> str | None:
@@ -323,6 +395,7 @@ def record_stage(
     if stage == "final_review_completed":
         if posture not in POSTURES:
             raise WorkflowError("final review requires a valid --posture")
+        validate_full_coverage_receipt(root, payload, refs, posture)
         if reviewed_fingerprint != current_fingerprint:
             raise WorkflowError("final review must bind to the current wiki fingerprint")
         if payload.get("latest_mutation_sequence") is None:
@@ -425,6 +498,7 @@ def project_status(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
         "workflow": "INGEST",
         "run_id": payload["run_id"],
         "source": payload["source"],
+        "coverage_mode": payload.get("coverage_mode", "full"),
         "status": "pass" if not blockers else "blocked",
         "run_status": payload.get("status"),
         "contract_digest": current_contract,
@@ -599,6 +673,12 @@ def build_parser() -> argparse.ArgumentParser:
     start = sub.add_parser("start")
     start.add_argument("--workflow", choices=["ingest"], default="ingest")
     start.add_argument("--source", required=True)
+    start.add_argument(
+        "--coverage-mode",
+        choices=sorted(COVERAGE_MODES),
+        default="full",
+        help="full is the default; summary requires explicit user intent",
+    )
 
     stage = sub.add_parser("stage")
     stage.add_argument("--run", required=True)
@@ -625,7 +705,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         root = find_repo_root(Path(args.root))
         if args.command == "start":
-            result = start_run(root, args.source)
+            result = start_run(root, args.source, args.coverage_mode)
         elif args.command == "stage":
             result = record_stage(
                 root,

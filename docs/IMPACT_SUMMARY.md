@@ -30,6 +30,11 @@ superseded_by: N/A
 - Made generated workflow process locks portable without adding a dependency:
   Unix uses `fcntl.flock`, Windows uses one-byte `msvcrt.locking`, and both keep
   the existing run-finalization and SQLite-refresh serialization contract.
+- Changed ordinary wiki ingest from implicit concise summarization to
+  coverage-preserving `full` mode. Generated `AGENTS.md` and `llm-wiki-loop`
+  now compile short ingest requests into heading/bounded-chunk accounting;
+  explicit summary remains opt-in, and full final review requires a matching,
+  balanced receipt with zero deferred units.
 - Corrected generated wiki orphan detection so automatic `_meta` index links and self-links cannot hide disconnected pages; added optional strict failure behavior and regression coverage.
 - Replaced the mixed ontology/wiki/workbench repository surface with exactly three self-contained skills under `.agents/skills/`.
 - Added `scripts/manage_skills.py`, focused tests, CI, current Repo Docs, minimal intelligence contracts, and small repository memory.
@@ -37,6 +42,8 @@ superseded_by: N/A
 
 ### Files
 
+- `.agents/skills/llm-wiki-bootstrap/SKILL.md`
+- `.agents/skills/llm-wiki-loop/SKILL.md`
 - `.agents/skills/repo-docs-intelligence-bootstrap/SKILL.md`
 - `.agents/skills/llm-wiki-bootstrap/references/scaffold-spec.md`
 - `.agents/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py`
@@ -66,6 +73,7 @@ superseded_by: N/A
 - `docs/repo-map/MODULES.md`
 - `docs/repo-map/SYMBOL_GRAPH.md`
 - `tests/test_repo_docs_retrieval.py`
+- `tests/test_wiki_batch_gate.py`
 - `tests/test_wiki_sqlite_index.py`
 - `tests/test_wiki_sqlite_retrieval.py`
 - `tests/test_wiki_sqlite_semantic.py`
@@ -108,7 +116,8 @@ undefined until the owner selects one.
 
 ## Validator Summary
 
-The full suite passes 147/147, including Windows lock acquisition, contention,
-retry, and write-failure cleanup regressions. Changed workflow Python passes `py_compile`; patch whitespace passes
-`git diff --check`. Final repository validator and skill-distribution results are
-recorded at handoff after the final mutation.
+The full suite passes 151/151, including full-mode receipt requirements,
+deferred-unit ready rejection, resumable partial review, explicit summary opt-in, and prior Windows lock
+regressions. Changed workflow Python passes `py_compile`; patch whitespace
+passes `git diff --check`. Final repository validator and skill-distribution
+results are recorded at handoff after the final mutation.

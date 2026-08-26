@@ -9,8 +9,10 @@ superseded_by: N/A
 
 - `.agents/skills/llm-wiki-bootstrap/`: vault scaffolding, optional
   page-streamed SQLite retrieval, bounded ONNX vector refresh, and copied gate
-  runtimes.
-- `.agents/skills/llm-wiki-loop/`: agent-operated repeated wiki growth contract.
+  runtimes, including the full-coverage receipt gate.
+- `.agents/skills/llm-wiki-loop/`: agent-operated repeated wiki growth contract;
+  ordinary ingest compiles to coverage-preserving full mode and explicit summary
+  requests remain opt-in.
 - `.agents/skills/repo-docs-intelligence-bootstrap/`: templates, validator,
   portable docs-index lifecycle, optional native SQLite readers, shared SQL,
   and dogfood tooling.

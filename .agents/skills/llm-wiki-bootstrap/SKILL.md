@@ -42,8 +42,10 @@ Do not use this skill when the user only wants to ingest one source into an exis
    - `scripts/wiki_workflow.py`
    - `scripts/wiki_batch.py`
    - `templates/source_page_template.md`
+   - `templates/coverage_receipt_template.md`
    - `wiki/_meta/index.md`, `dashboard.md`, `log.md`
    - `wiki/_meta/representative_questions.json`
+   - `wiki/_meta/ingest_reports/`
    - `state/wiki_runs/`, `state/wiki_batches/`
    - when SQLite is enabled, also verify:
      - `scripts/reindex_sqlite_operational.py`
@@ -84,6 +86,7 @@ Add `--force` only when the user explicitly wants overwrites.
 - starter dashboard, index, and log pages
 - optional Markdown-derived SQLite/FTS5 retrieval helpers
 - persistent bounded run/batch receipts under `state/`, plus a representative-question contract under `wiki/_meta/`
+- coverage-preserving full ingest by default, with applied per-source receipts and explicit summary opt-in
 
 ## Three-Layer Follow-On Guidance
 
@@ -109,6 +112,7 @@ The active bootstrap does not generate canonical ontology JSONL, DuckDB, helper-
 - The scaffold should teach source registration before semantic promotion, overlapping-scope checks before page creation, and `wiki/_meta/index.md` plus `wiki/_meta/log.md` refresh after meaningful work.
 - The generated wiki workflow must stay inside the `LLM_WIKI_CONTRACT` managed markers so later repository-guidance tools can preserve it.
 - The generated contract must block source completion on missing/stale procedure stages and block batch completion on pending sources, unobserved writes, writer conflicts, or stale corpus/question fingerprints.
+- Ordinary ingest defaults to full source-unit accounting; summary mode requires explicit user intent, and full final review rejects missing, unbalanced, stale-source, or deferred coverage receipts.
 - The scaffold must describe Markdown as canonical and SQLite as optional derived state when enabled.
 - If a later wiki-local conventions page is ever added, it must remain subordinate to `AGENTS.md`.
 
@@ -134,5 +138,6 @@ After changes to this skill:
 8. Run source procedure missing/stale/repair-to-PASS tests and batch one-writer/fingerprint/certification tests.
 9. Confirm `pipeline_check.py --strict` returns nonzero for pending work.
 10. Confirm the generated wording does not imply markdown pages, SQLite, or DuckDB are canonical semantic truth.
+11. Confirm default full ingest rejects missing/deferred coverage receipts and explicit summary mode remains available.
 
 Prefer deterministic script validation over vague chat-only claims.

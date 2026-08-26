@@ -37,3 +37,9 @@ Generated wiki lint treats `_meta` navigation links and self-links as non-semant
 Generated workflow locks use `fcntl.flock` on Unix and `msvcrt.locking` on
 Windows, preserving run-finalization and SQLite-refresh serialization without
 adding a runtime dependency.
+
+Generated wiki ingest now defaults to coverage-preserving `full` mode. Ordinary
+requests are expanded by `llm-wiki-loop` into heading/bounded-chunk accounting;
+explicit `summary` mode is the only reduced path. Full final review requires one
+applied ingest receipt bound to the raw source hash, balanced projected/omitted/
+deferred counts, and zero deferred units.

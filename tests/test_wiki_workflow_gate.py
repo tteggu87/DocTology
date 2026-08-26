@@ -53,6 +53,36 @@ class WikiWorkflowGateTest(unittest.TestCase):
         source.write_text("# Example\n\nEvidence.\n", encoding="utf-8")
         return root, source
 
+    def write_coverage_receipt(
+        self,
+        root: Path,
+        *,
+        projected: int = 1,
+        omitted: int = 0,
+        deferred: int = 0,
+    ) -> str:
+        source = root / "raw" / "inbox" / "example.md"
+        total = projected + omitted + deferred
+        relative = "wiki/_meta/ingest_reports/ingest-example.md"
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "---\n"
+            'title: "Ingest coverage for Example"\n'
+            "type: meta\n"
+            "status: applied\n"
+            "coverage_mode: full\n"
+            "raw_path: raw/inbox/example.md\n"
+            f'source_sha256: "{self.workflow.file_digest(source)}"\n'
+            f"source_units_total: {total}\n"
+            f"source_units_projected: {projected}\n"
+            f"source_units_omitted: {omitted}\n"
+            f"source_units_deferred: {deferred}\n"
+            "---\n\n# Coverage\n\n- Raw path: `raw/inbox/example.md`\n",
+            encoding="utf-8",
+        )
+        return relative
+
     def test_windows_lock_backend_acquires_and_releases_one_byte(self) -> None:
         class FakeMsvcrt:
             LK_NBLCK = 1
@@ -204,7 +234,15 @@ class WikiWorkflowGateTest(unittest.TestCase):
             reviewed_fingerprint=None,
         )
 
-    def record_ready_completion(self, root: Path, run_id: str) -> None:
+    def record_ready_completion(
+        self,
+        root: Path,
+        run_id: str,
+        *,
+        coverage_receipt: bool = True,
+        coverage_deferred: int = 0,
+        posture: str = "ready",
+    ) -> None:
         self.record_preflight(root, run_id)
         source_page = root / "wiki" / "sources" / "source-example.md"
         source_page.write_text(
@@ -231,13 +269,21 @@ class WikiWorkflowGateTest(unittest.TestCase):
             na_reason="no_affected_page_promotion", result=None, posture=None,
             reviewed_fingerprint=None,
         )
+        final_refs = ["wiki/sources/source-example.md"]
+        refresh_refs = ["wiki/_meta/log.md"]
+        if coverage_receipt:
+            receipt = self.write_coverage_receipt(
+                root, projected=1, deferred=coverage_deferred
+            )
+            final_refs.append(receipt)
+            refresh_refs.append(receipt)
         log = root / "wiki" / "_meta" / "log.md"
         log.write_text(
             log.read_text(encoding="utf-8") + "\n- Example ingest updated.\n",
             encoding="utf-8",
         )
         self.workflow.record_stage(
-            root, run_id, "refresh_index_and_log", refs=["wiki/_meta/log.md"],
+            root, run_id, "refresh_index_and_log", refs=refresh_refs,
             na_reason=None, result=None, posture=None, reviewed_fingerprint=None,
         )
         self.workflow.record_stage(
@@ -248,9 +294,63 @@ class WikiWorkflowGateTest(unittest.TestCase):
         fingerprint = self.workflow.state_fingerprint(root, "raw/inbox/example.md")
         self.workflow.record_stage(
             root, run_id, "final_review_completed",
-            refs=["wiki/sources/source-example.md"], na_reason=None, result=None,
-            posture="ready", reviewed_fingerprint=fingerprint,
+            refs=final_refs, na_reason=None, result=None,
+            posture=posture, reviewed_fingerprint=fingerprint,
         )
+
+    def test_full_coverage_is_default_and_requires_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            run = self.workflow.start_run(root, "raw/inbox/example.md")
+            self.assertEqual(run["coverage_mode"], "full")
+            with self.assertRaisesRegex(
+                self.workflow.WorkflowError, "requires exactly one ingest report"
+            ):
+                self.record_ready_completion(
+                    root, run["run_id"], coverage_receipt=False
+                )
+
+    def test_full_coverage_rejects_deferred_units(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            run = self.workflow.start_run(root, "raw/inbox/example.md")
+            with self.assertRaisesRegex(
+                self.workflow.WorkflowError, "cannot leave deferred"
+            ):
+                self.record_ready_completion(
+                    root,
+                    run["run_id"],
+                    coverage_deferred=1,
+                )
+
+    def test_explicit_summary_mode_does_not_require_full_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            run = self.workflow.start_run(
+                root, "raw/inbox/example.md", coverage_mode="summary"
+            )
+            self.record_ready_completion(
+                root, run["run_id"], coverage_receipt=False
+            )
+            result = self.workflow.finish_run(root, run["run_id"])
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["coverage_mode"], "summary")
+
+    def test_deferred_full_coverage_can_close_review_as_partial_not_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, _source = self.make_vault(Path(tmp))
+            run = self.workflow.start_run(root, "raw/inbox/example.md")
+            self.record_ready_completion(
+                root,
+                run["run_id"],
+                coverage_deferred=1,
+                posture="partial",
+            )
+            result = self.workflow.finish_run(root, run["run_id"])
+
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("FINAL_REVIEW_NOT_READY", result["blockers"])
 
     def test_missing_stage_blocks_finish(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -327,10 +427,11 @@ class WikiWorkflowGateTest(unittest.TestCase):
                 na_reason="no_affected_page_promotion", result=None, posture=None, reviewed_fingerprint=None,
             )
 
+            receipt = self.write_coverage_receipt(root)
             log = root / "wiki" / "_meta" / "log.md"
             log.write_text(log.read_text(encoding="utf-8") + "\n- Example ingest updated.\n", encoding="utf-8")
             self.workflow.record_stage(
-                root, run_id, "refresh_index_and_log", refs=["wiki/_meta/log.md"],
+                root, run_id, "refresh_index_and_log", refs=["wiki/_meta/log.md", receipt],
                 na_reason=None, result=None, posture=None, reviewed_fingerprint=None,
             )
             self.workflow.record_stage(
@@ -339,7 +440,7 @@ class WikiWorkflowGateTest(unittest.TestCase):
             )
             fingerprint = self.workflow.state_fingerprint(root, "raw/inbox/example.md")
             self.workflow.record_stage(
-                root, run_id, "final_review_completed", refs=["wiki/sources/source-example.md"],
+                root, run_id, "final_review_completed", refs=["wiki/sources/source-example.md", receipt],
                 na_reason=None, result=None, posture="ready", reviewed_fingerprint=fingerprint,
             )
             passed = self.workflow.finish_run(root, run_id)

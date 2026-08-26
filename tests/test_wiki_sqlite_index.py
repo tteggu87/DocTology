@@ -70,6 +70,12 @@ class WikiSqliteIndexTests(unittest.TestCase):
                 agents = (root / "AGENTS.md").read_text(encoding="utf-8")
                 readme = (root / "README.md").read_text(encoding="utf-8")
                 self.assertIn("Markdown", agents)
+                self.assertIn("Coverage-Preserving Ingest", agents)
+                self.assertIn("--coverage-mode summary", agents)
+                self.assertTrue(
+                    (root / "templates" / "coverage_receipt_template.md").is_file()
+                )
+                self.assertTrue((root / "wiki" / "_meta" / "ingest_reports").is_dir())
                 if not sqlite_enabled:
                     self.assertFalse(
                         (root / "scripts" / "reindex_sqlite_operational.py").exists()
