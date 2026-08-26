@@ -12,6 +12,8 @@ superseded_by: N/A
 - Verification: `python3 -m unittest discover -s tests` and the bundled Repo Docs validator.
 - Downstream LLM Wiki raw retrieval: `scripts/raw_retrieval.py` owns incremental
   rebuild, stat status, lexical search, and exact doctor for `raw/**/*.md`.
+- Downstream wiki query fallback: `scripts/wiki_retrieval.py search
+  --raw-fallback` invokes raw lexical lookup only after a wiki lexical miss.
 - Downstream Repo Docs retrieval: `scripts/repo_docs_retrieval.py` owns portable
   rebuild/status/doctor/search/batch/traversal; `repo_docs_query.sh` and
   `repo_docs_query.ps1` are optional native read wrappers over shared SQL.

@@ -122,6 +122,8 @@ class WikiSqliteIndexTests(unittest.TestCase):
                     self.assertIn("zero API tokens", document)
                     self.assertIn("wiki_complete", document)
                     self.assertIn("retrieval_ready", document)
+                    self.assertIn("raw-fallback", document)
+                    self.assertIn("separate", document.lower())
                 self.assertIn("no `warehouse/jsonl/`", agents)
 
     def test_force_switch_from_sqlite_on_to_off_removes_managed_state(self) -> None:

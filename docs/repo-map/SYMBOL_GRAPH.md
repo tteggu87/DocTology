@@ -21,6 +21,8 @@ superseded_by: N/A
   range and labels changed spans stale instead of returning stored text as truth.
 - `raw_retrieval.doctor`: hashes raw documents and reconstructs chunk/FTS rows
   for exact derived-state verification.
+- `wiki_retrieval.raw_fallback_lane`: lazily loads optional raw retrieval after
+  an empty wiki lexical result and returns a separate candidate/unavailable lane.
 - `reindex_sqlite_operational.rebuild`: streams generated-wiki page bodies,
   retains only page metadata, and checks exact source content before atomic
   publication.

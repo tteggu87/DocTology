@@ -116,6 +116,9 @@ The active bootstrap does not generate canonical ontology JSONL, DuckDB, helper-
 - The generated contract must block source completion on missing/stale procedure stages and block batch completion on pending sources, unobserved writes, writer conflicts, or stale corpus/question fingerprints.
 - Ordinary ingest defaults to full source-unit accounting; summary mode requires explicit user intent, and full final review rejects missing, unbalanced, stale-source, or deferred coverage receipts.
 - The scaffold must describe Markdown as canonical and SQLite as optional derived state when enabled.
+- With SQLite enabled, the scaffold must teach wiki-first lookup, explicit raw
+  fallback only after an empty wiki lexical result, and direct raw search for
+  thin-page verification or ingest coverage without blended ranking.
 - If a later wiki-local conventions page is ever added, it must remain subordinate to `AGENTS.md`.
 
 ## Customization Guidance

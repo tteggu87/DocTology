@@ -285,6 +285,9 @@ def retrieval_contract(profile: str, sqlite_enabled: bool = True) -> str:
   reopens raw bytes for results, and never adds raw vectors or blended ranking.
 - Pages at or below the default 64 KiB threshold stay whole. Larger pages split at Markdown headings, with paragraph fallback for oversized sections.
 - `search --mode lexical` is the dependable default: exact title/path, FTS5, then bounded wikilinks.
+- `search --mode lexical --raw-fallback` consults the separate raw index only
+  when wiki lexical results are empty. Raw candidates remain a labeled lane and
+  are never blended into wiki ranking.
 - `search --mode semantic` is an optional local ONNX cosine-similarity candidate lane. Similarity candidates are not accepted evidence.
 - `search --mode both` keeps lexical and semantic ranks separate, applies deterministic page/chunk deduplication, and still succeeds when ONNX or semantic vectors are unavailable.
 - Run `refresh` once after the final canonical writer. It atomically rebuilds lexical state, reuses compatible vectors, and embeds only missing chunks when local model artifacts are configured.
@@ -318,6 +321,7 @@ This workspace was created without the optional SQLite retrieval helpers. Markdo
 python scripts/wiki_retrieval.py --repo-root . rebuild
 python scripts/wiki_retrieval.py --repo-root . refresh
 python scripts/wiki_retrieval.py --repo-root . search "your query" --mode lexical
+python scripts/wiki_retrieval.py --repo-root . search "your query" --mode lexical --raw-fallback
 python scripts/wiki_retrieval.py --repo-root . search "your query" --mode both
 python scripts/raw_retrieval.py --repo-root . rebuild
 python scripts/raw_retrieval.py --repo-root . search "source query"
@@ -491,10 +495,15 @@ When the user asks a question:
 3. Read the smallest set of pages that can answer well.
 4. Follow wikilinks. When a page you read contains `[[link-name]]` wikilinks relevant to the question, resolve and read those linked pages too. Wikilinks are not decoration; they are paths to evidence. For example, `[[concept-name]]` maps to `wiki/concepts/concept-name.md`, and `[[source-example]]` maps to `wiki/sources/source-example.md`.
 5. Traverse recursively. If a linked page contains further relevant wikilinks, follow them to a reasonable depth of 2–3 hops. Stop when the question is answered or no more relevant links exist.
-6. Synthesize an answer grounded in the wiki.
-7. If the answer is durable, save it into `wiki/analyses/`.
-8. Cross-link that analysis page from relevant pages if appropriate.
-9. Append a `query` log entry for substantial work.
+6. If wiki evidence is missing or too thin, or exact verification/coverage is
+   needed, consult canonical `raw/`. When SQLite helpers exist, prefer
+   `wiki_retrieval.py search --raw-fallback` after wiki-first lookup, or use
+   `raw_retrieval.py search` directly for source planning. Keep raw candidates
+   separate and reopen their listed byte ranges before use.
+7. Synthesize an answer grounded in the wiki and any explicitly verified raw evidence.
+8. If the answer is durable, save it into `wiki/analyses/`.
+9. Cross-link that analysis page from relevant pages if appropriate.
+10. Append a `query` log entry for substantial work.
 
 ## Link Traversal Rules
 

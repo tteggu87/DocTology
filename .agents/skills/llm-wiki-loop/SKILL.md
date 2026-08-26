@@ -88,6 +88,9 @@ Read:
 
 Inventory repo-owned scripts and inspect their local help or documentation.
 Select only commands whose files exist; never invent a runner or flags.
+When `scripts/raw_retrieval.py` exists, use its status/rebuild/search commands as
+an optional routing aid for large raw corpora. Reopen the returned canonical
+raw byte ranges; the index is not evidence or a substitute for source reading.
 
 ### 2. Confirm The Wiki-Only Contract
 
@@ -131,6 +134,13 @@ writer may apply canonical files.
 ### 4. Register The Source Boundary
 
 Resolve or create source identity without modifying `raw/`.
+
+Search the wiki first for existing coverage and affected pages. If wiki lexical
+results are empty, `wiki_retrieval.py search --raw-fallback` may consult the
+separate raw lane. Use direct `raw_retrieval.py search` when planning coverage,
+checking thin wiki pages, or verifying exact source facts. Keep the two result
+lanes separate; never fuse their scores. If SQLite or the raw index is off,
+continue with canonical Markdown discovery instead of blocking the wiki loop.
 
 Use the repository's source-registration command when needed, remembering that
 registration is not semantic synthesis. Create or refresh the source page,

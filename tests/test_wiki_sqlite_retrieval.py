@@ -93,6 +93,22 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
     def payload(self, *arguments: str) -> dict[str, object]:
         return json.loads(self.run_cli(*arguments).stdout)
 
+    def run_raw_cli(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(self.root / "scripts" / "raw_retrieval.py"),
+                "--repo-root",
+                str(self.root),
+                *arguments,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result
+
     def test_exact_title_and_path_precede_fts_and_include_chunk_spans(self) -> None:
         title = self.payload("search", "Alpha", "--hops", "0")
         path = self.payload("search", "wiki/concepts/alpha.md", "--hops", "0")
@@ -112,6 +128,39 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
         self.assertEqual(hit["results"][0]["match_kind"], "fts")
         self.assertEqual(len(hit["results"][0]["neighbors"]), 1)
         self.assertEqual(miss["results"], [])
+
+    def test_explicit_raw_fallback_is_separate_and_only_runs_on_wiki_miss(
+        self,
+    ) -> None:
+        raw = self.root / "raw" / "notes" / "source.md"
+        raw.write_text("# Source\nraw-only-token evidence\n", encoding="utf-8")
+        self.run_raw_cli("rebuild")
+
+        default_miss = self.payload("search", "raw-only-token", "--hops", "0")
+        fallback = self.payload(
+            "search", "raw-only-token", "--hops", "0", "--raw-fallback"
+        )
+        (self.root / "state" / "raw_index.sqlite").unlink()
+        wiki_hit = self.payload("search", "needle", "--hops", "0", "--raw-fallback")
+
+        self.assertNotIn("raw", default_miss["lanes"])
+        self.assertEqual(default_miss["results"], [])
+        self.assertEqual(fallback["results"], [])
+        self.assertEqual(fallback["lanes"]["raw"]["status"], "candidate")
+        self.assertEqual(
+            fallback["lanes"]["raw"]["anchors"][0]["lane"], "raw"
+        )
+        self.assertEqual(wiki_hit["lanes"]["raw"]["status"], "not_needed")
+        self.assertEqual(wiki_hit["lanes"]["raw"]["anchors"], [])
+
+    def test_missing_raw_index_does_not_fail_explicit_wiki_fallback(self) -> None:
+        payload = self.payload(
+            "search", "not-present-anywhere", "--hops", "0", "--raw-fallback"
+        )
+
+        self.assertEqual(payload["results"], [])
+        self.assertEqual(payload["lanes"]["raw"]["status"], "unavailable")
+        self.assertIn("index", payload["lanes"]["raw"]["reason"])
 
     def test_two_hop_neighbors_are_explicit_and_globally_capped(self) -> None:
         one_hop = self.payload("neighbors", "Alpha", "--hops", "1", "--limit", "10")

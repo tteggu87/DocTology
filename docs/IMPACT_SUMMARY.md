@@ -39,6 +39,9 @@ superseded_by: N/A
   vaults. It updates only stat-changed paths, keeps chunk content out of regular
   tables, reopens canonical byte ranges for results, and deliberately adds no
   raw ONNX, RRF, ANN, daemon, or canonical database.
+- Added explicit wiki-first `--raw-fallback`. It invokes raw FTS only after a
+  wiki lexical miss, preserves default wiki search, keeps rankings separate,
+  and treats a missing raw index as non-fatal.
 - Corrected generated wiki orphan detection so automatic `_meta` index links and self-links cannot hide disconnected pages; added optional strict failure behavior and regression coverage.
 - Replaced the mixed ontology/wiki/workbench repository surface with exactly three self-contained skills under `.agents/skills/`.
 - Added `scripts/manage_skills.py`, focused tests, CI, current Repo Docs, minimal intelligence contracts, and small repository memory.
@@ -126,7 +129,8 @@ undefined until the owner selects one.
 
 ## Validator Summary
 
-The full suite passes 156/156, including raw-index rebuild/search/doctor checks,
+The full suite passes 158/158, including raw-index rebuild/search/doctor and
+explicit wiki-first fallback checks,
 full-mode receipt requirements, deferred-unit ready rejection, resumable partial
 review, explicit summary opt-in, and prior Windows lock regressions. Changed
 workflow Python passes `py_compile`; patch whitespace

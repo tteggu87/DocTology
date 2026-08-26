@@ -43,3 +43,19 @@
   - Repo Docs finalize/verify -> 0 errors, 0 warnings
 - Learning: generated retrieval prose has compatibility assertions, so additions must preserve the established readiness and `wiki_complete` contract language.
 ---
+
+## 2026-08-26 - US-002 complete
+- Added explicit `wiki_retrieval.py search --raw-fallback` without changing the default search payload.
+- The raw helper is loaded only after an empty wiki lexical lane; wiki hits never touch raw state.
+- Raw results remain a separately labeled BM25 lane, and missing raw state reports `unavailable` without failing wiki search.
+- Generated `AGENTS.md` and `llm-wiki-loop` now teach wiki-first lookup plus direct raw lookup for thin-page verification and ingest coverage.
+- Quality checks:
+  - focused fallback tests -> 2 passed
+  - `python3 -m unittest tests.test_wiki_sqlite_retrieval tests.test_wiki_sqlite_index -v` -> 34 passed
+  - `python3 -m unittest discover -s tests` -> 158 passed
+  - `python3 scripts/manage_skills.py check` -> passed
+  - changed Python `py_compile` -> passed
+  - `git diff --check` -> passed
+  - Repo Docs finalize/verify -> 0 errors, 0 warnings
+- Learning: making raw fallback explicit preserves the hot/default wiki path while still giving large raw corpora deterministic discovery when wiki coverage is absent.
+---

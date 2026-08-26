@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -1340,6 +1341,46 @@ def command_status(repo_root: Path, _args: argparse.Namespace) -> int:
     return 0 if payload["state"] == "ready" else 1
 
 
+def raw_fallback_lane(
+    repo_root: Path, query: str, limit: int
+) -> dict[str, object]:
+    """Query the optional raw index without making it a wiki prerequisite."""
+    script = Path(__file__).with_name("raw_retrieval.py")
+    unavailable: dict[str, object] = {
+        "status": "unavailable",
+        "score_kind": "bm25",
+        "freshness": "unavailable",
+        "candidate_role": "raw_source_candidate_reopen_before_use",
+        "anchors": [],
+    }
+    if not script.is_file():
+        unavailable["reason"] = "raw retrieval helper is not installed"
+        return unavailable
+    try:
+        spec = importlib.util.spec_from_file_location("wiki_raw_fallback", script)
+        if spec is None or spec.loader is None:
+            raise RuntimeError("raw retrieval helper could not be loaded")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        payload = module.search(
+            repo_root,
+            module.database_path(repo_root, None),
+            query,
+            limit,
+        )
+    except Exception as exc:
+        unavailable["reason"] = str(exc)
+        return unavailable
+    anchors = payload["results"]
+    return {
+        "status": "candidate" if anchors else "empty",
+        "score_kind": "bm25",
+        "freshness": payload["freshness"],
+        "candidate_role": "raw_source_candidate_reopen_before_use",
+        "anchors": anchors,
+    }
+
+
 def command_search(repo_root: Path, args: argparse.Namespace) -> int:
     validate_limit(args.limit, "search limit")
     validate_limit(args.neighbor_limit, "neighbor limit")
@@ -1407,6 +1448,19 @@ def command_search(repo_root: Path, args: argparse.Namespace) -> int:
     }
     if semantic_reason:
         lanes["semantic"]["reason"] = semantic_reason
+    if getattr(args, "raw_fallback", False):
+        if args.mode not in ("lexical", "both"):
+            raise IndexStateError("raw fallback requires lexical or both mode")
+        if lexical:
+            lanes["raw"] = {
+                "status": "not_needed",
+                "score_kind": "bm25",
+                "freshness": "not_requested",
+                "candidate_role": "raw_source_candidate_reopen_before_use",
+                "anchors": [],
+            }
+        else:
+            lanes["raw"] = raw_fallback_lane(repo_root, args.query, args.limit)
     emit(
         {
             "operation": "query",
@@ -1606,6 +1660,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search.add_argument("--neighbor-limit", type=int, default=DEFAULT_NEIGHBOR_LIMIT)
     search.add_argument("--graph-cap", type=int, default=DEFAULT_GRAPH_CAP)
+    search.add_argument(
+        "--raw-fallback",
+        action="store_true",
+        help="Query the separate raw lexical index only when wiki lexical search is empty.",
+    )
     search.add_argument("--model-path")
     search.add_argument("--tokenizer-path")
     search.add_argument(

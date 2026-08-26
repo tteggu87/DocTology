@@ -7,6 +7,8 @@ active CLI choices.
 SQLite retrieval is the only first-run option:
 
 - `--sqlite on`: include the Markdown-derived SQLite schema, rebuild tool, and retrieval CLI.
+- The generated retrieval contract keeps wiki search primary and exposes raw
+  search as a separate fallback/verification lane; it never blends scores.
 - `--sqlite off`: create the pure Markdown wiki without SQLite retrieval files.
 - omitted in an interactive terminal: ask once, defaulting to yes.
 - omitted outside a terminal: default to on without prompting.

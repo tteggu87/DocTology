@@ -24,3 +24,9 @@ For generated LLM Wiki raw retrieval the downstream flow is:
 
 Raw and wiki indexes publish and age independently. Raw has no vector or blended
 ranking lane; stat status and exact doctor remain separate from unchecked search.
+
+The optional composition is one-way:
+
+`wiki lexical search -> hit: wiki lane | miss + --raw-fallback: separate raw lane`
+
+An absent raw index does not block the wiki result.

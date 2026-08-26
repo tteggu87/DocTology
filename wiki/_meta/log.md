@@ -7,6 +7,9 @@ updated: 2026-08-26
 
 # Maintenance log
 
+- 2026-08-26: Added explicit wiki-first raw fallback. Default wiki search is
+  unchanged; `--raw-fallback` queries the separate raw lane only after a wiki
+  lexical miss and remains non-fatal when raw derived state is unavailable.
 - 2026-08-26: Added an independent raw Markdown lexical index to generated
   SQLite-enabled vaults. Incremental rebuilds update added/changed/removed files;
   search reopens canonical byte ranges, while stat status and exact doctor stay

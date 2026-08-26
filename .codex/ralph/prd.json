@@ -21,7 +21,7 @@
       "id": "US-002",
       "title": "Add wiki-first raw fallback retrieval",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "Existing wiki search remains the default and keeps its output contract.",
         "An explicit raw fallback option queries raw only when wiki lexical results are empty; direct raw search remains available for verification and ingest planning.",

@@ -37,6 +37,10 @@ separate incremental `state/raw_index.sqlite` over `raw/**/*.md`, stores chunk
 metadata/offsets without a duplicate regular content column, uses lexical FTS
 only, and reopens canonical raw byte ranges for results. Raw `status` is
 stat-based, `search` is unchecked candidate discovery, and `doctor` is exact.
+Wiki search remains the unchanged default path. Explicit `search
+--raw-fallback` consults the raw index only after an empty wiki lexical result,
+keeps candidates in a separate lane, and reports `unavailable` without failing
+the wiki query when optional raw state is absent.
 
 Generated wiki lint treats `_meta` navigation links and self-links as non-semantic for orphan detection. Orphans are advisory unless `lint --strict-orphans` is requested.
 
