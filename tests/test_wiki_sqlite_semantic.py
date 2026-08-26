@@ -4,6 +4,7 @@ import builtins
 import argparse
 import hashlib
 import importlib.util
+import io
 import json
 import sqlite3
 import struct
@@ -124,9 +125,7 @@ class FakeOutput:
 
     def tolist(self) -> list[list[list[float]]]:
         batch, width, dimensions = self.shape
-        return [
-            [[1.0] * dimensions for _ in range(width)] for _ in range(batch)
-        ]
+        return [[[1.0] * dimensions for _ in range(width)] for _ in range(batch)]
 
 
 class WikiSqliteSemanticTests(unittest.TestCase):
@@ -206,6 +205,32 @@ class WikiSqliteSemanticTests(unittest.TestCase):
                 row["vector_fingerprint"], hashlib.sha256(row["vector"]).hexdigest()
             )
 
+    def test_embedding_persistence_streams_missing_chunks_in_bounded_batches(
+        self,
+    ) -> None:
+        concepts = self.root / "wiki" / "concepts"
+        for index in range(129):
+            (concepts / f"bulk-{index}.md").write_text(
+                f"# Bulk {index}\nVector payload {index}.\n", encoding="utf-8"
+            )
+        self.run_cli("rebuild")
+        connection = sqlite3.connect(self.root / "state" / "wiki_index.sqlite")
+        connection.row_factory = sqlite3.Row
+        self.addCleanup(connection.close)
+        embedder = RecordingFakeEmbedder()
+        result = self.retrieval.persist_embeddings(
+            connection, embedder, "fake-model-v1", "fake-tokenizer-v1"
+        )
+
+        expected = 131
+        self.assertEqual(result["embedded_chunks"], expected)
+        self.assertEqual(result["reused_chunks"], 0)
+        self.assertEqual([len(batch) for batch in embedder.calls], [128, 3])
+        self.assertEqual(
+            connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0],
+            expected,
+        )
+
     def test_rebuild_reuses_only_current_structurally_valid_vectors(self) -> None:
         with self.persist_fake_embeddings():
             pass
@@ -213,7 +238,9 @@ class WikiSqliteSemanticTests(unittest.TestCase):
         self.run_cli("rebuild")
         with sqlite3.connect(self.root / "state" / "wiki_index.sqlite") as connection:
             self.assertEqual(
-                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0],
+                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[
+                    0
+                ],
                 2,
             )
 
@@ -249,7 +276,9 @@ class WikiSqliteSemanticTests(unittest.TestCase):
         self.run_cli("rebuild")
         with sqlite3.connect(self.root / "state" / "wiki_index.sqlite") as connection:
             self.assertEqual(
-                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0],
+                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[
+                    0
+                ],
                 1,
             )
             connection.execute(
@@ -259,7 +288,9 @@ class WikiSqliteSemanticTests(unittest.TestCase):
         self.run_cli("rebuild")
         with sqlite3.connect(self.root / "state" / "wiki_index.sqlite") as connection:
             self.assertEqual(
-                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0],
+                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[
+                    0
+                ],
                 0,
             )
 
@@ -320,7 +351,9 @@ class WikiSqliteSemanticTests(unittest.TestCase):
 
         with sqlite3.connect(self.root / "state" / "wiki_index.sqlite") as connection:
             self.assertEqual(
-                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0],
+                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[
+                    0
+                ],
                 0,
             )
 
@@ -343,10 +376,14 @@ class WikiSqliteSemanticTests(unittest.TestCase):
 
         with sqlite3.connect(database) as connection:
             self.assertEqual(
-                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0],
+                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[
+                    0
+                ],
                 2,
             )
-            self.assertEqual(connection.execute("PRAGMA quick_check").fetchone()[0], "ok")
+            self.assertEqual(
+                connection.execute("PRAGMA quick_check").fetchone()[0], "ok"
+            )
 
     def test_internal_carry_forward_read_error_preserves_prior_index(self) -> None:
         with self.persist_fake_embeddings():
@@ -373,10 +410,14 @@ class WikiSqliteSemanticTests(unittest.TestCase):
 
         with sqlite3.connect(database) as connection:
             self.assertEqual(
-                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0],
+                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[
+                    0
+                ],
                 2,
             )
-            self.assertEqual(connection.execute("PRAGMA quick_check").fetchone()[0], "ok")
+            self.assertEqual(
+                connection.execute("PRAGMA quick_check").fetchone()[0], "ok"
+            )
 
     def test_internal_carry_forward_os_error_preserves_prior_index(self) -> None:
         with self.persist_fake_embeddings():
@@ -405,10 +446,14 @@ class WikiSqliteSemanticTests(unittest.TestCase):
 
         with sqlite3.connect(database) as connection:
             self.assertEqual(
-                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0],
+                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[
+                    0
+                ],
                 2,
             )
-            self.assertEqual(connection.execute("PRAGMA quick_check").fetchone()[0], "ok")
+            self.assertEqual(
+                connection.execute("PRAGMA quick_check").fetchone()[0], "ok"
+            )
 
     def test_non_finite_vectors_are_never_reused_or_served(self) -> None:
         with self.persist_fake_embeddings() as connection:
@@ -477,7 +522,9 @@ class WikiSqliteSemanticTests(unittest.TestCase):
         self.run_cli("rebuild")
         with sqlite3.connect(self.root / "state" / "wiki_index.sqlite") as connection:
             self.assertEqual(
-                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0],
+                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[
+                    0
+                ],
                 1,
             )
 
@@ -553,7 +600,9 @@ class WikiSqliteSemanticTests(unittest.TestCase):
         self.run_cli("rebuild")
         with sqlite3.connect(self.root / "state" / "wiki_index.sqlite") as connection:
             self.assertEqual(
-                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0],
+                connection.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[
+                    0
+                ],
                 1,
             )
 
@@ -622,6 +671,20 @@ class WikiSqliteSemanticTests(unittest.TestCase):
         self.assertEqual(payload["lanes"]["semantic"]["anchors"], [])
         self.assertIn("reason", payload["lanes"]["semantic"])
 
+    def test_standalone_semantic_checks_current_markdown_before_provider(self) -> None:
+        alpha = self.root / "wiki" / "concepts" / "alpha.md"
+        alpha.write_text("# Alpha\nStale vector source.\n", encoding="utf-8")
+        args = argparse.Namespace(query="query", limit=10)
+        with (
+            mock.patch.object(
+                self.retrieval,
+                "semantic_provider",
+                side_effect=AssertionError("stale semantic search must not load ONNX"),
+            ),
+            self.assertRaisesRegex(self.retrieval.IndexStateError, "stale"),
+        ):
+            self.retrieval.command_semantic(self.root, args)
+
     def test_artifact_reads_and_dependency_loader_failures_are_lane_unavailable(
         self,
     ) -> None:
@@ -673,7 +736,15 @@ class WikiSqliteSemanticTests(unittest.TestCase):
                 Path("model"), Path("tokenizer"), pooling="cls"
             ),
         )
-        self.assertEqual(len({base.preprocessing_identity, *(item.preprocessing_identity for item in variants)}), 4)
+        self.assertEqual(
+            len(
+                {
+                    base.preprocessing_identity,
+                    *(item.preprocessing_identity for item in variants),
+                }
+            ),
+            4,
+        )
 
     def test_all_semantic_pipeline_exceptions_are_lane_unavailable(self) -> None:
         class RaisingTokenizer:
@@ -794,6 +865,52 @@ class WikiSqliteSemanticTests(unittest.TestCase):
         self.assertEqual(
             lexical[0]["neighbors"][0]["provenance"]["relation"], "resolved_wikilink"
         )
+
+    def test_search_freshness_uses_weakest_requested_lane_guarantee(self) -> None:
+        semantic_row = {
+            "chunk_id": "semantic-candidate",
+            "page_id": "semantic-page",
+            "path": "wiki/concepts/semantic.md",
+            "title": "Semantic",
+            "chunk_index": 0,
+            "heading_path": "Semantic",
+            "line_start": 1,
+            "line_end": 2,
+            "byte_start": 0,
+            "byte_end": 1,
+            "semantic_score": 1.0,
+        }
+
+        def query(mode: str) -> dict[str, object]:
+            output = io.StringIO()
+            args = argparse.Namespace(
+                query="Alpha",
+                mode=mode,
+                limit=10,
+                neighbor_limit=5,
+                graph_cap=50,
+                hops=0,
+            )
+            with (
+                mock.patch.object(
+                    self.retrieval, "semantic_candidates", return_value=[semantic_row]
+                ),
+                mock.patch("sys.stdout", output),
+            ):
+                self.assertEqual(self.retrieval.command_search(self.root, args), 0)
+            return json.loads(output.getvalue())
+
+        lexical = query("lexical")
+        semantic = query("semantic")
+        both = query("both")
+
+        self.assertEqual(lexical["freshness"], "unchecked")
+        self.assertEqual(lexical["lanes"]["lexical"]["freshness"], "unchecked")
+        self.assertEqual(semantic["freshness"], "stat")
+        self.assertEqual(semantic["lanes"]["semantic"]["freshness"], "stat")
+        self.assertEqual(both["freshness"], "unchecked")
+        self.assertEqual(both["lanes"]["lexical"]["freshness"], "unchecked")
+        self.assertEqual(both["lanes"]["semantic"]["freshness"], "stat")
 
     def test_refresh_reuses_vectors_and_embeds_only_changed_chunks(self) -> None:
         provider = RefreshFakeProvider()

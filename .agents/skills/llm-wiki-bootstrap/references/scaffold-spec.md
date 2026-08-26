@@ -62,6 +62,10 @@ templates/llm-wiki-three-layer/
 - `raw/` is immutable source storage.
 - `wiki/` is maintained synthesis and the complete knowledge truth surface.
 - `state/wiki_index.sqlite` is optional, disposable, and rebuildable from Markdown.
+- Lexical SQLite search and bounded wikilink traversal are candidate discovery only:
+  they report unchecked freshness and callers reopen canonical Markdown before
+  treating a result as evidence. `status` is the cheap stat gate; `doctor` is
+  the exact content/vector gate.
 - `AGENTS.md` is the repo-local contract for future agents.
 - The reusable wiki workflow is enclosed by `LLM_WIKI_CONTRACT_START` and `LLM_WIKI_CONTRACT_END` markers.
 - The scaffold contains no ontology JSONL, `intelligence/` contract layer, DuckDB, helper-model configuration, or proposal/review registry.

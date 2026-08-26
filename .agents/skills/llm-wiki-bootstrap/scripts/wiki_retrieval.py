@@ -57,6 +57,7 @@ REQUIRED_METADATA = {
     "truth_source",
     "rebuildable",
 }
+SQLITE_HEADER = b"SQLite format 3\x00"
 
 
 class IndexStateError(RuntimeError):
@@ -94,9 +95,7 @@ class OnnxSemanticProvider:
         if output_index < 0:
             raise SemanticLaneUnavailable("ONNX output index must be non-negative")
         if pooling not in ("attention_mask_mean", "cls"):
-            raise SemanticLaneUnavailable(
-                "pooling must be attention_mask_mean or cls"
-            )
+            raise SemanticLaneUnavailable("pooling must be attention_mask_mean or cls")
         self.model_path = model_path
         self.tokenizer_path = tokenizer_path
         self.max_sequence_length = max_sequence_length
@@ -204,7 +203,9 @@ class OnnxSemanticProvider:
         except SemanticLaneUnavailable:
             raise
         except Exception as exc:
-            raise SemanticLaneUnavailable(f"semantic preprocessing failed: {exc}") from exc
+            raise SemanticLaneUnavailable(
+                f"semantic preprocessing failed: {exc}"
+            ) from exc
         try:
             inputs = self._session.get_inputs()
             feed = {
@@ -213,7 +214,9 @@ class OnnxSemanticProvider:
                 if item.name in available
             }
         except Exception as exc:
-            raise SemanticLaneUnavailable(f"ONNX input discovery failed: {exc}") from exc
+            raise SemanticLaneUnavailable(
+                f"ONNX input discovery failed: {exc}"
+            ) from exc
         if "input_ids" not in feed:
             raise SemanticLaneUnavailable("ONNX model does not expose input_ids")
         try:
@@ -232,7 +235,10 @@ class OnnxSemanticProvider:
                     count = max(sum(mask), 1)
                     pooled.append(
                         [
-                            sum(token[index] * weight for token, weight in zip(tokens, mask, strict=True))
+                            sum(
+                                token[index] * weight
+                                for token, weight in zip(tokens, mask, strict=True)
+                            )
                             / count
                             for index in range(len(tokens[0]))
                         ]
@@ -273,6 +279,12 @@ def open_index(repo_root: Path) -> sqlite3.Connection:
         raise IndexStateError(
             f"derived SQLite index is missing: {path}; run the rebuild command"
         )
+    try:
+        with path.open("rb") as handle:
+            if handle.read(len(SQLITE_HEADER)) != SQLITE_HEADER:
+                raise IndexStateError("malformed derived SQLite index header")
+    except OSError as exc:
+        raise IndexStateError(f"cannot read derived SQLite index: {exc}") from exc
     connection = None
     try:
         connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
@@ -336,14 +348,10 @@ def metadata(
 def expected_fingerprints(repo_root: Path, threshold: int) -> tuple[str, str]:
     schema = indexer.SCHEMA_PATH.read_text(encoding="utf-8")
     pages = indexer.page_records(repo_root)
-    corpus = "\n".join(
-        [
-            indexer.SCHEMA_VERSION,
-            str(threshold),
-            *(f"{page.path}\0{page.checksum}" for page in pages),
-        ]
+    corpus = indexer.corpus_fingerprint(
+        [indexer.page_metadata(page) for page in pages], threshold
     )
-    return indexer.sha256(schema.encode()), indexer.sha256(corpus.encode())
+    return indexer.sha256(schema.encode()), corpus
 
 
 def semantic_cohort_state(
@@ -419,10 +427,7 @@ def lightweight_semantic_cohort_state(
         current_rows += cohort_current
         if row_count != chunk_count or cohort_current != chunk_count:
             reasons.append("vector_rows")
-        if (
-            not row["min_dimensions"]
-            or row["min_dimensions"] != row["max_dimensions"]
-        ):
+        if not row["min_dimensions"] or row["min_dimensions"] != row["max_dimensions"]:
             reasons.append("vector_metadata")
         if int(row["fingerprint_metadata_rows"] or 0) != row_count:
             reasons.append("vector_fingerprints")
@@ -430,9 +435,14 @@ def lightweight_semantic_cohort_state(
     return ("unavailable" if reasons else "ready"), current_rows, reasons
 
 
-def lightweight_health(repo_root: Path) -> dict[str, object]:
+def lightweight_health(
+    repo_root: Path, connection: sqlite3.Connection | None = None
+) -> dict[str, object]:
     path = database_path(repo_root)
-    with closing(open_index(repo_root)) as connection:
+    owns_connection = connection is None
+    if connection is None:
+        connection = open_index(repo_root)
+    try:
         values = metadata(connection)
         try:
             threshold = int(values["chunk_threshold_bytes"])
@@ -453,7 +463,9 @@ def lightweight_health(repo_root: Path) -> dict[str, object]:
             if values.get("rebuildable") != "true":
                 stale_reasons.append("rebuildable")
             page_count = connection.execute("SELECT count(*) FROM pages").fetchone()[0]
-            chunk_count = connection.execute("SELECT count(*) FROM chunks").fetchone()[0]
+            chunk_count = connection.execute("SELECT count(*) FROM chunks").fetchone()[
+                0
+            ]
             semantic_lane, semantic_vectors, semantic_reasons = (
                 lightweight_semantic_cohort_state(connection, chunk_count)
             )
@@ -469,6 +481,9 @@ def lightweight_health(repo_root: Path) -> dict[str, object]:
                 semantic_lane = "unavailable"
         except (KeyError, TypeError, ValueError, sqlite3.Error) as exc:
             raise IndexStateError(f"malformed derived SQLite metadata: {exc}") from exc
+    finally:
+        if owns_connection:
+            connection.close()
     return {
         "index": str(path),
         "state": "stale" if stale_reasons else "ready",
@@ -656,11 +671,57 @@ def health(repo_root: Path) -> dict[str, object]:
     }
 
 
+def discovery_metadata(connection: sqlite3.Connection) -> dict[str, str]:
+    """Accept a structurally compatible derived index without scanning Markdown."""
+    values = metadata(connection)
+    try:
+        schema = indexer.SCHEMA_PATH.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise IndexStateError(f"cannot read SQLite schema contract: {exc}") from exc
+    if values.get("schema_version") != indexer.SCHEMA_VERSION:
+        raise IndexStateError("derived SQLite index schema is stale; run rebuild")
+    if values.get("schema_fingerprint") != indexer.sha256(schema.encode()):
+        raise IndexStateError("derived SQLite index schema is stale; run rebuild")
+    if values.get("truth_source") != "markdown" or values.get("rebuildable") != "true":
+        raise IndexStateError(
+            "derived SQLite index metadata is incompatible; run rebuild"
+        )
+    return values
+
+
+def open_discovery_index(repo_root: Path) -> sqlite3.Connection:
+    """Open one reusable connection for candidate discovery or link traversal."""
+    connection: sqlite3.Connection | None = None
+    try:
+        connection = open_index(repo_root)
+        discovery_metadata(connection)
+        return connection
+    except (IndexStateError, sqlite3.Error):
+        if connection is not None:
+            connection.close()
+        raise
+
+
+def open_current_index(repo_root: Path) -> sqlite3.Connection:
+    """Open one current index connection for operations that require fresh vectors."""
+    connection = open_discovery_index(repo_root)
+    try:
+        state = lightweight_health(repo_root, connection)
+        if state["state"] != "ready":
+            reasons = ", ".join(state["stale_reasons"])
+            raise IndexStateError(
+                f"derived SQLite index is stale ({reasons}); run rebuild"
+            )
+        return connection
+    except Exception:
+        connection.close()
+        raise
+
+
 def require_ready(repo_root: Path) -> None:
-    state = lightweight_health(repo_root)
-    if state["state"] != "ready":
-        reasons = ", ".join(state["stale_reasons"])
-        raise IndexStateError(f"derived SQLite index is stale ({reasons}); run rebuild")
+    """Compatibility gate for callers that require current derived state."""
+    with closing(open_current_index(repo_root)):
+        pass
 
 
 def resolve_page(connection: sqlite3.Connection, reference: str) -> sqlite3.Row:
@@ -749,13 +810,23 @@ def lexical_rows(
     folded = query.strip().casefold()
     exact = connection.execute(
         """
-        SELECT c.id chunk_id, p.id page_id, p.path, p.title, c.chunk_index,
-               c.heading_path, c.line_start, c.line_end, c.byte_start, c.byte_end
-        FROM pages p
-        JOIN documents d ON d.page_id = p.id
-        JOIN chunks c ON c.document_id = d.id
-        WHERE lower(p.title) = ? OR lower(p.path) = ?
-        ORDER BY CASE WHEN lower(p.title) = ? THEN 0 ELSE 1 END, p.path, c.chunk_index
+        WITH ranked AS (
+          SELECT c.id chunk_id, p.id page_id, p.path, p.title, c.chunk_index,
+                 c.heading_path, c.line_start, c.line_end, c.byte_start, c.byte_end,
+                 CASE WHEN lower(p.title) = ? THEN 0 ELSE 1 END exact_priority,
+                 row_number() OVER (
+                   PARTITION BY p.id ORDER BY c.chunk_index
+                 ) page_rank
+          FROM pages p
+          JOIN documents d ON d.page_id = p.id
+          JOIN chunks c ON c.document_id = d.id
+          WHERE lower(p.title) = ? OR lower(p.path) = ?
+        )
+        SELECT chunk_id, page_id, path, title, chunk_index, heading_path,
+               line_start, line_end, byte_start, byte_end
+        FROM ranked
+        WHERE page_rank = 1
+        ORDER BY exact_priority, path, chunk_index
         LIMIT ?
         """,
         (folded, folded, folded, limit),
@@ -763,31 +834,42 @@ def lexical_rows(
     results = [
         dict(row) | {"match_kind": "exact", "lexical_score": None} for row in exact
     ]
-    seen = {row["chunk_id"] for row in exact}
+    seen_pages = {row["page_id"] for row in exact}
     expression = fts_expression(query)
     if expression and len(results) < limit:
         try:
             rows = connection.execute(
                 """
-                SELECT c.id chunk_id, p.id page_id, p.path, p.title, c.chunk_index,
-                       c.heading_path, c.line_start, c.line_end, c.byte_start, c.byte_end,
-                       bm25(chunk_fts) lexical_score
-                FROM chunk_fts
-                JOIN chunks c ON c.id = chunk_fts.chunk_id
-                JOIN documents d ON d.id = c.document_id
-                JOIN pages p ON p.id = d.page_id
-                WHERE chunk_fts MATCH ?
-                ORDER BY lexical_score, p.path, c.chunk_index
+                WITH matched AS (
+                  SELECT c.id chunk_id, p.id page_id, p.path, p.title, c.chunk_index,
+                         c.heading_path, c.line_start, c.line_end, c.byte_start, c.byte_end,
+                         bm25(chunk_fts) lexical_score
+                  FROM chunk_fts
+                  JOIN chunks c ON c.id = chunk_fts.chunk_id
+                  JOIN documents d ON d.id = c.document_id
+                  JOIN pages p ON p.id = d.page_id
+                  WHERE chunk_fts MATCH ?
+                ), ranked AS (
+                  SELECT *, row_number() OVER (
+                    PARTITION BY page_id ORDER BY lexical_score, chunk_index
+                  ) page_rank
+                  FROM matched
+                )
+                SELECT chunk_id, page_id, path, title, chunk_index, heading_path,
+                       line_start, line_end, byte_start, byte_end, lexical_score
+                FROM ranked
+                WHERE page_rank = 1
+                ORDER BY lexical_score, path, chunk_index
                 LIMIT ?
                 """,
-                (expression, limit),
+                (expression, limit + len(results)),
             ).fetchall()
         except sqlite3.Error as exc:
             raise IndexStateError(f"lexical search failed: {exc}") from exc
         for row in rows:
-            if row["chunk_id"] not in seen:
+            if row["page_id"] not in seen_pages:
                 results.append(dict(row) | {"match_kind": "fts"})
-                seen.add(row["chunk_id"])
+                seen_pages.add(row["page_id"])
                 if len(results) >= limit:
                     break
     return results
@@ -833,96 +915,81 @@ def persist_embeddings(
     tokenizer_identity: str,
     preprocessing_identity: str = DEFAULT_PREPROCESSING_IDENTITY,
 ) -> dict[str, int]:
-    chunks = connection.execute(
-        "SELECT id, content, content_hash FROM chunks ORDER BY id"
-    ).fetchall()
-    if not chunks:
+    chunk_count = connection.execute("SELECT count(*) FROM chunks").fetchone()[0]
+    if not chunk_count:
         return {"embedded_chunks": 0, "reused_chunks": 0, "dimensions": 0}
-    existing = {
-        row["chunk_id"]: row
-        for row in connection.execute(
-            """
-            SELECT chunk_id, chunk_hash, dimensions, vector, vector_fingerprint
-            FROM chunk_embeddings
-            WHERE model_identity = ? AND tokenizer_identity = ?
-              AND preprocessing_identity = ?
-            """,
-            (model_identity, tokenizer_identity, preprocessing_identity),
-        )
-    }
-    reusable: dict[str, sqlite3.Row] = {}
-    missing = []
-    for chunk in chunks:
-        row = existing.get(chunk["id"])
-        if row is not None:
+    reusable_ids: set[str] = set()
+    reused_dimensions: set[int] = set()
+    for row in connection.execute(
+        """
+        SELECT c.id, c.content_hash, e.chunk_hash, e.dimensions, e.vector,
+               e.vector_fingerprint
+        FROM chunks c
+        LEFT JOIN chunk_embeddings e
+          ON e.chunk_id = c.id AND e.model_identity = ?
+         AND e.tokenizer_identity = ? AND e.preprocessing_identity = ?
+        ORDER BY c.id
+        """,
+        (model_identity, tokenizer_identity, preprocessing_identity),
+    ):
+        if row["chunk_hash"] is not None:
             try:
                 payload = bytes(row["vector"])
                 dimensions = int(row["dimensions"])
             except (TypeError, ValueError):
-                row = None
-            else:
-                if (
-                    row["chunk_hash"] == chunk["content_hash"]
-                    and dimensions > 0
-                    and len(payload) == dimensions * 4
-                    and hashlib.sha256(payload).hexdigest()
-                    == row["vector_fingerprint"]
-                ):
-                    try:
-                        unpack_vector(payload, dimensions)
-                    except SemanticLaneUnavailable:
-                        pass
-                    else:
-                        reusable[chunk["id"]] = row
-                        continue
-        missing.append(chunk)
-
-    reused_dimensions = {int(row["dimensions"]) for row in reusable.values()}
+                continue
+            if (
+                row["chunk_hash"] == row["content_hash"]
+                and dimensions > 0
+                and len(payload) == dimensions * 4
+                and hashlib.sha256(payload).hexdigest() == row["vector_fingerprint"]
+            ):
+                try:
+                    unpack_vector(payload, dimensions)
+                except SemanticLaneUnavailable:
+                    continue
+                reusable_ids.add(str(row["id"]))
+                reused_dimensions.add(dimensions)
     if len(reused_dimensions) > 1:
-        reusable.clear()
-        missing = list(chunks)
+        reusable_ids.clear()
         reused_dimensions.clear()
-    vectors = list(embedder.embed([row["content"] for row in missing])) if missing else []
-    if len(vectors) != len(missing):
-        raise SemanticLaneUnavailable(
-            f"embedder returned {len(vectors)} vectors for {len(missing)} chunks"
-        )
-    normalized = [normalize_vector(vector) for vector in vectors]
-    dimensions = (
-        len(normalized[0]) if normalized else next(iter(reused_dimensions), 0)
-    )
-    if any(len(vector) != dimensions for vector in normalized):
-        raise SemanticLaneUnavailable("embedder returned inconsistent dimensions")
-    if reused_dimensions and dimensions not in reused_dimensions:
-        raise SemanticLaneUnavailable(
-            "new embedding dimensions do not match reusable semantic cohort"
-        )
+    dimensions = next(iter(reused_dimensions), 0)
     now = datetime.now(timezone.utc).isoformat()
-    rows = []
-    for chunk, vector in zip(missing, normalized, strict=True):
-        packed = pack_vector(vector)
-        rows.append(
-            (
-                chunk["id"],
-                chunk["content_hash"],
-                model_identity,
-                tokenizer_identity,
-                preprocessing_identity,
-                dimensions,
-                packed,
-                hashlib.sha256(packed).hexdigest(),
-                now,
+    embedded_chunks = 0
+
+    def store_batch(batch: list[sqlite3.Row]) -> int:
+        nonlocal dimensions
+        vectors = list(embedder.embed([row["content"] for row in batch]))
+        if len(vectors) != len(batch):
+            raise SemanticLaneUnavailable(
+                f"embedder returned {len(vectors)} vectors for {len(batch)} chunks"
             )
-        )
-    with connection:
-        connection.execute(
-            """
-            DELETE FROM chunk_embeddings
-            WHERE model_identity != ? OR tokenizer_identity != ?
-              OR preprocessing_identity != ?
-            """,
-            (model_identity, tokenizer_identity, preprocessing_identity),
-        )
+        normalized = [normalize_vector(vector) for vector in vectors]
+        batch_dimensions = {len(vector) for vector in normalized}
+        if len(batch_dimensions) != 1:
+            raise SemanticLaneUnavailable("embedder returned inconsistent dimensions")
+        batch_dimension = batch_dimensions.pop()
+        if dimensions and batch_dimension != dimensions:
+            raise SemanticLaneUnavailable(
+                "new embedding dimensions do not match reusable semantic cohort"
+            )
+        dimensions = batch_dimension
+        rows = []
+        for chunk, vector in zip(batch, normalized, strict=True):
+            packed = pack_vector(vector)
+            rows.append(
+                (
+                    chunk["id"],
+                    chunk["content_hash"],
+                    model_identity,
+                    tokenizer_identity,
+                    preprocessing_identity,
+                    dimensions,
+                    packed,
+                    hashlib.sha256(packed).hexdigest(),
+                    now,
+                )
+            )
         connection.executemany(
             """
             DELETE FROM chunk_embeddings
@@ -930,23 +997,9 @@ def persist_embeddings(
               AND preprocessing_identity = ?
             """,
             [
-                (
-                    chunk["id"],
-                    model_identity,
-                    tokenizer_identity,
-                    preprocessing_identity,
-                )
-                for chunk in missing
+                (row["id"], model_identity, tokenizer_identity, preprocessing_identity)
+                for row in batch
             ],
-        )
-        connection.execute(
-            """
-            DELETE FROM chunk_embeddings AS e
-            WHERE model_identity = ? AND tokenizer_identity = ?
-              AND preprocessing_identity = ?
-              AND NOT EXISTS (SELECT 1 FROM chunks c WHERE c.id = e.chunk_id)
-            """,
-            (model_identity, tokenizer_identity, preprocessing_identity),
         )
         connection.executemany(
             """
@@ -957,6 +1010,38 @@ def persist_embeddings(
             """,
             rows,
         )
+        return len(rows)
+
+    with connection:
+        connection.execute(
+            """
+            DELETE FROM chunk_embeddings
+            WHERE model_identity != ? OR tokenizer_identity != ?
+              OR preprocessing_identity != ?
+            """,
+            (model_identity, tokenizer_identity, preprocessing_identity),
+        )
+        connection.execute(
+            """
+            DELETE FROM chunk_embeddings AS e
+            WHERE model_identity = ? AND tokenizer_identity = ?
+              AND preprocessing_identity = ?
+              AND NOT EXISTS (SELECT 1 FROM chunks c WHERE c.id = e.chunk_id)
+            """,
+            (model_identity, tokenizer_identity, preprocessing_identity),
+        )
+        batch: list[sqlite3.Row] = []
+        for chunk in connection.execute(
+            "SELECT id, content, content_hash FROM chunks ORDER BY id"
+        ):
+            if str(chunk["id"]) in reusable_ids:
+                continue
+            batch.append(chunk)
+            if len(batch) == MAX_EMBED_BATCH_SIZE:
+                embedded_chunks += store_batch(batch)
+                batch.clear()
+        if batch:
+            embedded_chunks += store_batch(batch)
         connection.execute(
             """
             INSERT INTO index_metadata(key, value) VALUES (?, ?)
@@ -978,8 +1063,8 @@ def persist_embeddings(
             ),
         )
     return {
-        "embedded_chunks": len(rows),
-        "reused_chunks": len(reusable),
+        "embedded_chunks": embedded_chunks,
+        "reused_chunks": len(reusable_ids),
         "dimensions": dimensions,
     }
 
@@ -1054,9 +1139,7 @@ def semantic_provider(args: argparse.Namespace) -> OnnxSemanticProvider:
             os.environ.get("WIKI_ONNX_MAX_SEQUENCE_LENGTH", args.max_sequence_length)
         )
         batch_size = int(os.environ.get("WIKI_ONNX_BATCH_SIZE", args.batch_size))
-        output_index = int(
-            os.environ.get("WIKI_ONNX_OUTPUT_INDEX", args.output_index)
-        )
+        output_index = int(os.environ.get("WIKI_ONNX_OUTPUT_INDEX", args.output_index))
         pooling = os.environ.get("WIKI_ONNX_POOLING", args.pooling)
     except (TypeError, ValueError) as exc:
         raise SemanticLaneUnavailable(f"invalid ONNX bounds: {exc}") from exc
@@ -1263,24 +1346,39 @@ def command_search(repo_root: Path, args: argparse.Namespace) -> int:
     cap = validate_cap(args.graph_cap)
     if args.hops not in (0, 1, 2):
         raise IndexStateError("search hops must be 0, 1, or 2")
-    require_ready(repo_root)
     lexical: list[dict[str, object]] = []
     semantic: list[dict[str, object]] = []
     semantic_status = "not_requested"
     semantic_reason = None
-    with closing(open_index(repo_root)) as connection:
-        metadata(connection)
+    lexical_freshness = (
+        "unchecked" if args.mode in ("lexical", "both") else "not_requested"
+    )
+    semantic_freshness = "not_requested"
+    with closing(open_discovery_index(repo_root)) as connection:
         if args.mode in ("lexical", "both"):
             lexical = lexical_rows(connection, args.query, args.limit)
         if args.mode in ("semantic", "both"):
-            try:
-                semantic = semantic_candidates(connection, args)
-                semantic_status = "ready"
-            except SemanticLaneUnavailable as exc:
+            readiness = lightweight_health(repo_root, connection)
+            if readiness["state"] != "ready":
+                semantic_freshness = "stale"
+                reasons = ", ".join(readiness["stale_reasons"])
+                semantic_reason = (
+                    "semantic retrieval requires a current derived index "
+                    f"({reasons}); run rebuild"
+                )
                 if args.mode == "semantic":
-                    raise
+                    raise IndexStateError(semantic_reason)
                 semantic_status = "unavailable"
-                semantic_reason = str(exc)
+            else:
+                semantic_freshness = "stat"
+                try:
+                    semantic = semantic_candidates(connection, args)
+                    semantic_status = "ready"
+                except SemanticLaneUnavailable as exc:
+                    if args.mode == "semantic":
+                        raise
+                    semantic_status = "unavailable"
+                    semantic_reason = str(exc)
         lexical, semantic = prepare_lane_rows(lexical, semantic)
         attach_lane_neighbors(
             connection,
@@ -1291,13 +1389,18 @@ def command_search(repo_root: Path, args: argparse.Namespace) -> int:
         )
     lanes = {
         "lexical": {
-            "status": "ready" if args.mode in ("lexical", "both") else "not_requested",
+            "status": "candidate"
+            if args.mode in ("lexical", "both")
+            else "not_requested",
             "score_kind": "exact_then_bm25",
+            "freshness": lexical_freshness,
+            "candidate_role": "verify_against_canonical_markdown",
             "anchors": lexical,
         },
         "semantic": {
             "status": semantic_status,
             "score_kind": "cosine",
+            "freshness": semantic_freshness,
             "candidate_role": "similarity_candidate_not_evidence",
             "anchors": semantic,
         },
@@ -1311,7 +1414,11 @@ def command_search(repo_root: Path, args: argparse.Namespace) -> int:
             "mode": args.mode,
             "default_link_hops": args.hops,
             "graph_cap": cap,
-            "deduplication": "lexical_then_semantic_by_page_and_chunk",
+            "freshness": (
+                "unchecked" if lexical_freshness == "unchecked" else semantic_freshness
+            ),
+            "canonical": False,
+            "deduplication": "one_best_lexical_chunk_per_page_then_semantic",
             "semantic_lane": semantic_status,
             "lanes": lanes,
             "results": lexical if args.mode == "lexical" else [],
@@ -1347,13 +1454,11 @@ def command_embed(repo_root: Path, args: argparse.Namespace) -> int:
 
 def command_semantic(repo_root: Path, args: argparse.Namespace) -> int:
     validate_limit(args.limit, "semantic limit")
-    require_ready(repo_root)
-    provider = semantic_provider(args)
-    query_vectors = list(provider.embed([args.query]))
-    if len(query_vectors) != 1:
-        raise SemanticLaneUnavailable("embedder did not return one query vector")
-    with closing(open_index(repo_root)) as connection:
-        metadata(connection)
+    with closing(open_current_index(repo_root)) as connection:
+        provider = semantic_provider(args)
+        query_vectors = list(provider.embed([args.query]))
+        if len(query_vectors) != 1:
+            raise SemanticLaneUnavailable("embedder did not return one query vector")
         results = semantic_rows(
             connection,
             query_vectors[0],
@@ -1367,6 +1472,8 @@ def command_semantic(repo_root: Path, args: argparse.Namespace) -> int:
             "operation": "semantic_search",
             "semantic_lane": "ready",
             "query": args.query,
+            "freshness": "stat",
+            "canonical": False,
             "results": results,
         }
     )
@@ -1377,8 +1484,7 @@ def command_neighbors(repo_root: Path, args: argparse.Namespace) -> int:
     cap = validate_cap(args.limit)
     if args.hops not in (1, 2):
         raise IndexStateError("neighbors hops must be 1 or 2")
-    require_ready(repo_root)
-    with closing(open_index(repo_root)) as connection:
+    with closing(open_discovery_index(repo_root)) as connection:
         origin = resolve_page(connection, args.page)
         results = bounded_neighbors(connection, origin["id"], args.hops, cap)
     emit(
@@ -1386,6 +1492,8 @@ def command_neighbors(repo_root: Path, args: argparse.Namespace) -> int:
             "operation": "neighbors",
             "origin": dict(origin),
             "hops": args.hops,
+            "freshness": "unchecked",
+            "canonical": False,
             "results": results,
         }
     )
@@ -1396,8 +1504,7 @@ def command_path(repo_root: Path, args: argparse.Namespace) -> int:
     cap = validate_cap(args.graph_cap)
     if not 1 <= args.max_depth <= 10:
         raise IndexStateError("path max depth must be between 1 and 10")
-    require_ready(repo_root)
-    with closing(open_index(repo_root)) as connection:
+    with closing(open_discovery_index(repo_root)) as connection:
         start = resolve_page(connection, args.from_page)
         goal = resolve_page(connection, args.to_page)
         queue: deque[tuple[str, list[str]]] = deque([(start["id"], [start["id"]])])
@@ -1432,6 +1539,8 @@ def command_path(repo_root: Path, args: argparse.Namespace) -> int:
             "max_depth": args.max_depth,
             "graph_cap": cap,
             "visited": len(visited),
+            "freshness": "unchecked",
+            "canonical": False,
             "pages": pages,
         }
     )

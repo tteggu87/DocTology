@@ -288,7 +288,8 @@ def retrieval_contract(profile: str, sqlite_enabled: bool = True) -> str:
 - Configure local artifacts with `--model-path`/`--tokenizer-path` or `WIKI_ONNX_MODEL`/`WIKI_TOKENIZER`, or omit them for lexical-only operation. Local ONNX uses zero API tokens and adds no ANN database.
 - Workflow completion reports `wiki_complete` separately from derived `retrieval_ready` and semantic status; optional retrieval failure never reverses canonical Markdown completion.
 - The runtime uses no reciprocal-rank fusion (RRF), never compares BM25 with cosine, and never requires ONNX for ingest or query completion.
-- Query readiness uses fast Markdown path/size/mtime checks. Same-size edits with preserved mtimes require `doctor`, which performs exhaustive content and vector validation.
+- Lexical search and wikilink traversal reuse one structurally compatible SQLite connection and return `freshness: unchecked` candidates; reopen the listed Markdown paths before relying on their content as evidence.
+- `status` performs fast Markdown path/size/mtime readiness checks. `doctor` performs exhaustive content and vector validation, including same-size edits with preserved mtimes. The semantic lane runs only from a stat-current index.
 - {profile_note}
 """
 
@@ -317,7 +318,7 @@ python scripts/wiki_retrieval.py --repo-root . search "your query" --mode lexica
 python scripts/wiki_retrieval.py --repo-root . search "your query" --mode both
 ```
 
-`state/wiki_index.sqlite` is disposable derived state. Run `refresh` once after the final canonical writer: it atomically rebuilds lexical state, reuses compatible vectors, and embeds only missing current chunks when `--model-path`/`--tokenizer-path` or `WIKI_ONNX_MODEL`/`WIKI_TOKENIZER` are configured. Local ONNX uses zero API tokens and remains optional; omitting or failing its artifacts never invalidates canonical Markdown completion or lexical readiness. Workflow output reports `wiki_complete`, `retrieval_ready`, and semantic status separately. By default, Markdown files up to 64 KiB remain one chunk; larger files split at headings and then paragraphs when needed. Lane ranks stay separate: there is no RRF or ANN, and BM25 is never compared with cosine. Query readiness uses fast path/size/mtime checks; run `doctor` for exhaustive content and vector validation, including same-size changes whose mtimes were preserved. {profile_note}
+`state/wiki_index.sqlite` is disposable derived state. Run `refresh` once after the final canonical writer: it atomically rebuilds lexical state, reuses compatible vectors, and embeds only missing current chunks when `--model-path`/`--tokenizer-path` or `WIKI_ONNX_MODEL`/`WIKI_TOKENIZER` are configured. Local ONNX uses zero API tokens and remains optional; omitting or failing its artifacts never invalidates canonical Markdown completion or lexical readiness. Workflow output reports `wiki_complete`, `retrieval_ready`, and semantic status separately. By default, Markdown files up to 64 KiB remain one chunk; larger files split at headings and then paragraphs when needed. Lane ranks stay separate: there is no RRF or ANN, and BM25 is never compared with cosine. Lexical search and wikilink traversal return `freshness: unchecked` candidates from one structural SQLite connection, so reopen the listed Markdown paths before treating them as evidence. Run `status` for fast path/size/mtime readiness and `doctor` for exhaustive content and vector validation, including same-size changes whose mtimes were preserved. {profile_note}
 """
 
 

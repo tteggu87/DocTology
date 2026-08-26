@@ -22,7 +22,7 @@ SCHEMA_PATH = (
     ROOT / "templates" / "llm-wiki-three-layer" / "sqlite_operational.schema.sql"
 )
 DEFAULT_CHUNK_THRESHOLD = 64 * 1024
-SCHEMA_VERSION = "wiki-heading-index-v7"
+SCHEMA_VERSION = "wiki-heading-index-v8"
 FINITE_ATTESTATION_VERSION = "finite-nonzero-v2"
 PAGE_TYPE_BY_DIR = {
     "concepts": "concept",
@@ -62,6 +62,19 @@ class Page:
     updated_at: str
     checksum: str
     text: str
+    byte_size: int
+
+
+@dataclass(frozen=True)
+class PageMetadata:
+    """The small page manifest retained while a rebuild streams page bodies."""
+
+    id: str
+    path: str
+    title: str
+    page_type: str
+    updated_at: str
+    checksum: str
     byte_size: int
 
 
@@ -155,39 +168,105 @@ def fallback_page_id(relative_wiki_path: Path) -> str:
     return f"page-{normalized}-{sha256(original.encode('utf-8'))[:12]}"
 
 
-def page_records(repo_root: Path) -> list[Page]:
+def wiki_page_paths(repo_root: Path) -> list[Path]:
+    """Return canonical page paths, excluding generated wiki metadata."""
     wiki_dir = repo_root / "wiki"
-    records: list[Page] = []
     if not wiki_dir.exists():
-        return records
-    for path in sorted(wiki_dir.rglob("*.md")):
+        return []
+    paths: list[Path] = []
+    for path in wiki_dir.rglob("*.md"):
         rel = path.relative_to(wiki_dir)
         if (
-            not rel.parts
+            not path.is_file()
+            or not rel.parts
             or rel.parts[0] == "_meta"
             or rel.parts[0] not in PAGE_TYPE_BY_DIR
         ):
             continue
-        raw = path.read_bytes()
-        text = raw.decode("utf-8")
-        page_id = frontmatter_value(text, "page_id") or fallback_page_id(rel)
-        records.append(
-            Page(
-                page_id,
-                path.relative_to(repo_root).as_posix(),
-                frontmatter_value(text, "title") or extract_title(path, text),
-                frontmatter_value(text, "page_type")
-                or frontmatter_value(text, "type")
-                or PAGE_TYPE_BY_DIR[rel.parts[0]],
-                frontmatter_value(text, "updated_at")
-                or frontmatter_value(text, "updated")
-                or "",
-                sha256(raw),
-                text,
-                len(raw),
+        paths.append(path)
+    return sorted(paths)
+
+
+def page_record(repo_root: Path, path: Path) -> Page:
+    """Read one canonical page without retaining unrelated page bodies."""
+    wiki_dir = repo_root / "wiki"
+    rel = path.relative_to(wiki_dir)
+    raw = path.read_bytes()
+    text = raw.decode("utf-8")
+    page_id = frontmatter_value(text, "page_id") or fallback_page_id(rel)
+    return Page(
+        page_id,
+        path.relative_to(repo_root).as_posix(),
+        frontmatter_value(text, "title") or extract_title(path, text),
+        frontmatter_value(text, "page_type")
+        or frontmatter_value(text, "type")
+        or PAGE_TYPE_BY_DIR[rel.parts[0]],
+        frontmatter_value(text, "updated_at")
+        or frontmatter_value(text, "updated")
+        or "",
+        sha256(raw),
+        text,
+        len(raw),
+    )
+
+
+def page_metadata(page: Page) -> PageMetadata:
+    return PageMetadata(
+        page.id,
+        page.path,
+        page.title,
+        page.page_type,
+        page.updated_at,
+        page.checksum,
+        page.byte_size,
+    )
+
+
+def page_metadata_records(repo_root: Path) -> list[PageMetadata]:
+    """Build a metadata-only manifest for streaming rebuilds."""
+    return [
+        page_metadata(page_record(repo_root, path))
+        for path in wiki_page_paths(repo_root)
+    ]
+
+
+def page_records(repo_root: Path) -> list[Page]:
+    """Materialize pages only for deep doctor comparisons."""
+    return [page_record(repo_root, path) for path in wiki_page_paths(repo_root)]
+
+
+def link_candidates(pages: list[Page | PageMetadata]) -> dict[str, list[str]]:
+    candidates: dict[str, list[str]] = {}
+    for page in pages:
+        relative_wiki_path = (
+            Path(page.path).relative_to("wiki").with_suffix("").as_posix()
+        )
+        for key in {
+            Path(page.path).stem.casefold(),
+            relative_wiki_path.casefold(),
+            page.title.casefold(),
+        }:
+            candidates.setdefault(key, []).append(page.id)
+    return candidates
+
+
+def link_records_for_page(
+    page: Page, candidates: dict[str, list[str]], now: str
+) -> list[tuple[str, str | None, str, str, str]]:
+    rows = []
+    for link in WIKILINK_RE.findall(split_frontmatter(page.text)[1]):
+        matches = candidates.get(link.strip().casefold(), [])
+        target = matches[0] if len(matches) == 1 else None
+        rows.append(
+            (
+                page.id,
+                target,
+                link.strip(),
+                "resolved" if target else "unresolved",
+                now,
             )
         )
-    return records
+    return rows
 
 
 def utf8_offsets(text: str) -> list[int]:
@@ -210,14 +289,15 @@ def newline_offsets(text: str) -> list[int]:
 
 def section_spans(text: str) -> list[tuple[int, int, str]]:
     headings: list[tuple[int, str]] = []
-    stack: list[str] = []
+    stack: list[tuple[int, str]] = []
     for match in re.finditer(r"^#{1,6}[ \t]+.+?$", text, re.MULTILINE):
         parsed = HEADING_RE.match(match.group(0))
         if parsed:
             level, title = len(parsed.group(1)), parsed.group(2).strip()
-            stack = stack[: level - 1]
-            stack.append(title)
-            headings.append((match.start(), " > ".join(stack)))
+            while stack and stack[-1][0] >= level:
+                stack.pop()
+            stack.append((level, title))
+            headings.append((match.start(), " > ".join(item[1] for item in stack)))
     if not headings:
         return [(0, len(text), "")]
     spans = [(0, headings[0][0], "")] if headings[0][0] else []
@@ -312,33 +392,22 @@ def chunks_for_page(page: Page, threshold: int) -> list[Chunk]:
 
 
 def link_records(pages: list[Page]) -> list[tuple[str, str | None, str, str, str]]:
-    candidates: dict[str, list[str]] = {}
-    for page in pages:
-        relative_wiki_path = (
-            Path(page.path).relative_to("wiki").with_suffix("").as_posix()
-        )
-        for key in {
-            Path(page.path).stem.casefold(),
-            relative_wiki_path.casefold(),
-            page.title.casefold(),
-        }:
-            candidates.setdefault(key, []).append(page.id)
+    candidates = link_candidates(pages)
     now = datetime.now(timezone.utc).isoformat()
-    rows = []
-    for page in pages:
-        for link in WIKILINK_RE.findall(split_frontmatter(page.text)[1]):
-            matches = candidates.get(link.strip().casefold(), [])
-            target = matches[0] if len(matches) == 1 else None
-            rows.append(
-                (
-                    page.id,
-                    target,
-                    link.strip(),
-                    "resolved" if target else "unresolved",
-                    now,
-                )
-            )
-    return rows
+    return [
+        row for page in pages for row in link_records_for_page(page, candidates, now)
+    ]
+
+
+def source_and_tag_records_for_page(
+    page: Page,
+) -> tuple[list[tuple[str, str, str]], list[tuple[str, str]]]:
+    sources = []
+    for value in frontmatter_list(page.text, "sources"):
+        match = WIKILINK_RE.search(value)
+        if match:
+            sources.append((page.id, match.group(1), "primary"))
+    return sources, [(page.id, tag) for tag in frontmatter_list(page.text, "tags")]
 
 
 def source_and_tag_records(
@@ -347,31 +416,49 @@ def source_and_tag_records(
     sources: list[tuple[str, str, str]] = []
     tags: list[tuple[str, str]] = []
     for page in pages:
-        for value in frontmatter_list(page.text, "sources"):
-            match = WIKILINK_RE.search(value)
-            if match:
-                sources.append((page.id, match.group(1), "primary"))
-        tags.extend((page.id, tag) for tag in frontmatter_list(page.text, "tags"))
+        page_sources, page_tags = source_and_tag_records_for_page(page)
+        sources.extend(page_sources)
+        tags.extend(page_tags)
     return sources, tags
 
 
 def source_stat_fingerprint(repo_root: Path) -> str:
     rows = []
-    wiki_dir = repo_root / "wiki"
-    for path in sorted(wiki_dir.rglob("*.md")):
-        rel = path.relative_to(wiki_dir)
-        if (
-            not path.is_file()
-            or not rel.parts
-            or rel.parts[0] == "_meta"
-            or rel.parts[0] not in PAGE_TYPE_BY_DIR
-        ):
-            continue
+    for path in wiki_page_paths(repo_root):
         stat = path.stat()
         rows.append(
             f"{path.relative_to(repo_root).as_posix()}\0{stat.st_size}\0{stat.st_mtime_ns}"
         )
     return sha256("\n".join(rows).encode())
+
+
+def corpus_fingerprint(pages: list[PageMetadata], threshold: int) -> str:
+    material = "\n".join(
+        [
+            SCHEMA_VERSION,
+            str(threshold),
+            *(f"{page.path}\0{page.checksum}" for page in pages),
+        ]
+    )
+    return sha256(material.encode())
+
+
+def file_checksum(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def corpus_fingerprint_from_disk(repo_root: Path, threshold: int) -> str:
+    """Stream a content-exact final fingerprint without retaining page bodies."""
+    material = [SCHEMA_VERSION, str(threshold)]
+    for path in wiki_page_paths(repo_root):
+        material.append(
+            f"{path.relative_to(repo_root).as_posix()}\0{file_checksum(path)}"
+        )
+    return sha256("\n".join(material).encode())
 
 
 def prepare_existing_index_for_replace(db_path: Path) -> None:
@@ -415,7 +502,7 @@ def prepare_existing_index_for_replace(db_path: Path) -> None:
 def carry_forward_embeddings(
     connection: sqlite3.Connection, existing_path: Path
 ) -> int:
-    """Copy compatible current vectors from the prior disposable index."""
+    """Copy compatible current vectors without materializing prior vector BLOBs."""
     if not existing_path.is_file():
         return 0
     with existing_path.open("rb") as handle:
@@ -429,7 +516,36 @@ def carry_forward_embeddings(
         }
         if columns != EMBEDDING_COLUMNS:
             return 0
-        rows = source.execute(
+        current_chunks = dict(connection.execute("SELECT id, content_hash FROM chunks"))
+        cohort_dimensions: dict[tuple[str, str, str], set[int]] = {}
+        for row in source.execute(
+            """
+            SELECT chunk_id, chunk_hash, model_identity, tokenizer_identity,
+                   preprocessing_identity, dimensions
+            FROM chunk_embeddings
+            ORDER BY model_identity, tokenizer_identity,
+                     preprocessing_identity, chunk_id
+            """
+        ):
+            identity = (
+                str(row["model_identity"]),
+                str(row["tokenizer_identity"]),
+                str(row["preprocessing_identity"]),
+            )
+            try:
+                dimensions = int(row["dimensions"])
+            except (TypeError, ValueError):
+                continue
+            if (
+                all(identity)
+                and dimensions > 0
+                and current_chunks.get(row["chunk_id"]) == row["chunk_hash"]
+            ):
+                cohort_dimensions.setdefault(identity, set()).add(dimensions)
+
+        compatible = 0
+        batch: list[tuple[object, ...]] = []
+        for row in source.execute(
             """
             SELECT chunk_id, chunk_hash, model_identity, tokenizer_identity,
                    preprocessing_identity, dimensions, vector,
@@ -438,66 +554,64 @@ def carry_forward_embeddings(
             ORDER BY model_identity, tokenizer_identity,
                      preprocessing_identity, chunk_id
             """
-        ).fetchall()
+        ):
+            identity = (
+                str(row["model_identity"]),
+                str(row["tokenizer_identity"]),
+                str(row["preprocessing_identity"]),
+            )
+            try:
+                dimensions = int(row["dimensions"])
+                vector = bytes(row["vector"])
+            except (TypeError, ValueError):
+                continue
+            if (
+                not all(identity)
+                or dimensions <= 0
+                or current_chunks.get(row["chunk_id"]) != row["chunk_hash"]
+                or len(cohort_dimensions.get(identity, set())) != 1
+                or len(vector) != dimensions * 4
+                or sha256(vector) != row["vector_fingerprint"]
+                or not usable_vector_payload(vector, dimensions)
+            ):
+                continue
+            batch.append(
+                (
+                    row["chunk_id"],
+                    row["chunk_hash"],
+                    *identity,
+                    dimensions,
+                    vector,
+                    row["vector_fingerprint"],
+                    row["created_at"],
+                )
+            )
+            if len(batch) == 128:
+                connection.executemany(
+                    """
+                    INSERT INTO chunk_embeddings(
+                      chunk_id, chunk_hash, model_identity, tokenizer_identity,
+                      preprocessing_identity, dimensions, vector, vector_fingerprint, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    batch,
+                )
+                compatible += len(batch)
+                batch.clear()
+        if batch:
+            connection.executemany(
+                """
+                INSERT INTO chunk_embeddings(
+                  chunk_id, chunk_hash, model_identity, tokenizer_identity,
+                  preprocessing_identity, dimensions, vector, vector_fingerprint, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                batch,
+            )
+            compatible += len(batch)
+        return compatible
     finally:
         source.close()
-
-    current_chunks = dict(connection.execute("SELECT id, content_hash FROM chunks"))
-    cohort_dimensions: dict[tuple[str, str, str], set[int]] = {}
-    candidates: list[tuple[object, ...]] = []
-    for row in rows:
-        identity = (
-            str(row["model_identity"]),
-            str(row["tokenizer_identity"]),
-            str(row["preprocessing_identity"]),
-        )
-        try:
-            dimensions = int(row["dimensions"])
-            vector = bytes(row["vector"])
-        except (TypeError, ValueError):
-            continue
-        if (
-            all(identity)
-            and dimensions > 0
-            and current_chunks.get(row["chunk_id"]) == row["chunk_hash"]
-        ):
-            cohort_dimensions.setdefault(identity, set()).add(dimensions)
-        if (
-            not all(identity)
-            or dimensions <= 0
-            or current_chunks.get(row["chunk_id"]) != row["chunk_hash"]
-            or len(vector) != dimensions * 4
-            or sha256(vector) != row["vector_fingerprint"]
-            or not usable_vector_payload(vector, dimensions)
-        ):
-            continue
-        candidates.append(
-            (
-                row["chunk_id"],
-                row["chunk_hash"],
-                *identity,
-                dimensions,
-                vector,
-                row["vector_fingerprint"],
-                row["created_at"],
-            )
-        )
-
-    compatible = [
-        row
-        for row in candidates
-        if len(cohort_dimensions[(str(row[2]), str(row[3]), str(row[4]))]) == 1
-    ]
-    connection.executemany(
-        """
-        INSERT INTO chunk_embeddings(
-          chunk_id, chunk_hash, model_identity, tokenizer_identity,
-          preprocessing_identity, dimensions, vector, vector_fingerprint, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        compatible,
-    )
-    return len(compatible)
 
 
 def semantic_cohort_fingerprint(connection: sqlite3.Connection) -> str:
@@ -547,7 +661,9 @@ def attest_semantic_vectors(connection: sqlite3.Connection) -> str:
             dimensions = int(dimensions)
             payload = bytes(payload)
         except (TypeError, ValueError):
-            raise RebuildError("semantic vector attestation found malformed data") from None
+            raise RebuildError(
+                "semantic vector attestation found malformed data"
+            ) from None
         if sha256(payload) != fingerprint or not usable_vector_payload(
             payload, dimensions
         ):
@@ -562,10 +678,8 @@ def rebuild(repo_root: Path, threshold: int) -> tuple[int, int, Path]:
         raise ValueError("chunk threshold must be positive")
     schema = SCHEMA_PATH.read_text(encoding="utf-8")
     stat_fingerprint = source_stat_fingerprint(repo_root)
-    pages = page_records(repo_root)
-    chunks = [chunk for page in pages for chunk in chunks_for_page(page, threshold)]
-    if stat_fingerprint != source_stat_fingerprint(repo_root):
-        raise RebuildError("Markdown changed during rebuild; refusing to publish index")
+    pages = page_metadata_records(repo_root)
+    corpus_fingerprint_value = corpus_fingerprint(pages, threshold)
     db_path = repo_root / "state" / "wiki_index.sqlite"
     db_path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
@@ -574,6 +688,7 @@ def rebuild(repo_root: Path, threshold: int) -> tuple[int, int, Path]:
     os.close(descriptor)
     temporary_path = Path(temporary_name)
     temporary_path.unlink()
+    chunk_count = 0
     try:
         connection = sqlite3.connect(temporary_path)
         try:
@@ -593,54 +708,63 @@ def rebuild(repo_root: Path, threshold: int) -> tuple[int, int, Path]:
                     for p in pages
                 ],
             )
-            connection.executemany(
-                "INSERT INTO chunks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                [
-                    (
-                        c.id,
-                        c.document_id,
-                        c.chunk_index,
-                        c.heading_path,
-                        c.line_start,
-                        c.line_end,
-                        c.byte_start,
-                        c.byte_end,
-                        c.content,
-                        c.content_hash,
+            candidates = link_candidates(pages)
+            now = datetime.now(timezone.utc).isoformat()
+            for page_metadata_row in pages:
+                page = page_record(repo_root, repo_root / page_metadata_row.path)
+                if page_metadata(page) != page_metadata_row:
+                    raise RebuildError(
+                        "Markdown changed during rebuild; refusing to publish index"
                     )
-                    for c in chunks
-                ],
-            )
-            titles = {f"document-{p.id}": (p.title, p.path) for p in pages}
-            connection.executemany(
-                "INSERT INTO chunk_fts VALUES (?, ?, ?, ?, ?)",
-                [
-                    (c.id, *titles[c.document_id], c.heading_path, c.content)
-                    for c in chunks
-                ],
-            )
-            connection.executemany(
-                "INSERT INTO page_links VALUES (?, ?, ?, ?, ?)", link_records(pages)
-            )
-            sources, tags = source_and_tag_records(pages)
-            connection.executemany(
-                "INSERT OR IGNORE INTO page_sources VALUES (?, ?, ?)", sources
-            )
-            connection.executemany("INSERT OR IGNORE INTO tags VALUES (?, ?)", tags)
+                chunks = chunks_for_page(page, threshold)
+                connection.executemany(
+                    "INSERT INTO chunks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        (
+                            chunk.id,
+                            chunk.document_id,
+                            chunk.chunk_index,
+                            chunk.heading_path,
+                            chunk.line_start,
+                            chunk.line_end,
+                            chunk.byte_start,
+                            chunk.byte_end,
+                            chunk.content,
+                            chunk.content_hash,
+                        )
+                        for chunk in chunks
+                    ],
+                )
+                connection.executemany(
+                    "INSERT INTO chunk_fts VALUES (?, ?, ?, ?, ?)",
+                    [
+                        (
+                            chunk.id,
+                            page.title,
+                            page.path,
+                            chunk.heading_path,
+                            chunk.content,
+                        )
+                        for chunk in chunks
+                    ],
+                )
+                connection.executemany(
+                    "INSERT INTO page_links VALUES (?, ?, ?, ?, ?)",
+                    link_records_for_page(page, candidates, now),
+                )
+                sources, tags = source_and_tag_records_for_page(page)
+                connection.executemany(
+                    "INSERT OR IGNORE INTO page_sources VALUES (?, ?, ?)", sources
+                )
+                connection.executemany("INSERT OR IGNORE INTO tags VALUES (?, ?)", tags)
+                chunk_count += len(chunks)
             carry_forward_embeddings(connection, db_path)
-            corpus = "\n".join(
-                [
-                    SCHEMA_VERSION,
-                    str(threshold),
-                    *(f"{p.path}\0{p.checksum}" for p in pages),
-                ]
-            )
             connection.executemany(
                 "INSERT INTO index_metadata VALUES (?, ?)",
                 [
                     ("schema_version", SCHEMA_VERSION),
                     ("schema_fingerprint", sha256(schema.encode())),
-                    ("corpus_fingerprint", sha256(corpus.encode())),
+                    ("corpus_fingerprint", corpus_fingerprint_value),
                     ("source_stat_fingerprint", stat_fingerprint),
                     (
                         "semantic_cohort_fingerprint",
@@ -675,8 +799,8 @@ def rebuild(repo_root: Path, threshold: int) -> tuple[int, int, Path]:
             if counts != {
                 "pages": len(pages),
                 "documents": len(pages),
-                "chunks": len(chunks),
-                "chunk_fts": len(chunks),
+                "chunks": chunk_count,
+                "chunk_fts": chunk_count,
             }:
                 raise sqlite3.DatabaseError(f"temporary index is incomplete: {counts}")
             journal_mode = str(
@@ -689,6 +813,15 @@ def rebuild(repo_root: Path, threshold: int) -> tuple[int, int, Path]:
         finally:
             connection.close()
         prepare_existing_index_for_replace(db_path)
+        final_stat_fingerprint = source_stat_fingerprint(repo_root)
+        if (
+            corpus_fingerprint_value
+            != corpus_fingerprint_from_disk(repo_root, threshold)
+            or stat_fingerprint != final_stat_fingerprint
+        ):
+            raise RebuildError(
+                "Markdown changed during rebuild; prior index was not replaced"
+            )
         os.replace(temporary_path, db_path)
         Path(f"{db_path}-wal").unlink(missing_ok=True)
         Path(f"{db_path}-shm").unlink(missing_ok=True)
@@ -699,7 +832,7 @@ def rebuild(repo_root: Path, threshold: int) -> tuple[int, int, Path]:
             Path(f"{temporary_path}-shm"),
         ):
             path.unlink(missing_ok=True)
-    return len(pages), len(chunks), db_path
+    return len(pages), chunk_count, db_path
 
 
 def main() -> int:

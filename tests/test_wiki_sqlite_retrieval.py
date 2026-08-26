@@ -4,12 +4,14 @@ import hashlib
 import io
 import importlib.util
 import json
+import os
 import sqlite3
 import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stderr
+from argparse import Namespace
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -139,7 +141,7 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
         )
         self.assertFalse(json.loads(missing.stdout)["found"])
 
-    def test_doctor_detects_drift_and_queries_do_not_mutate_markdown(self) -> None:
+    def test_doctor_detects_drift_and_stale_search_is_explicit_candidate(self) -> None:
         alpha = self.root / "wiki" / "concepts" / "alpha.md"
         before = alpha.read_bytes()
         ready = self.payload("doctor")
@@ -148,12 +150,69 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
         )
 
         drift = self.run_cli("doctor", expected_returncode=1)
-        blocked = self.run_cli("search", "needle", expected_returncode=2)
+        candidate = self.payload("search", "needle")
 
         self.assertEqual(ready["state"], "ready")
         self.assertEqual(json.loads(drift.stdout)["state"], "stale")
-        self.assertIn("stale", blocked.stderr)
+        self.assertEqual(candidate["freshness"], "unchecked")
+        self.assertEqual(candidate["lanes"]["lexical"]["status"], "candidate")
+        self.assertEqual(candidate["results"][0]["title"], "Alpha")
         self.assertEqual(alpha.read_bytes(), before + b"Changed.\n")
+
+    def test_lexical_discovery_uses_one_connection_without_source_stat_scan(
+        self,
+    ) -> None:
+        sys.path.insert(0, str(self.root / "scripts"))
+        self.addCleanup(lambda: sys.path.remove(str(self.root / "scripts")))
+        retrieval = load_module(
+            f"wiki_retrieval_discovery_test_{id(self)}",
+            self.root / "scripts" / "wiki_retrieval.py",
+        )
+        original_open = retrieval.open_index
+        opens = 0
+
+        def counting_open(root: Path):
+            nonlocal opens
+            opens += 1
+            return original_open(root)
+
+        output = io.StringIO()
+        args = Namespace(
+            query="needle",
+            mode="lexical",
+            limit=10,
+            neighbor_limit=5,
+            graph_cap=50,
+            hops=0,
+        )
+        with (
+            mock.patch.object(retrieval, "open_index", side_effect=counting_open),
+            mock.patch.object(
+                retrieval.indexer,
+                "source_stat_fingerprint",
+                side_effect=AssertionError("lexical discovery must not stat Markdown"),
+            ),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(retrieval.command_search(self.root, args), 0)
+
+        payload = json.loads(output.getvalue())
+        self.assertEqual(opens, 1)
+        self.assertEqual(payload["freshness"], "unchecked")
+
+    def test_lexical_ranking_returns_one_best_chunk_per_page(self) -> None:
+        concepts = self.root / "wiki" / "concepts"
+        (concepts / "alpha.md").write_text(
+            "# Alpha\n" + ("repeat-token " * 200), encoding="utf-8"
+        )
+        (concepts / "beta.md").write_text("# Beta\nrepeat-token\n", encoding="utf-8")
+        self.run_cli("rebuild", "--chunk-threshold", "80")
+
+        rows = self.payload("search", "repeat-token", "--limit", "10", "--hops", "0")[
+            "results"
+        ]
+        self.assertEqual({row["title"] for row in rows}, {"Alpha", "Beta"})
+        self.assertEqual(len(rows), len({row["page_id"] for row in rows}))
 
     def test_doctor_detects_missing_fts_rows(self) -> None:
         database = self.root / "state" / "wiki_index.sqlite"
@@ -247,11 +306,15 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
 
     def test_non_indexed_meta_changes_do_not_make_query_state_stale(self) -> None:
         meta = self.root / "wiki" / "_meta" / "index.md"
-        meta.write_text(meta.read_text(encoding="utf-8") + "\nMeta only.\n", encoding="utf-8")
+        meta.write_text(
+            meta.read_text(encoding="utf-8") + "\nMeta only.\n", encoding="utf-8"
+        )
         status = self.payload("status")
         self.assertEqual(status["state"], "ready")
 
-    def test_invalid_threshold_fails_before_empty_corpus_and_preserves_index(self) -> None:
+    def test_invalid_threshold_fails_before_empty_corpus_and_preserves_index(
+        self,
+    ) -> None:
         database = self.root / "state" / "wiki_index.sqlite"
         baseline = database.read_bytes()
         for path in (self.root / "wiki").rglob("*.md"):
@@ -262,11 +325,15 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
         self.assertIn("chunk threshold must be positive", failed.stderr)
         self.assertEqual(database.read_bytes(), baseline)
 
-    def test_busy_wal_rebuild_refuses_publication_and_preserves_prior_index(self) -> None:
+    def test_busy_wal_rebuild_refuses_publication_and_preserves_prior_index(
+        self,
+    ) -> None:
         database = self.root / "state" / "wiki_index.sqlite"
         writer = sqlite3.connect(database, timeout=0)
         self.addCleanup(writer.close)
-        self.assertEqual(writer.execute("PRAGMA journal_mode = WAL").fetchone()[0], "wal")
+        self.assertEqual(
+            writer.execute("PRAGMA journal_mode = WAL").fetchone()[0], "wal"
+        )
         writer.execute("BEGIN IMMEDIATE")
         writer.execute(
             "UPDATE index_metadata SET value = value WHERE key = 'truth_source'"
@@ -275,7 +342,9 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
         failed = self.run_cli("rebuild", expected_returncode=2)
         self.assertIn("prior index was not replaced", failed.stderr)
         reader = sqlite3.connect(database)
-        self.assertGreater(reader.execute("SELECT count(*) FROM pages").fetchone()[0], 0)
+        self.assertGreater(
+            reader.execute("SELECT count(*) FROM pages").fetchone()[0], 0
+        )
         reader.close()
 
         writer.rollback()
@@ -361,7 +430,9 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
         rebuilt = self.payload("rebuild")
         self.assertGreater(rebuilt["pages"], 0)
         with sqlite3.connect(database) as connection:
-            baseline_pages = connection.execute("SELECT count(*) FROM pages").fetchone()[0]
+            baseline_pages = connection.execute(
+                "SELECT count(*) FROM pages"
+            ).fetchone()[0]
 
         sys.path.insert(0, str(self.root / "scripts"))
         self.addCleanup(lambda: sys.path.remove(str(self.root / "scripts")))
@@ -387,7 +458,9 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
             )
         self.assertEqual(list((self.root / "state").glob(".wiki_index.*.tmp*")), [])
 
-    def test_lightweight_readiness_skips_vector_blobs_and_closes_connection(self) -> None:
+    def test_lightweight_readiness_skips_vector_blobs_and_closes_connection(
+        self,
+    ) -> None:
         sys.path.insert(0, str(self.root / "scripts"))
         self.addCleanup(lambda: sys.path.remove(str(self.root / "scripts")))
         retrieval = load_module(
@@ -478,6 +551,62 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
         self.assertEqual(returncode, 2)
         self.assertIn("Markdown changed during rebuild", stderr.getvalue())
         self.assertNotIn("Traceback", stderr.getvalue())
+
+    def test_rebuild_checks_content_again_at_publication_boundary(self) -> None:
+        sys.path.insert(0, str(self.root / "scripts"))
+        self.addCleanup(lambda: sys.path.remove(str(self.root / "scripts")))
+        retrieval = load_module(
+            f"wiki_retrieval_content_boundary_test_{id(self)}",
+            self.root / "scripts" / "wiki_retrieval.py",
+        )
+        database = self.root / "state" / "wiki_index.sqlite"
+        baseline = database.read_bytes()
+        alpha = self.root / "wiki" / "concepts" / "alpha.md"
+        original_fingerprint = retrieval.indexer.corpus_fingerprint_from_disk
+
+        def mutate_after_final_stat(root: Path, threshold: int) -> str:
+            prior_stat = alpha.stat()
+            alpha.write_text(
+                alpha.read_text(encoding="utf-8").replace("needle", "change"),
+                encoding="utf-8",
+            )
+            os.utime(alpha, ns=(prior_stat.st_atime_ns, prior_stat.st_mtime_ns))
+            return original_fingerprint(root, threshold)
+
+        with (
+            mock.patch.object(
+                retrieval.indexer,
+                "corpus_fingerprint_from_disk",
+                side_effect=mutate_after_final_stat,
+            ),
+            self.assertRaisesRegex(
+                retrieval.indexer.RebuildError, "changed during rebuild"
+            ),
+        ):
+            retrieval.indexer.rebuild(
+                self.root, retrieval.indexer.DEFAULT_CHUNK_THRESHOLD
+            )
+        self.assertEqual(database.read_bytes(), baseline)
+
+    def test_rebuild_streams_pages_without_deep_page_materialization(self) -> None:
+        sys.path.insert(0, str(self.root / "scripts"))
+        self.addCleanup(lambda: sys.path.remove(str(self.root / "scripts")))
+        retrieval = load_module(
+            f"wiki_retrieval_streaming_rebuild_test_{id(self)}",
+            self.root / "scripts" / "wiki_retrieval.py",
+        )
+        with mock.patch.object(
+            retrieval.indexer,
+            "page_records",
+            side_effect=AssertionError(
+                "rebuild must not materialize the deep doctor corpus"
+            ),
+        ):
+            pages, chunks, _ = retrieval.indexer.rebuild(
+                self.root, retrieval.indexer.DEFAULT_CHUNK_THRESHOLD
+            )
+        self.assertGreater(pages, 0)
+        self.assertGreater(chunks, 0)
 
 
 if __name__ == "__main__":

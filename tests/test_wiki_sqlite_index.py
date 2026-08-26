@@ -55,7 +55,10 @@ class WikiSqliteIndexTests(unittest.TestCase):
 
     def test_wiki_only_sqlite_choice_controls_retrieval_files(self) -> None:
         for sqlite_enabled in (True, False):
-            with self.subTest(sqlite_enabled=sqlite_enabled), tempfile.TemporaryDirectory() as tmp:
+            with (
+                self.subTest(sqlite_enabled=sqlite_enabled),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
                 root = Path(tmp) / "vault"
                 self.bootstrap.scaffold(
                     root,
@@ -227,6 +230,26 @@ class WikiSqliteIndexTests(unittest.TestCase):
                     any(heading == "Large > Details" for heading, _, _ in rows)
                 )
                 self.assertTrue(all(end - start <= 65536 for _, start, end in rows))
+
+    def test_peer_headings_do_not_inherit_the_previous_peer(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "vault"
+            self.scaffold(root)
+            (root / "wiki" / "concepts" / "peers.md").write_text(
+                "# First\n" + ("alpha " * 80) + "\n# Second\n" + ("beta " * 80),
+                encoding="utf-8",
+            )
+            db_path = self.rebuild(root, threshold=120)
+            with sqlite3.connect(db_path) as db:
+                headings = {
+                    row[0]
+                    for row in db.execute(
+                        "SELECT heading_path FROM chunks WHERE heading_path != ''"
+                    )
+                }
+            self.assertIn("First", headings)
+            self.assertIn("Second", headings)
+            self.assertNotIn("First > Second", headings)
 
     def test_headingless_oversized_page_uses_paragraph_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -22,6 +22,11 @@ superseded_by: N/A
   workflow engine, or canonical database was introduced.
 - Expanded focused retrieval regression coverage from 7 to 23 tests and recorded
   bounded implementation evidence plus a derived absorption analysis.
+- Aligned generated LLM Wiki SQLite with the same lifecycle split while retaining
+  its independent ONNX lane: one-connection unchecked lexical/link discovery,
+  stat-current semantic use, exact `doctor`, one best lexical chunk per page,
+  peer-heading correction, page-streamed rebuild/publication verification, and
+  bounded vector reuse/embedding batches.
 - Corrected generated wiki orphan detection so automatic `_meta` index links and self-links cannot hide disconnected pages; added optional strict failure behavior and regression coverage.
 - Replaced the mixed ontology/wiki/workbench repository surface with exactly three self-contained skills under `.agents/skills/`.
 - Added `scripts/manage_skills.py`, focused tests, CI, current Repo Docs, minimal intelligence contracts, and small repository memory.
@@ -30,6 +35,10 @@ superseded_by: N/A
 ### Files
 
 - `.agents/skills/repo-docs-intelligence-bootstrap/SKILL.md`
+- `.agents/skills/llm-wiki-bootstrap/references/scaffold-spec.md`
+- `.agents/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py`
+- `.agents/skills/llm-wiki-bootstrap/scripts/reindex_sqlite_operational.py`
+- `.agents/skills/llm-wiki-bootstrap/scripts/wiki_retrieval.py`
 - `.agents/skills/repo-docs-intelligence-bootstrap/assets/AGENTS.template.md`
 - `.agents/skills/repo-docs-intelligence-bootstrap/assets/docs/README.template.md`
 - `.agents/skills/repo-docs-intelligence-bootstrap/scripts/repo_docs_query.ps1`
@@ -40,6 +49,8 @@ superseded_by: N/A
 - `docs/ARCHITECTURE.md`
 - `docs/CURRENT_STATE.md`
 - `docs/IMPACT_SUMMARY.md`
+- `docs/repo-map/MODULES.md`
+- `docs/repo-map/SYMBOL_GRAPH.md`
 - `docs/LAYERS.md`
 - `docs/README.md`
 - `docs/ROADMAP.md`
@@ -51,14 +62,17 @@ superseded_by: N/A
 - `docs/repo-map/MODULES.md`
 - `docs/repo-map/SYMBOL_GRAPH.md`
 - `tests/test_repo_docs_retrieval.py`
+- `tests/test_wiki_sqlite_index.py`
+- `tests/test_wiki_sqlite_retrieval.py`
+- `tests/test_wiki_sqlite_semantic.py`
 - `wiki/_meta/index.md`
 - `wiki/_meta/log.md`
 
 ## Checked Not Changed
 
 - `llm-wiki-bootstrap` remains a separate Obsidian-first retrieval implementation;
-  this Repo Docs patch does not copy native Markdown-link SQL or trigram policy
-  into generated wiki vaults.
+  it absorbs only the shared lifecycle lessons, not Repo Docs native Markdown-link
+  SQL, trigram policy, daemon, or vector-ANN complexity.
 - `scripts/manage_skills.py` remains a thin whole-tree distributor, so the new
   sibling wrappers and SQL files require no root installer logic.
 - `AGENTS.md`, intelligence contracts, and the three-skill product boundary remain
