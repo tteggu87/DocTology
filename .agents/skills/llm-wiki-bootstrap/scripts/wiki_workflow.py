@@ -10,15 +10,26 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import fcntl
+import errno
 import hashlib
 import json
 import os
 import subprocess
 import sys
+import time
 import uuid
 from pathlib import Path
 from typing import Any
+
+try:
+    import fcntl as _fcntl
+except ModuleNotFoundError:  # Windows
+    _fcntl = None
+
+try:
+    import msvcrt as _msvcrt
+except ModuleNotFoundError:  # Unix
+    _msvcrt = None
 
 
 PROCEDURE_ORDER = (
@@ -151,26 +162,55 @@ def acquire_refresh_claim(
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
-        operation = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
-        fcntl.flock(descriptor, operation)
-    except BlockingIOError:
+        if _fcntl is not None:
+            operation = _fcntl.LOCK_EX | (0 if blocking else _fcntl.LOCK_NB)
+            try:
+                _fcntl.flock(descriptor, operation)
+            except BlockingIOError:
+                os.close(descriptor)
+                return None
+        elif _msvcrt is not None:
+            while True:
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                try:
+                    _msvcrt.locking(descriptor, _msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError as error:
+                    if error.errno not in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                        raise
+                    if not blocking:
+                        os.close(descriptor)
+                        return None
+                    time.sleep(0.05)
+        else:
+            raise WorkflowError("this platform has no supported file-lock backend")
+        claim = {
+            "run_id": run_id,
+            "owner_pid": os.getpid(),
+            "claimed_at": utc_now(),
+        }
+        encoded = (
+            json.dumps(claim, ensure_ascii=False, sort_keys=True) + "\n"
+        ).encode("utf-8")
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        os.write(descriptor, encoded)
+        os.ftruncate(descriptor, len(encoded))
+        os.fsync(descriptor)
+        return descriptor
+    except BaseException:
         os.close(descriptor)
-        return None
-    claim = {
-        "run_id": run_id,
-        "owner_pid": os.getpid(),
-        "claimed_at": utc_now(),
-    }
-    encoded = (json.dumps(claim, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
-    os.ftruncate(descriptor, 0)
-    os.write(descriptor, encoded)
-    os.fsync(descriptor)
-    return descriptor
+        raise
 
 
 def release_refresh_claim(descriptor: int) -> None:
-    fcntl.flock(descriptor, fcntl.LOCK_UN)
-    os.close(descriptor)
+    try:
+        if _fcntl is not None:
+            _fcntl.flock(descriptor, _fcntl.LOCK_UN)
+        elif _msvcrt is not None:
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            _msvcrt.locking(descriptor, _msvcrt.LK_UNLCK, 1)
+    finally:
+        os.close(descriptor)
 
 
 def retrieval_refresh_lock_path(root: Path) -> Path:

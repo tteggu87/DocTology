@@ -7,6 +7,11 @@ updated: 2026-08-26
 
 # Maintenance log
 
+- 2026-08-26: Made generated `wiki_workflow.py` process locks portable. Unix
+  keeps `fcntl.flock`; Windows now uses the standard-library `msvcrt.locking`
+  backend, locks byte zero directly without a first-use write race, and closes
+  the acquired descriptor if claim persistence fails. Workflow startup and
+  refresh serialization require no extra package.
 - 2026-08-26: Applied the proven SQLite lifecycle split to the generated LLM
   Wiki implementation without importing Repo Docs-specific wrappers or trigram
   policy. Lexical/link discovery now opens one structural connection and marks

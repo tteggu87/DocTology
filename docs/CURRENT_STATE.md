@@ -33,3 +33,7 @@ batches, correct peer-heading paths, and compare a streamed exact fingerprint
 immediately before replacing the disposable index.
 
 Generated wiki lint treats `_meta` navigation links and self-links as non-semantic for orphan detection. Orphans are advisory unless `lint --strict-orphans` is requested.
+
+Generated workflow locks use `fcntl.flock` on Unix and `msvcrt.locking` on
+Windows, preserving run-finalization and SQLite-refresh serialization without
+adding a runtime dependency.

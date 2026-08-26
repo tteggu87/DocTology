@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import errno
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -50,6 +52,125 @@ class WikiWorkflowGateTest(unittest.TestCase):
         source = root / "raw" / "inbox" / "example.md"
         source.write_text("# Example\n\nEvidence.\n", encoding="utf-8")
         return root, source
+
+    def test_windows_lock_backend_acquires_and_releases_one_byte(self) -> None:
+        class FakeMsvcrt:
+            LK_NBLCK = 1
+            LK_UNLCK = 2
+
+            def __init__(self) -> None:
+                self.calls: list[tuple[int, int]] = []
+
+            def locking(self, _descriptor: int, mode: int, size: int) -> None:
+                self.calls.append((mode, size))
+
+        backend = FakeMsvcrt()
+        with tempfile.TemporaryDirectory() as tmp:
+            lock_path = Path(tmp) / "workflow.lock"
+            with (
+                mock.patch.object(self.workflow, "_fcntl", None),
+                mock.patch.object(self.workflow, "_msvcrt", backend),
+            ):
+                descriptor = self.workflow.acquire_refresh_claim(lock_path, "wiki-test")
+                self.assertIsNotNone(descriptor)
+                self.workflow.release_refresh_claim(descriptor)
+
+            claim = json.loads(lock_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(claim["run_id"], "wiki-test")
+        self.assertEqual(backend.calls, [(backend.LK_NBLCK, 1), (backend.LK_UNLCK, 1)])
+
+    def test_windows_nonblocking_contention_closes_descriptor(self) -> None:
+        class BusyMsvcrt:
+            LK_NBLCK = 1
+
+            @staticmethod
+            def locking(_descriptor: int, _mode: int, _size: int) -> None:
+                raise OSError(errno.EACCES, "locked")
+
+        opened: list[int] = []
+        original_open = os.open
+
+        def recording_open(*args, **kwargs):
+            descriptor = original_open(*args, **kwargs)
+            opened.append(descriptor)
+            return descriptor
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with (
+                mock.patch.object(self.workflow, "_fcntl", None),
+                mock.patch.object(self.workflow, "_msvcrt", BusyMsvcrt()),
+                mock.patch.object(self.workflow.os, "open", side_effect=recording_open),
+            ):
+                result = self.workflow.acquire_refresh_claim(
+                    Path(tmp) / "workflow.lock", "wiki-test"
+                )
+
+        self.assertIsNone(result)
+        with self.assertRaises(OSError):
+            os.fstat(opened[0])
+
+    def test_windows_blocking_contention_retries(self) -> None:
+        class RetryingMsvcrt:
+            LK_NBLCK = 1
+            LK_UNLCK = 2
+
+            def __init__(self) -> None:
+                self.attempts = 0
+
+            def locking(self, _descriptor: int, mode: int, _size: int) -> None:
+                if mode == self.LK_NBLCK:
+                    self.attempts += 1
+                    if self.attempts == 1:
+                        raise OSError(errno.EACCES, "locked")
+
+        backend = RetryingMsvcrt()
+        with tempfile.TemporaryDirectory() as tmp:
+            with (
+                mock.patch.object(self.workflow, "_fcntl", None),
+                mock.patch.object(self.workflow, "_msvcrt", backend),
+                mock.patch.object(self.workflow.time, "sleep") as sleep,
+            ):
+                descriptor = self.workflow.acquire_refresh_claim(
+                    Path(tmp) / "workflow.lock", "wiki-test", blocking=True
+                )
+                self.workflow.release_refresh_claim(descriptor)
+
+        self.assertEqual(backend.attempts, 2)
+        sleep.assert_called_once_with(0.05)
+
+    def test_claim_write_failure_closes_acquired_descriptor(self) -> None:
+        class FakeMsvcrt:
+            LK_NBLCK = 1
+
+            @staticmethod
+            def locking(_descriptor: int, _mode: int, _size: int) -> None:
+                return None
+
+        opened: list[int] = []
+        original_open = os.open
+
+        def recording_open(*args, **kwargs):
+            descriptor = original_open(*args, **kwargs)
+            opened.append(descriptor)
+            return descriptor
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with (
+                mock.patch.object(self.workflow, "_fcntl", None),
+                mock.patch.object(self.workflow, "_msvcrt", FakeMsvcrt()),
+                mock.patch.object(self.workflow.os, "open", side_effect=recording_open),
+                mock.patch.object(
+                    self.workflow.os, "write", side_effect=OSError("write failed")
+                ),
+            ):
+                with self.assertRaisesRegex(OSError, "write failed"):
+                    self.workflow.acquire_refresh_claim(
+                        Path(tmp) / "workflow.lock", "wiki-test"
+                    )
+
+        with self.assertRaises(OSError):
+            os.fstat(opened[0])
 
     def record_preflight(self, root: Path, run_id: str) -> None:
         self.workflow.record_stage(
@@ -453,17 +574,17 @@ module.finish_run(Path(sys.argv[2]), sys.argv[3])
                 )
                 self.assertNotIn("attempt", stored_second["retrieval_refresh"])
                 self.assertEqual(refresh.call_count, 1)
-                claim = json.loads(
-                    self.workflow.retrieval_refresh_lock_path(root).read_text(
-                        encoding="utf-8"
-                    )
-                )
-                self.assertEqual(claim["run_id"], first["run_id"])
                 release.set()
                 worker.join(timeout=5)
 
             self.assertFalse(worker.is_alive())
             self.assertEqual(results[0]["retrieval_status"], "ready")
+            claim = json.loads(
+                self.workflow.retrieval_refresh_lock_path(root).read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(claim["run_id"], first["run_id"])
 
             with mock.patch.object(
                 self.workflow,

@@ -27,6 +27,9 @@ superseded_by: N/A
   stat-current semantic use, exact `doctor`, one best lexical chunk per page,
   peer-heading correction, page-streamed rebuild/publication verification, and
   bounded vector reuse/embedding batches.
+- Made generated workflow process locks portable without adding a dependency:
+  Unix uses `fcntl.flock`, Windows uses one-byte `msvcrt.locking`, and both keep
+  the existing run-finalization and SQLite-refresh serialization contract.
 - Corrected generated wiki orphan detection so automatic `_meta` index links and self-links cannot hide disconnected pages; added optional strict failure behavior and regression coverage.
 - Replaced the mixed ontology/wiki/workbench repository surface with exactly three self-contained skills under `.agents/skills/`.
 - Added `scripts/manage_skills.py`, focused tests, CI, current Repo Docs, minimal intelligence contracts, and small repository memory.
@@ -39,6 +42,7 @@ superseded_by: N/A
 - `.agents/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py`
 - `.agents/skills/llm-wiki-bootstrap/scripts/reindex_sqlite_operational.py`
 - `.agents/skills/llm-wiki-bootstrap/scripts/wiki_retrieval.py`
+- `.agents/skills/llm-wiki-bootstrap/scripts/wiki_workflow.py`
 - `.agents/skills/repo-docs-intelligence-bootstrap/assets/AGENTS.template.md`
 - `.agents/skills/repo-docs-intelligence-bootstrap/assets/docs/README.template.md`
 - `.agents/skills/repo-docs-intelligence-bootstrap/scripts/repo_docs_query.ps1`
@@ -65,6 +69,7 @@ superseded_by: N/A
 - `tests/test_wiki_sqlite_index.py`
 - `tests/test_wiki_sqlite_retrieval.py`
 - `tests/test_wiki_sqlite_semantic.py`
+- `tests/test_wiki_workflow_gate.py`
 - `wiki/_meta/index.md`
 - `wiki/_meta/log.md`
 
@@ -94,16 +99,16 @@ ontology analyses remain in the legacy vault and Git history.
 ## Remaining Drift
 
 PowerShell syntax and shared SQL are covered, but actual `pwsh`/`sqlite3.exe`
-execution and latency still require a Windows host. Multi-gigabyte trigram size
-and latency are deliberately unclaimed; use `--no-trigram` until measured when
-storage is constrained. The full suite also exposes pre-existing SQLite
+execution, workflow locking, and latency still require a Windows host.
+Multi-gigabyte trigram size and latency are deliberately unclaimed; use
+`--no-trigram` until measured when storage is constrained. The full suite also exposes pre-existing SQLite
 `ResourceWarning` messages in other wiki retrieval tests. No runtime legacy
 remains active. The repository has no license file; redistribution terms remain
 undefined until the owner selects one.
 
 ## Validator Summary
 
-The Repo Docs retrieval suite passes 23/23 and the full suite passes 135/135.
-Changed Python passes Ruff; the POSIX wrapper passes `bash -n`; patch whitespace
-passes `git diff --check`. Final repository validator and skill-distribution
-results are recorded at handoff after the final mutation.
+The full suite passes 147/147, including Windows lock acquisition, contention,
+retry, and write-failure cleanup regressions. Changed workflow Python passes `py_compile`; patch whitespace passes
+`git diff --check`. Final repository validator and skill-distribution results are
+recorded at handoff after the final mutation.
