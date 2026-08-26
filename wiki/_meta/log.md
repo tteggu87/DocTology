@@ -7,9 +7,10 @@ updated: 2026-08-26
 
 # Maintenance log
 
-- 2026-08-26: Restored the original cropped DocTology logo to the concise root
-  README through the standalone `branding/` asset path; the removed workbench
-  remains archived in Git history.
+- 2026-08-26: Restored the original cropped DocTology logo and rewrote the root
+  README around the human-facing Obsidian LLM Wiki, agent-facing Repo Docs,
+  deterministic gates, optional SQLite, and copyable skill-first workflows.
+  The removed workbench remains archived in Git history.
 - 2026-08-26: Added explicit wiki-first raw fallback. Default wiki search is
   unchanged; `--raw-fallback` queries the separate raw lane only after a wiki
   lexical miss and remains non-fatal when raw derived state is unavailable.

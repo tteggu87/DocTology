@@ -9,8 +9,10 @@ superseded_by: N/A
 
 ## Changed
 
-- Restored the original cropped DocTology logo asset and its centered GitHub
-  README presentation without reviving the removed workbench surface.
+- Restored the original cropped DocTology logo and rebuilt the concise GitHub
+  front door around the two actual use cases: human-facing Obsidian LLM Wiki
+  and agent-facing Repo Docs, joined by deterministic gates and derived SQLite.
+  The removed workbench surface remains inactive.
 - Upgraded the canonical Repo Docs retrieval script to schema v3 with stat-only
   status, exact doctor, unchecked one-connection discovery, exact one-result-per-
   document ranking, source line ranges, batch query attribution, peer-heading
