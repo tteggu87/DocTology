@@ -244,6 +244,69 @@ class WikiWorkflowGateTest(unittest.TestCase):
                     self.assertIn("unrecognized arguments", result.stderr)
             self.assertEqual(list(other.iterdir()), [])
 
+    def test_public_lane_help_forwards_without_preflighting_target(self) -> None:
+        missing_target = "/definitely-not-a-wiki-target"
+        cases = (
+            ("workflow", ["--help"], "{start,stage,status,finish,fingerprint}"),
+            ("workflow", ["start", "--help"], "--coverage-mode"),
+            ("batch", ["--help"], "{plan,link-run,defer,stage,apply,question-receipt,certify,status}"),
+            ("check", ["--help"], "--strict"),
+            ("preflight", ["--help"], "Validate one exact wiki-only target"),
+        )
+        for command, remainder, expected in cases:
+            with self.subTest(command=command, remainder=remainder):
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(LOOP_ENTRYPOINT),
+                        "--repo-root",
+                        missing_target,
+                        command,
+                        *remainder,
+                    ],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(expected, result.stdout)
+                self.assertNotIn("target repository is not a directory", result.stderr)
+                if command != "preflight":
+                    self.assertIn(f"usage: wiki_loop.py {command}", result.stdout)
+                    self.assertNotIn("--root", result.stdout)
+                    self.assertNotIn(f"{command}.py", result.stdout)
+
+    def test_public_help_router_handles_global_option_edge_cases(self) -> None:
+        success_cases = (
+            (["--repo-root=/missing", "workflow", "-h"], "usage: wiki_loop.py workflow"),
+            (
+                ["--repo-root", r"C:\wiki-vault", "workflow", "start", "-h"],
+                "--coverage-mode",
+            ),
+            (["batch", "plan", "-h"], "usage: wiki_loop.py batch plan"),
+            (["check", "-h"], "usage: wiki_loop.py check"),
+        )
+        for arguments, expected in success_cases:
+            with self.subTest(arguments=arguments):
+                result = subprocess.run(
+                    [sys.executable, str(LOOP_ENTRYPOINT), *arguments],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(expected, result.stdout)
+
+        missing_value = subprocess.run(
+            [sys.executable, str(LOOP_ENTRYPOINT), "--repo-root"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(missing_value.returncode, 2)
+        self.assertIn("expected one argument", missing_value.stderr)
+
     def write_coverage_receipt(
         self,
         root: Path,

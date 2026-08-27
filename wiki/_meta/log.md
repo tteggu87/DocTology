@@ -15,7 +15,11 @@ updated: 2026-08-27
   preventing project or global installs from resolving it inside the target
   repository by mistake. Exact `--repo-root` validation and nested `--root`
   rejection also prevent a child runtime from redirecting work to another
-  repository after preflight.
+  repository after preflight. The public entrypoint now forwards lane and
+  nested-command help to the skill-local parsers, so agents can discover CLI
+  arguments without reading runtime code or requiring a valid target. Help
+  retains the public `wiki_loop.py <lane>` name and hides the internal root
+  transport option.
 - 2026-08-26: Restored the original cropped DocTology logo and rewrote the root
   README around the human-facing Obsidian LLM Wiki, agent-facing Repo Docs,
   deterministic gates, optional SQLite, and copyable skill-first workflows.

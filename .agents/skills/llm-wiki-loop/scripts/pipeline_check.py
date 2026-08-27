@@ -786,12 +786,13 @@ def render_human(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog=prog,
         description="DocTology structural source ingest route checker.",
         allow_abbrev=False,
     )
-    parser.add_argument("--root", default=".", help="DocTology repo root. Defaults to current directory.")
+    parser.add_argument("--root", default=".", help=argparse.SUPPRESS)
     scope = parser.add_mutually_exclusive_group(required=True)
     scope.add_argument("--source", help="Source path to inspect.")
     scope.add_argument("--batch", help="Batch manifest JSON to inspect.")

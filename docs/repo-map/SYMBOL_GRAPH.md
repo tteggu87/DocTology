@@ -17,6 +17,9 @@ superseded_by: N/A
   checker against the exact `--repo-root`, rejects nested root overrides, and
   relies on non-abbreviating child parsers so shortened flags cannot redirect
   the target after preflight.
+- `wiki_loop.show_help`: forwards public lane and nested-command help to the
+  skill-local parsers with public command names and without preflighting or
+  touching a target repository.
 - `wiki_workflow.start_run`: freezes `full` coverage by default or an explicit
   user-requested `summary` mode into the source run.
 - `wiki_workflow.validate_full_coverage_receipt`: binds full final review to one

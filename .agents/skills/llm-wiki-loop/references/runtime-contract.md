@@ -11,6 +11,12 @@ not resolve that entrypoint relative to the current working directory or the
 target repository. Once invoked, `wiki_loop.py` resolves all sibling runtime
 modules from its own file location.
 
+For discovery, `wiki_loop.py workflow --help`, `workflow start --help`,
+`batch --help`, and `check --help` forward to the corresponding skill-local
+parser while retaining the public `wiki_loop.py <lane>` command name and hiding
+the internal root transport option. Help never validates or mutates a target
+repository.
+
 ## Target requirements
 
 The target must contain:

@@ -673,12 +673,13 @@ def finish_run(root: Path, run_id: str) -> dict[str, Any]:
         release_refresh_claim(run_descriptor)
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
+        prog=prog,
         description="DuckCrab-style procedure gate for LLM Wiki ingest.",
         allow_abbrev=False,
     )
-    parser.add_argument("--root", default=".")
+    parser.add_argument("--root", default=".", help=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="command", required=True)
 
     start = sub.add_parser("start")

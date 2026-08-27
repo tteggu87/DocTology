@@ -150,7 +150,7 @@ undefined until the owner selects one.
 
 ## Validator Summary
 
-The full suite passes 164/164, including raw-index rebuild/search/doctor,
+The full suite passes 166/166, including raw-index rebuild/search/doctor,
 standalone loop-runtime, and
 explicit wiki-first fallback checks,
 full-mode receipt requirements, deferred-unit ready rejection, resumable partial

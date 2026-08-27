@@ -103,6 +103,16 @@ Run this skill's deterministic preflight first:
 python3 "<SKILL_DIR>/scripts/wiki_loop.py" --repo-root <target-repo> preflight
 ```
 
+Before reading runtime code, use the public CLI help when command details are
+needed. Lane and nested help work without a valid target repository:
+
+```bash
+python3 "<SKILL_DIR>/scripts/wiki_loop.py" workflow --help
+python3 "<SKILL_DIR>/scripts/wiki_loop.py" workflow start --help
+python3 "<SKILL_DIR>/scripts/wiki_loop.py" batch --help
+python3 "<SKILL_DIR>/scripts/wiki_loop.py" check --help
+```
+
 It verifies the target's `AGENTS.md`, `raw/`, `wiki/`, wiki-only boundary, and
 optional SQLite posture. It may report legacy repo-local gate scripts, but this
 loop never executes or modifies them. Use only this skill's `wiki_loop.py`

@@ -29,8 +29,8 @@ or loop-only template. The loop can start a run against such a vault through
 
 | Command | Result | Relevant output |
 | --- | --- | --- |
-| focused loop, batch, bootstrap, and distribution tests | pass | 42 tests, including exact-target, nested-root rejection, standalone, no-install, and legacy-local-runtime cases |
-| `python3 -m unittest discover -s tests` | pass | 164 tests |
+| focused loop, batch, bootstrap, and distribution tests | pass | 44 tests, including lane-help forwarding edge cases, exact-target, nested-root rejection, standalone, no-install, and legacy-local-runtime cases |
+| `python3 -m unittest discover -s tests` | pass | 166 tests |
 | `python3 scripts/manage_skills.py check` | pass | exactly three self-contained skills |
 | skill quick validation for bootstrap and loop | pass | both skill trees valid |
 | fresh `--sqlite on` and `--sqlite off` bootstrap checks | pass | no copied loop scripts/assets; SQLite helper presence matches choice |
