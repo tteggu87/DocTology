@@ -26,7 +26,7 @@ superseded_by: N/A
   applied raw-source receipt with balanced accounting and no deferred units.
 - `raw_retrieval.rebuild`: transactionally updates only added, changed, or
   removed `raw/**/*.md` documents in a separate lexical index.
-- `reindex_sqlite_operational.build_markdown_structure`: deterministically maps
+- `reindex_sqlite_operational.structure_nodes_for_page`: deterministically maps
   fenced-code-aware Markdown headings to document, ancestor, and subtree ranges.
 - `raw_retrieval.search`: queries raw FTS, then reopens the canonical source byte
   range and labels changed spans stale instead of returning stored text as truth.
