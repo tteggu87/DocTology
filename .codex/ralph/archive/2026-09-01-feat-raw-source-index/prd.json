@@ -1,0 +1,8 @@
+{
+  "branchName": "feat/raw-source-index",
+  "product": "Optional raw-source retrieval for generated LLM Wiki vaults",
+  "stories": [
+    {"id": "US-001", "title": "Build a separate incremental raw lexical index", "priority": 1, "passes": true},
+    {"id": "US-002", "title": "Add wiki-first raw fallback retrieval", "priority": 2, "passes": true}
+  ]
+}

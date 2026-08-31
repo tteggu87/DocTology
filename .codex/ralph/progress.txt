@@ -1,61 +1,17 @@
+# Ralph Progress Log
+Started: 2026-09-01
+
 ## Codebase Patterns
-- Generated helper scripts live beside llm-wiki-bootstrap and are copied by `generated_helper_script()`.
-- Markdown/raw files remain canonical; every SQLite database is disposable derived state.
-- Search lanes should remain separate rather than using blended ranking.
-- Cheap stat status, unchecked discovery, and exact doctor are distinct lifecycle levels.
+- DocTology distributes exactly three self-contained skills; do not create a fourth product or root runtime.
+- `llm-wiki-bootstrap` owns generated optional SQLite retrieval helpers; `llm-wiki-loop` owns semantic judgment, coverage, and completion gates.
+- `raw/**/*.md` and `wiki/**/*.md` remain canonical. SQLite indexes and structure trees are disposable derived candidates.
+- Raw search reopens canonical byte spans and keeps cheap stat status, unchecked discovery, and exact doctor as separate lifecycle levels.
+- Generated helper scripts live beside `llm-wiki-bootstrap` and are copied through `generated_helper_script()`.
+- `.ouroboros/` contains PM runtime artifacts from this task and is not product source.
 
-## 2026-08-26 - Baseline
-- Preserved the previously verified coverage-preserving ingest change on `feat/raw-source-index`.
-- Quality checks inherited from the completed change:
-  - `python3 -m unittest discover -s tests` -> 151 tests passed
-  - `python3 scripts/manage_skills.py check` -> passed
-  - Repo Docs finalize/verify -> 0 errors, 0 warnings
-- Commit: `ba426a6 feat: make wiki ingest coverage preserving`
----
-
-## 2026-08-26 - US-001 verification retry
-- Initial implementation checks found one generated-document regression.
-- Quality checks:
-  - `python3 -m unittest tests.test_wiki_raw_retrieval -v` -> 5 passed
-  - `python3 -m unittest discover -s tests` -> failed 1 of 156 because generated README no longer contained the existing `same-size` doctor guarantee
-- Next action: restore the exact readiness guarantee and rerun all US-001 gates.
----
-
-## 2026-08-26 - US-001 verification retry 2
-- The next full check found one more generated README contract omission.
-- Quality checks:
-  - `python3 -m unittest tests.test_wiki_raw_retrieval -v` -> 5 passed
-  - `python3 -m unittest discover -s tests` -> failed 1 of 156 because the rewritten retrieval paragraph omitted the existing `wiki_complete` separation statement
-- Next action: restore completion/retrieval status separation and rerun every gate.
----
-
-## 2026-08-26 - US-001 complete
-- Added an optional, separate `raw/**/*.md` lexical index at `state/raw_index.sqlite`.
-- Rebuild is incremental by path/size/mtime, search reopens canonical byte spans, and exact checks remain in `doctor`.
-- Kept raw and wiki storage independent; added no raw vectors, RRF, ANN, daemon, or canonical database.
-- Quality checks:
-  - `python3 -m unittest tests.test_wiki_raw_retrieval -v` -> 5 passed
-  - focused SQLite bootstrap choice test -> passed
-  - `python3 -m unittest discover -s tests` -> 156 passed
-  - `python3 scripts/manage_skills.py check` -> passed
-  - changed Python `py_compile` -> passed
-  - `git diff --check` -> passed
-  - Repo Docs finalize/verify -> 0 errors, 0 warnings
-- Learning: generated retrieval prose has compatibility assertions, so additions must preserve the established readiness and `wiki_complete` contract language.
----
-
-## 2026-08-26 - US-002 complete
-- Added explicit `wiki_retrieval.py search --raw-fallback` without changing the default search payload.
-- The raw helper is loaded only after an empty wiki lexical lane; wiki hits never touch raw state.
-- Raw results remain a separately labeled BM25 lane, and missing raw state reports `unavailable` without failing wiki search.
-- Generated `AGENTS.md` and `llm-wiki-loop` now teach wiki-first lookup plus direct raw lookup for thin-page verification and ingest coverage.
-- Quality checks:
-  - focused fallback tests -> 2 passed
-  - `python3 -m unittest tests.test_wiki_sqlite_retrieval tests.test_wiki_sqlite_index -v` -> 34 passed
-  - `python3 -m unittest discover -s tests` -> 158 passed
-  - `python3 scripts/manage_skills.py check` -> passed
-  - changed Python `py_compile` -> passed
-  - `git diff --check` -> passed
-  - Repo Docs finalize/verify -> 0 errors, 0 warnings
-- Learning: making raw fallback explicit preserves the hot/default wiki path while still giving large raw corpora deterministic discovery when wiki coverage is absent.
+## 2026-09-01 - Baseline
+- Approved scope: deterministic Markdown hierarchy only.
+- Explicit exclusions: email, PDF, PageIndex dependency, JS/TS, UI, LLM summaries, automatic repair, a second coverage ledger, and workflow hard gates.
+- Branch: `feat/markdown-structure-navigation`.
+- Quality gates: focused raw/SQLite tests per story, full unittest suite, manage_skills check, Repo Docs validator, and git diff check.
 ---
