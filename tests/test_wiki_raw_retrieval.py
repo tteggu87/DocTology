@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import asdict
 from pathlib import Path
 
 
@@ -19,6 +20,14 @@ BOOTSTRAP_PATH = (
     / "llm-wiki-bootstrap"
     / "scripts"
     / "bootstrap_llm_wiki.py"
+)
+REINDEX_PATH = (
+    ROOT
+    / ".agents"
+    / "skills"
+    / "llm-wiki-bootstrap"
+    / "scripts"
+    / "reindex_sqlite_operational.py"
 )
 
 
@@ -32,10 +41,25 @@ def load_bootstrap():
     return module
 
 
+def load_reindex():
+    spec = importlib.util.spec_from_file_location(
+        "reindex_for_raw_retrieval_test", REINDEX_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        del sys.modules[spec.name]
+    return module
+
+
 class WikiRawRetrievalTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.bootstrap = load_bootstrap()
+        cls.reindex = load_reindex()
 
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -66,6 +90,166 @@ class WikiRawRetrievalTests(unittest.TestCase):
 
     def payload(self, *arguments: str) -> dict[str, object]:
         return json.loads(self.run_cli(*arguments).stdout)
+
+    def structure_page(self, text: str, *, title: str = "Structure"):
+        encoded = text.encode("utf-8")
+        return self.reindex.Page(
+            "raw-page-fixture",
+            "raw/inbox/structure.md",
+            title,
+            "source",
+            "",
+            self.reindex.sha256(encoded),
+            text,
+            len(encoded),
+        )
+
+    def test_structure_builder_preserves_tree_ranges_and_ignores_fences(self) -> None:
+        text = (
+            "Preamble α.\n\n"
+            "# Parent\n\n"
+            "```python\n# Not a heading\n```\n\n"
+            "### Child\nchild body\n"
+            "## Sibling\nsibling body\n"
+            "# Tail\ntail body\n"
+        )
+
+        nodes = self.reindex.structure_nodes_for_page(self.structure_page(text))
+
+        self.assertEqual(
+            [node.title for node in nodes],
+            ["Structure", "Parent", "Child", "Sibling", "Tail"],
+        )
+        self.assertEqual([node.ordinal for node in nodes], list(range(5)))
+        self.assertEqual([node.depth for node in nodes], [0, 1, 3, 2, 1])
+        self.assertEqual(
+            [node.heading_path for node in nodes],
+            ["", "Parent", "Parent > Child", "Parent > Sibling", "Tail"],
+        )
+        self.assertEqual(
+            [heading_path for _, _, heading_path in self.reindex.section_spans(text)],
+            ["", "Parent", "Parent > Child", "Parent > Sibling", "Tail"],
+        )
+        self.assertEqual(
+            [node.parent_id for node in nodes],
+            [
+                None,
+                nodes[0].node_id,
+                nodes[1].node_id,
+                nodes[1].node_id,
+                nodes[0].node_id,
+            ],
+        )
+        self.assertEqual(
+            [(node.line_start, node.line_end) for node in nodes],
+            [(1, 2), (3, 8), (9, 10), (11, 12), (13, 14)],
+        )
+        self.assertEqual(
+            [(node.subtree_line_start, node.subtree_line_end) for node in nodes],
+            [(1, 14), (3, 12), (9, 10), (11, 12), (13, 14)],
+        )
+
+        encoded = text.encode("utf-8")
+        self.assertEqual(
+            encoded[nodes[0].byte_start : nodes[0].byte_end].decode("utf-8"),
+            "Preamble α.\n\n",
+        )
+        self.assertIn(
+            "# Not a heading",
+            encoded[nodes[1].byte_start : nodes[1].byte_end].decode("utf-8"),
+        )
+        self.assertEqual(
+            encoded[
+                nodes[1].subtree_byte_start : nodes[1].subtree_byte_end
+            ].decode("utf-8"),
+            text[text.index("# Parent") : text.index("# Tail")],
+        )
+
+    def test_structure_builder_keeps_one_root_for_headingless_documents(self) -> None:
+        text = "plain α source\nwith no headings\n"
+
+        nodes = self.reindex.structure_nodes_for_page(self.structure_page(text))
+
+        self.assertEqual(len(nodes), 1)
+        root = nodes[0]
+        self.assertEqual(root.ordinal, 0)
+        self.assertEqual(root.depth, 0)
+        self.assertIsNone(root.parent_id)
+        self.assertEqual(
+            (root.byte_start, root.byte_end), (0, len(text.encode("utf-8")))
+        )
+        self.assertEqual(
+            (root.subtree_byte_start, root.subtree_byte_end),
+            (root.byte_start, root.byte_end),
+        )
+
+    def test_structure_records_are_byte_stable_for_the_same_schema(self) -> None:
+        page = self.structure_page("# Same\n\n## Child\nbody\n")
+
+        nodes_v1 = self.reindex.structure_nodes_for_page(
+            page, schema_version="test-structure-v1"
+        )
+        self.assertEqual(
+            asdict(nodes_v1[0]),
+            {
+                "node_id": "structure-node-cb2f45408d73713b2f1266ff",
+                "document_id": "document-raw-page-fixture",
+                "parent_id": None,
+                "ordinal": 0,
+                "depth": 0,
+                "title": "Structure",
+                "heading_path": "",
+                "line_start": 1,
+                "line_end": 1,
+                "byte_start": 0,
+                "byte_end": 0,
+                "subtree_line_start": 1,
+                "subtree_line_end": 4,
+                "subtree_byte_start": 0,
+                "subtree_byte_end": 22,
+            },
+        )
+        self.assertEqual(
+            asdict(nodes_v1[1]),
+            {
+                "node_id": "structure-node-cb63ab113166ad4f03bed524",
+                "document_id": "document-raw-page-fixture",
+                "parent_id": "structure-node-cb2f45408d73713b2f1266ff",
+                "ordinal": 1,
+                "depth": 1,
+                "title": "Same",
+                "heading_path": "Same",
+                "line_start": 1,
+                "line_end": 2,
+                "byte_start": 0,
+                "byte_end": 8,
+                "subtree_line_start": 1,
+                "subtree_line_end": 4,
+                "subtree_byte_start": 0,
+                "subtree_byte_end": 22,
+            },
+        )
+
+        def serialized() -> bytes:
+            nodes = self.reindex.structure_nodes_for_page(
+                page, schema_version="test-structure-v1"
+            )
+            return json.dumps(
+                [asdict(node) for node in nodes],
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+
+        self.assertEqual(serialized(), serialized())
+        old_ids = [node.node_id for node in nodes_v1]
+        new_ids = [
+            node.node_id
+            for node in self.reindex.structure_nodes_for_page(
+                page, schema_version="test-structure-v2"
+            )
+        ]
+        self.assertNotEqual(old_ids, new_ids)
 
     def test_rebuild_and_search_return_canonical_raw_spans(self) -> None:
         source = self.raw_path("large.md")

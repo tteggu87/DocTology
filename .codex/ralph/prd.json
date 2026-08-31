@@ -15,7 +15,7 @@
         "Focused structure tests pass without adding third-party dependencies."
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "checks": [
         "python3 -m unittest tests.test_wiki_raw_retrieval -v",
         "python3 -m py_compile .agents/skills/llm-wiki-bootstrap/scripts/reindex_sqlite_operational.py"

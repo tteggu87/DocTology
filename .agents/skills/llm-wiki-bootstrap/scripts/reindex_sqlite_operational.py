@@ -23,6 +23,7 @@ SCHEMA_PATH = (
 )
 DEFAULT_CHUNK_THRESHOLD = 64 * 1024
 SCHEMA_VERSION = "wiki-heading-index-v8"
+STRUCTURE_SCHEMA_VERSION = "markdown-structure-v1"
 FINITE_ATTESTATION_VERSION = "finite-nonzero-v2"
 PAGE_TYPE_BY_DIR = {
     "concepts": "concept",
@@ -35,6 +36,7 @@ PAGE_TYPE_BY_DIR = {
 }
 WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]")
 HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)\s*$")
+FENCE_OPEN_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 SQLITE_HEADER = b"SQLite format 3\x00"
 EMBEDDING_COLUMNS = {
     "chunk_id",
@@ -90,6 +92,39 @@ class Chunk:
     byte_end: int
     content: str
     content_hash: str
+
+
+@dataclass(frozen=True)
+class MarkdownHeading:
+    """One source-order ATX heading outside fenced code blocks."""
+
+    ordinal: int
+    parent_ordinal: int
+    level: int
+    title: str
+    heading_path: str
+    character_start: int
+
+
+@dataclass(frozen=True)
+class StructureNode:
+    """Deterministic Markdown document or heading range."""
+
+    node_id: str
+    document_id: str
+    parent_id: str | None
+    ordinal: int
+    depth: int
+    title: str
+    heading_path: str
+    line_start: int
+    line_end: int
+    byte_start: int
+    byte_end: int
+    subtree_line_start: int
+    subtree_line_end: int
+    subtree_byte_start: int
+    subtree_byte_end: int
 
 
 def parse_args() -> argparse.Namespace:
@@ -151,7 +186,7 @@ def frontmatter_list(text: str, key: str) -> list[str]:
 
 def extract_title(path: Path, text: str) -> str:
     return next(
-        (line[2:].strip() for line in text.splitlines() if line.startswith("# ")),
+        (heading.title for heading in markdown_headings(text) if heading.level == 1),
         path.stem.replace("-", " ").title(),
     )
 
@@ -287,29 +322,183 @@ def newline_offsets(text: str) -> list[int]:
     return offsets
 
 
-def section_spans(text: str) -> list[tuple[int, int, str]]:
-    headings: list[tuple[int, str]] = []
-    stack: list[tuple[int, str]] = []
-    for match in re.finditer(r"^#{1,6}[ \t]+.+?$", text, re.MULTILINE):
-        parsed = HEADING_RE.match(match.group(0))
-        if parsed:
-            level, title = len(parsed.group(1)), parsed.group(2).strip()
-            while stack and stack[-1][0] >= level:
+def markdown_headings(text: str) -> list[MarkdownHeading]:
+    """Parse source-order ATX headings while treating fenced code as opaque."""
+    headings: list[MarkdownHeading] = []
+    stack: list[MarkdownHeading] = []
+    fence_marker: str | None = None
+    fence_length = 0
+    character_start = 0
+    for source_line in text.splitlines(keepends=True):
+        line = source_line.rstrip("\r\n")
+        if fence_marker is not None:
+            if re.fullmatch(
+                rf" {{0,3}}{re.escape(fence_marker)}{{{fence_length},}}[ \t]*",
+                line,
+            ):
+                fence_marker = None
+                fence_length = 0
+            character_start += len(source_line)
+            continue
+
+        fence = FENCE_OPEN_RE.match(line)
+        if fence is not None:
+            marker, info = fence.groups()
+            if marker[0] != "`" or "`" not in info:
+                fence_marker = marker[0]
+                fence_length = len(marker)
+                character_start += len(source_line)
+                continue
+
+        parsed = HEADING_RE.match(line)
+        if parsed is not None:
+            level = len(parsed.group(1))
+            title = parsed.group(2).strip()
+            while stack and stack[-1].level >= level:
                 stack.pop()
-            stack.append((level, title))
-            headings.append((match.start(), " > ".join(item[1] for item in stack)))
+            ordinal = len(headings) + 1
+            heading = MarkdownHeading(
+                ordinal=ordinal,
+                parent_ordinal=stack[-1].ordinal if stack else 0,
+                level=level,
+                title=title,
+                heading_path=" > ".join(
+                    [*(item.title for item in stack), title]
+                ),
+                character_start=character_start,
+            )
+            headings.append(heading)
+            stack.append(heading)
+        character_start += len(source_line)
+    return headings
+
+
+def section_spans(text: str) -> list[tuple[int, int, str]]:
+    headings = markdown_headings(text)
     if not headings:
         return [(0, len(text), "")]
-    spans = [(0, headings[0][0], "")] if headings[0][0] else []
+    spans = (
+        [(0, headings[0].character_start, "")]
+        if headings[0].character_start
+        else []
+    )
     spans.extend(
         (
-            start,
-            headings[index + 1][0] if index + 1 < len(headings) else len(text),
-            heading,
+            heading.character_start,
+            headings[index + 1].character_start
+            if index + 1 < len(headings)
+            else len(text),
+            heading.heading_path,
         )
-        for index, (start, heading) in enumerate(headings)
+        for index, heading in enumerate(headings)
     )
     return spans
+
+
+def _line_range(
+    text: str, newline_counts: list[int], start: int, end: int
+) -> tuple[int, int]:
+    line_start = newline_counts[start] + 1
+    line_end = max(
+        line_start,
+        newline_counts[end] + (0 if end and text[end - 1] == "\n" else 1),
+    )
+    return line_start, line_end
+
+
+def structure_nodes_for_page(
+    page: Page, *, schema_version: str = STRUCTURE_SCHEMA_VERSION
+) -> list[StructureNode]:
+    """Build a complete deterministic document/heading tree without thinning."""
+    headings = markdown_headings(page.text)
+    byte_offsets = utf8_offsets(page.text)
+    newline_counts = newline_offsets(page.text)
+    document_id = f"document-{page.id}"
+    node_ids = {
+        ordinal: "structure-node-"
+        + sha256(f"{schema_version}\0{document_id}\0{ordinal}".encode())[:24]
+        for ordinal in range(len(headings) + 1)
+    }
+
+    subtree_ends = [len(page.text)] * len(headings)
+    open_headings: list[int] = []
+    for index, heading in enumerate(headings):
+        while (
+            open_headings
+            and headings[open_headings[-1]].level >= heading.level
+        ):
+            subtree_ends[open_headings.pop()] = heading.character_start
+        open_headings.append(index)
+
+    own_ends = [
+        headings[index + 1].character_start
+        if index + 1 < len(headings)
+        else len(page.text)
+        for index in range(len(headings))
+    ]
+
+    def build_node(
+        *,
+        ordinal: int,
+        parent_ordinal: int | None,
+        depth: int,
+        title: str,
+        heading_path: str,
+        start: int,
+        end: int,
+        subtree_end: int,
+    ) -> StructureNode:
+        line_start, line_end = _line_range(page.text, newline_counts, start, end)
+        subtree_line_start, subtree_line_end = _line_range(
+            page.text, newline_counts, start, subtree_end
+        )
+        return StructureNode(
+            node_id=node_ids[ordinal],
+            document_id=document_id,
+            parent_id=node_ids[parent_ordinal]
+            if parent_ordinal is not None
+            else None,
+            ordinal=ordinal,
+            depth=depth,
+            title=title,
+            heading_path=heading_path,
+            line_start=line_start,
+            line_end=line_end,
+            byte_start=byte_offsets[start],
+            byte_end=byte_offsets[end],
+            subtree_line_start=subtree_line_start,
+            subtree_line_end=subtree_line_end,
+            subtree_byte_start=byte_offsets[start],
+            subtree_byte_end=byte_offsets[subtree_end],
+        )
+
+    first_heading_start = headings[0].character_start if headings else len(page.text)
+    nodes = [
+        build_node(
+            ordinal=0,
+            parent_ordinal=None,
+            depth=0,
+            title=page.title,
+            heading_path="",
+            start=0,
+            end=first_heading_start,
+            subtree_end=len(page.text),
+        )
+    ]
+    nodes.extend(
+        build_node(
+            ordinal=heading.ordinal,
+            parent_ordinal=heading.parent_ordinal,
+            depth=heading.level,
+            title=heading.title,
+            heading_path=heading.heading_path,
+            start=heading.character_start,
+            end=own_ends[index],
+            subtree_end=subtree_ends[index],
+        )
+        for index, heading in enumerate(headings)
+    )
+    return nodes
 
 
 def split_oversized(
@@ -369,11 +558,7 @@ def chunks_for_page(page: Page, threshold: int) -> list[Chunk]:
     for index, (start, end, heading) in enumerate(spans):
         content = page.text[start:end]
         content_hash = sha256(content.encode("utf-8"))
-        line_start = newline_counts[start] + 1
-        line_end = max(
-            line_start,
-            newline_counts[end] + (0 if end and page.text[end - 1] == "\n" else 1),
-        )
+        line_start, line_end = _line_range(page.text, newline_counts, start, end)
         chunks.append(
             Chunk(
                 f"chunk-{sha256(f'{page.id}:{index}:{content_hash}'.encode())[:24]}",

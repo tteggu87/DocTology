@@ -15,3 +15,21 @@ Started: 2026-09-01
 - Branch: `feat/markdown-structure-navigation`.
 - Quality gates: focused raw/SQLite tests per story, full unittest suite, manage_skills check, Repo Docs validator, and git diff check.
 ---
+
+## 2026-09-01 08:03:12 KST - US-001
+- Classified as `tight-coupled`; implemented one pure Python Markdown structure builder without subagent writers.
+- Added deterministic document-root and ATX heading nodes with schema-sensitive IDs, parents, source ordinals, heading paths, own ranges, and complete subtree ranges.
+- Centralized heading parsing so structure and existing chunk spans share fenced-code-aware Markdown interpretation; headings inside backtick or tilde fences are ignored.
+- Added focused coverage for preambles, skipped ATX levels, parent/subtree containment, UTF-8 byte reopening, fenced headings, headingless documents, schema-sensitive IDs, and byte-stable record snapshots.
+- Files changed: `.agents/skills/llm-wiki-bootstrap/scripts/reindex_sqlite_operational.py`, `tests/test_wiki_raw_retrieval.py`, `.codex/ralph/prd.json`, `.codex/ralph/progress.txt`.
+- Quality checks run and result:
+  - `python3 -m unittest tests.test_wiki_raw_retrieval -v` -> PASS, 8 tests.
+  - `python3 -m py_compile .agents/skills/llm-wiki-bootstrap/scripts/reindex_sqlite_operational.py` -> PASS.
+  - `python3 -m unittest discover -s tests` -> PASS, 169 tests; existing SQLite `ResourceWarning` messages remained non-failing.
+  - `python3 scripts/manage_skills.py check` -> PASS, exactly three self-contained skills.
+  - `git diff --check` -> PASS.
+  - `python3 .agents/skills/repo-docs-intelligence-bootstrap/scripts/validate_repo_docs_intelligence.py --repo-root .` -> exit 0, 0 errors and 1 warning because no changed-files list was supplied.
+  - Repo Docs validation with the implementation/test changed-files list -> exit 0, 0 errors and 1 docs-sync warning; documentation integration remains explicitly assigned to US-003.
+- Independent read-only code review -> APPROVE with no Critical, High, or Medium findings; exact top-heading record assertions were added in response to its low-severity determinism-test suggestion.
+- Learnings for future iterations: a root with no preamble has an empty byte range (`0:0`) but the current inclusive line convention reports `(1, 1)`; define the persisted/exposed empty-range convention during US-002 before line-based consumers depend on it.
+---
