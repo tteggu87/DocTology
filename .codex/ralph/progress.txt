@@ -52,3 +52,21 @@ Started: 2026-09-01
   - `git diff --check` -> PASS.
 - Learnings for future iterations: preserving the existing one-chunk policy means a small Markdown document's FTS row links to the document root; once threshold splitting activates, each chunk links to its exact fenced-code-aware heading node. Structure reads are content-exact while ordinary search deliberately remains unchecked candidate discovery.
 ---
+
+## 2026-09-01 08:15:25 KST - US-003
+- Classified as `tight-coupled`; integrated generated vault guidance, loop semantics, current docs, and regression coverage without subagents.
+- Documented raw `tree`, `ancestors`, and `subtree` as optional checksum-checked planning aids with explicit rebuild or direct-Markdown fallback for stale state.
+- Required the semantic owner to reopen canonical Markdown before synthesis and preserved the existing heading/bounded-chunk inventory plus applied coverage receipt as the only completion boundary; tree leaves do not create a second ledger.
+- Updated bootstrap and loop skill instructions, current state and repo maps, the maintenance log, and generated-text tests. `.agents/skills/llm-wiki-loop/scripts/wiki_workflow.py` remained unchanged.
+- Files changed: `.agents/skills/llm-wiki-bootstrap/SKILL.md`, `.agents/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py`, `.agents/skills/llm-wiki-loop/SKILL.md`, `docs/CURRENT_STATE.md`, `docs/SKILLS_INTEGRATION.md`, `docs/repo-map/DATA_FLOW.md`, `docs/repo-map/ENTRYPOINTS.md`, `docs/repo-map/MODULES.md`, `docs/repo-map/SYMBOL_GRAPH.md`, `tests/test_wiki_sqlite_index.py`, `wiki/_meta/log.md`, `.codex/ralph/prd.json`, `.codex/ralph/progress.txt`.
+- Quality checks run and result:
+  - `python3 -m unittest tests.test_wiki_sqlite_index -v` -> PASS, 10 tests.
+  - `python3 -m unittest tests.test_wiki_raw_retrieval -v` -> PASS, 12 tests.
+  - `python3 -m py_compile .agents/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py` -> PASS.
+  - `python3 -m unittest discover -s tests` -> PASS, 174 tests; existing non-failing SQLite `ResourceWarning` messages remained.
+  - `python3 scripts/manage_skills.py check` -> PASS, exactly three self-contained skills.
+  - `python3 .agents/skills/repo-docs-intelligence-bootstrap/scripts/validate_repo_docs_intelligence.py --repo-root .` -> exit 0, 0 errors and 1 warning because no changed-files list was supplied.
+  - `python3 .agents/skills/repo-docs-intelligence-bootstrap/scripts/validate_repo_docs_intelligence.py --repo-root . --changed-files <(git diff --name-only)` -> PASS, 0 errors and 0 warnings.
+  - `git diff --check` -> PASS.
+- Learnings for future iterations: raw heading structure is useful only as disposable navigation context. Stale structure reads deliberately return no payload, while direct canonical Markdown reading keeps the semantic loop available without changing its receipt or completion gates.
+---

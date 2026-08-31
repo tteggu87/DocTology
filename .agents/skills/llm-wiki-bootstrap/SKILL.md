@@ -83,6 +83,7 @@ Add `--force` only when the user explicitly wants overwrites.
 - starter dashboard, index, and log pages
 - optional Markdown-derived SQLite/FTS5 retrieval helpers
 - an independent incremental lexical index for `raw/**/*.md` when SQLite is enabled; no raw vectors or blended ranking
+- optional deterministic raw heading-tree navigation for planning; canonical Markdown remains the source read for synthesis
 - explicit routing to `llm-wiki-loop` for certified full-coverage ingest, receipts, batch certification, and completion posture
 
 ## Three-Layer Follow-On Guidance
@@ -114,6 +115,10 @@ The active bootstrap does not generate canonical ontology JSONL, DuckDB, helper-
 - With SQLite enabled, the scaffold must teach wiki-first lookup, explicit raw
   fallback only after an empty wiki lexical result, and direct raw search for
   thin-page verification or ingest coverage without blended ranking.
+- With SQLite enabled, the scaffold must describe raw `tree`, `ancestors`, and
+  `subtree` as optional navigation, require canonical Markdown reopening before
+  synthesis, and explain explicit rebuild or direct-reading fallback for stale
+  structure state. Tree leaves are not coverage units or a second ledger.
 - If a later wiki-local conventions page is ever added, it must remain subordinate to `AGENTS.md`.
 
 ## Customization Guidance
@@ -130,7 +135,8 @@ After changes to this skill:
 
 1. Run quick validation.
 2. Run the bootstrap script in a temporary directory with `--sqlite on`.
-3. Rebuild and query the generated SQLite index.
+3. Rebuild and query the generated SQLite index, including raw tree, ancestor,
+   and subtree navigation against canonical Markdown.
 4. Run the bootstrap script in a second temporary directory with `--sqlite off`.
 5. Verify SQLite scripts/schema/database are absent in the off scaffold and ontology folders are absent in both.
 6. Verify `--profile` and archived ontology profile names are not active CLI choices.

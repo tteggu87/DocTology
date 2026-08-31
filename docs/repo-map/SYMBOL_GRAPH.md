@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-08-27
+last_updated: 2026-09-01
 superseded_by: N/A
 ---
 
@@ -26,8 +26,12 @@ superseded_by: N/A
   applied raw-source receipt with balanced accounting and no deferred units.
 - `raw_retrieval.rebuild`: transactionally updates only added, changed, or
   removed `raw/**/*.md` documents in a separate lexical index.
+- `reindex_sqlite_operational.build_markdown_structure`: deterministically maps
+  fenced-code-aware Markdown headings to document, ancestor, and subtree ranges.
 - `raw_retrieval.search`: queries raw FTS, then reopens the canonical source byte
   range and labels changed spans stale instead of returning stored text as truth.
+- `raw_retrieval.tree`, `raw_retrieval.ancestors`, and `raw_retrieval.subtree`:
+  expose checksum-checked optional structure context without implicit rebuilds.
 - `raw_retrieval.doctor`: hashes raw documents and reconstructs chunk/FTS rows
   for exact derived-state verification.
 - `wiki_retrieval.raw_fallback_lane`: lazily loads optional raw retrieval after

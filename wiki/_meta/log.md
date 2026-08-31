@@ -2,11 +2,17 @@
 title: DocTology maintenance log
 type: meta
 status: active
-updated: 2026-08-27
+updated: 2026-09-01
 ---
 
 # Maintenance log
 
+- 2026-09-01: Added deterministic raw Markdown heading-tree navigation to the
+  disposable SQLite index and documented its boundary across bootstrap and loop
+  skills. Generated vaults expose `tree`, `ancestors`, and `subtree` only as
+  checksum-checked planning aids; canonical Markdown reopening and the existing
+  coverage receipt remain authoritative, with direct reading as the off,
+  unavailable, or stale fallback.
 - 2026-08-27: Moved the LLM Wiki procedure, batch, and structural gate runtime
   into `llm-wiki-loop`. Fresh bootstrap vaults retain the base wiki and optional
   SQLite only; certified ingest runs the skill-local runtime through

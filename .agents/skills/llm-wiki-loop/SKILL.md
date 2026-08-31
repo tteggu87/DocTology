@@ -118,8 +118,12 @@ optional SQLite posture. It may report legacy repo-local gate scripts, but this
 loop never executes or modifies them. Use only this skill's `wiki_loop.py`
 runtime entrypoint for procedure, batch, and structural gate commands.
 When `scripts/raw_retrieval.py` exists, use its status/rebuild/search commands as
-an optional routing aid for large raw corpora. Reopen the returned canonical
-raw byte ranges; the index is not evidence or a substitute for source reading.
+an optional routing aid for large raw corpora. Its `tree`, `ancestors`, and
+`subtree` commands may provide heading paths or bounded context when helpful.
+Reopen the returned canonical raw byte ranges before synthesis; the index is
+not evidence or a substitute for source reading. Structure reads never rebuild
+implicitly, so follow explicit rebuild guidance or read Markdown directly when
+they report `state: stale`.
 
 ### 2. Confirm The Wiki-Only Contract
 
@@ -180,6 +184,13 @@ Use the repository's source-registration command when needed, remembering that
 registration is not semantic synthesis. Create or refresh the source page,
 preserve provenance and uncertainty, and keep raw contents immutable. Do not
 claim ontology-backed completion or create a parallel canonical store.
+
+The semantic owner may use heading node paths, ancestors, or subtrees only when
+they help plan or recover source context. Reopen canonical Markdown before any
+synthesis. If SQLite is off, unavailable, or stale, fall back to direct Markdown
+reading without weakening the run. Structure nodes and tree leaves are not
+source units, do not create a tree coverage ledger, and do not replace the
+existing heading/bounded-chunk inventory or applied coverage receipt.
 
 ### 5. Project Into The Wiki
 

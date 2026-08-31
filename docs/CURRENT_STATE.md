@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: true
-last_updated: 2026-08-27
+last_updated: 2026-09-01
 superseded_by: N/A
 ---
 
@@ -43,6 +43,13 @@ keeps candidates in a separate lane, and reports `unavailable` without failing
 the wiki query when optional raw state is absent.
 
 Generated wiki lint treats `_meta` navigation links and self-links as non-semantic for orphan detection. Orphans are advisory unless `lint --strict-orphans` is requested.
+
+The raw index also stores a deterministic Markdown heading tree. `tree`,
+`ancestors`, and `subtree` are read-only, checksum-checked navigation aids that
+reopen canonical byte ranges; stale structure returns rebuild guidance and no
+structure or content. The wiki loop may use these paths when helpful, but direct
+Markdown reading remains the fallback and the existing coverage receipt remains
+the only source-accounting boundary.
 
 The standalone LLM Wiki loop runtime uses `fcntl.flock` on Unix and
 `msvcrt.locking` on Windows, preserving run-finalization and SQLite-refresh
