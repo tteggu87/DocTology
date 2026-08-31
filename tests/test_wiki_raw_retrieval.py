@@ -260,6 +260,7 @@ class WikiRawRetrievalTests(unittest.TestCase):
 
         rebuilt = self.payload("rebuild", "--chunk-bytes", "40")
         found = self.payload("search", "raw needle")
+        tree = self.payload("tree", "raw/inbox/large.md")
 
         self.assertEqual(rebuilt["changed_files"], 1)
         self.assertGreaterEqual(rebuilt["chunks"], 2)
@@ -268,6 +269,15 @@ class WikiRawRetrievalTests(unittest.TestCase):
         self.assertFalse(found["canonical"])
         result = found["results"][0]
         self.assertEqual(result["candidate_status"], "source_candidate")
+        self.assertTrue(result["node_id"].startswith("structure-node-"))
+        self.assertEqual(
+            next(
+                node["title"]
+                for node in tree["nodes"]
+                if node["node_id"] == result["node_id"]
+            ),
+            "Evidence",
+        )
         self.assertEqual(result["path"], "raw/inbox/large.md")
         self.assertIn("Unique raw needle", result["content"])
         encoded = source.read_bytes()
@@ -281,6 +291,9 @@ class WikiRawRetrievalTests(unittest.TestCase):
             columns = {
                 row[1] for row in connection.execute("PRAGMA table_info(raw_chunks)")
             }
+            metadata = dict(
+                connection.execute("SELECT key, value FROM raw_index_metadata")
+            )
             tables = {
                 row[0]
                 for row in connection.execute(
@@ -288,8 +301,128 @@ class WikiRawRetrievalTests(unittest.TestCase):
                 )
             }
         self.assertNotIn("content", columns)
+        self.assertIn("node_id", columns)
+        self.assertIn("raw_structure_nodes", tables)
         self.assertNotIn("chunk_embeddings", tables)
+        self.assertEqual(metadata["schema_version"], "raw-heading-structure-index-v2")
+        self.assertEqual(metadata["structure_schema_version"], "markdown-structure-v1")
         self.assertNotEqual(database, self.root / "state" / "wiki_index.sqlite")
+
+    def test_tree_ancestors_and_subtree_reopen_deterministic_structure(self) -> None:
+        source = self.raw_path("structure.md")
+        source.write_text(
+            "Preamble α.\n\n"
+            "# Parent\nparent body\n\n"
+            "## Child\nunique child needle\n\n"
+            "## Sibling\nsibling body\n",
+            encoding="utf-8",
+        )
+        self.payload("rebuild")
+        database = self.root / "state" / "raw_index.sqlite"
+        baseline = database.read_bytes()
+
+        first_tree = self.run_cli("tree", "raw/inbox/structure.md")
+        second_tree = self.run_cli("tree", "raw/inbox/structure.md")
+        tree = json.loads(first_tree.stdout)
+        found = self.payload("search", "unique child needle")
+        node_id = next(
+            node["node_id"] for node in tree["nodes"] if node["title"] == "Child"
+        )
+        ancestors = self.payload("ancestors", node_id)
+        subtree = self.payload("subtree", node_id)
+
+        self.assertEqual(first_tree.stdout, second_tree.stdout)
+        self.assertEqual(tree["state"], "ready")
+        self.assertEqual(tree["freshness"], "content")
+        self.assertEqual(
+            [node["title"] for node in tree["nodes"]],
+            ["Parent", "Parent", "Child", "Sibling"],
+        )
+        self.assertEqual(
+            [node["ordinal"] for node in tree["nodes"]], list(range(4))
+        )
+        self.assertEqual(found["results"][0]["node_id"], tree["nodes"][0]["node_id"])
+        self.assertEqual(ancestors["node"]["node_id"], node_id)
+        self.assertEqual(
+            [node["title"] for node in ancestors["ancestors"]],
+            ["Parent", "Parent"],
+        )
+        self.assertEqual([node["title"] for node in subtree["nodes"]], ["Child"])
+        self.assertEqual(subtree["content"], "## Child\nunique child needle\n\n")
+        node = subtree["node"]
+        self.assertEqual(
+            subtree["content"].encode("utf-8"),
+            source.read_bytes()[
+                node["subtree_byte_start"] : node["subtree_byte_end"]
+            ],
+        )
+        self.assertEqual(database.read_bytes(), baseline)
+
+    def test_structure_reads_report_stale_without_rebuild_or_payload(self) -> None:
+        source = self.raw_path("stale.md")
+        source.write_text("# Stale\n\n## Child\nold-token\n", encoding="utf-8")
+        self.payload("rebuild")
+        node_id = self.payload("search", "old-token")["results"][0]["node_id"]
+        database = self.root / "state" / "raw_index.sqlite"
+        source.write_text("# Stale\n\n## Child\nnew-token\n", encoding="utf-8")
+        baseline = database.read_bytes()
+
+        payloads = [
+            json.loads(
+                self.run_cli(
+                    "tree", "raw/inbox/stale.md", expected_returncode=1
+                ).stdout
+            ),
+            json.loads(
+                self.run_cli("ancestors", node_id, expected_returncode=1).stdout
+            ),
+            json.loads(
+                self.run_cli("subtree", node_id, expected_returncode=1).stdout
+            ),
+        ]
+        search = self.payload("search", "old-token")
+
+        for payload in payloads:
+            self.assertEqual(payload["state"], "stale")
+            self.assertIn("rebuild", payload["guidance"])
+            self.assertNotIn("node", payload)
+            self.assertNotIn("nodes", payload)
+            self.assertNotIn("ancestors", payload)
+            self.assertNotIn("content", payload)
+        self.assertEqual(search["freshness"], "unchecked")
+        self.assertEqual(search["results"][0]["candidate_status"], "stale_candidate")
+        self.assertIn("new-token", search["results"][0]["content"])
+        self.assertEqual(database.read_bytes(), baseline)
+
+    def test_rebuild_replaces_an_incompatible_prior_database(self) -> None:
+        self.raw_path("legacy.md").write_text("# Legacy\nbody\n", encoding="utf-8")
+        database = self.root / "state" / "raw_index.sqlite"
+        database.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(database) as connection:
+            connection.executescript(
+                """
+                CREATE TABLE raw_index_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                INSERT INTO raw_index_metadata VALUES('schema_version', 'raw-heading-index-v1');
+                CREATE TABLE legacy_sentinel(value TEXT);
+                """
+            )
+
+        rebuilt = self.payload("rebuild")
+        with sqlite3.connect(database) as connection:
+            tables = {
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                )
+            }
+            chunk_columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(raw_chunks)")
+            }
+
+        self.assertEqual(rebuilt["documents"], 1)
+        self.assertNotIn("legacy_sentinel", tables)
+        self.assertIn("raw_structure_nodes", tables)
+        self.assertIn("node_id", chunk_columns)
 
     def test_rebuild_is_incremental_for_add_change_and_remove(self) -> None:
         first = self.raw_path("first.md")
@@ -298,19 +431,65 @@ class WikiRawRetrievalTests(unittest.TestCase):
         second.write_text("# Second\n\nBeta.\n", encoding="utf-8")
 
         initial = self.payload("rebuild")
+        database = self.root / "state" / "raw_index.sqlite"
+        with sqlite3.connect(database) as connection:
+            initial_first_nodes = connection.execute(
+                """
+                SELECT n.node_id, n.subtree_byte_end
+                FROM raw_structure_nodes n
+                JOIN raw_documents d ON d.id = n.document_id
+                WHERE d.path = 'raw/inbox/first.md' ORDER BY n.ordinal
+                """
+            ).fetchall()
+            initial_second_nodes = connection.execute(
+                """
+                SELECT n.node_id, n.subtree_byte_end
+                FROM raw_structure_nodes n
+                JOIN raw_documents d ON d.id = n.document_id
+                WHERE d.path = 'raw/inbox/second.md' ORDER BY n.ordinal
+                """
+            ).fetchall()
         repeated = self.payload("rebuild")
         second.write_text("# Second\n\nBeta changed.\n", encoding="utf-8")
         changed = self.payload("rebuild")
+        with sqlite3.connect(database) as connection:
+            changed_first_nodes = connection.execute(
+                """
+                SELECT n.node_id, n.subtree_byte_end
+                FROM raw_structure_nodes n
+                JOIN raw_documents d ON d.id = n.document_id
+                WHERE d.path = 'raw/inbox/first.md' ORDER BY n.ordinal
+                """
+            ).fetchall()
+            changed_second_nodes = connection.execute(
+                """
+                SELECT n.node_id, n.subtree_byte_end
+                FROM raw_structure_nodes n
+                JOIN raw_documents d ON d.id = n.document_id
+                WHERE d.path = 'raw/inbox/second.md' ORDER BY n.ordinal
+                """
+            ).fetchall()
         first.unlink()
         removed = self.payload("rebuild")
+        with sqlite3.connect(database) as connection:
+            removed_first_nodes = connection.execute(
+                """
+                SELECT count(*) FROM raw_structure_nodes n
+                JOIN raw_documents d ON d.id = n.document_id
+                WHERE d.path = 'raw/inbox/first.md'
+                """
+            ).fetchone()[0]
 
         self.assertEqual(initial["changed_files"], 2)
         self.assertEqual(repeated["changed_files"], 0)
         self.assertEqual(repeated["unchanged_files"], 2)
         self.assertEqual(changed["changed_files"], 1)
         self.assertEqual(changed["unchanged_files"], 1)
+        self.assertEqual(initial_first_nodes, changed_first_nodes)
+        self.assertNotEqual(initial_second_nodes, changed_second_nodes)
         self.assertEqual(removed["removed_files"], 1)
         self.assertEqual(removed["documents"], 1)
+        self.assertEqual(removed_first_nodes, 0)
 
     def test_status_is_stat_only_and_doctor_detects_same_stat_drift(self) -> None:
         source = self.raw_path("drift.md")
@@ -360,6 +539,35 @@ class WikiRawRetrievalTests(unittest.TestCase):
 
         self.assertEqual(doctor["state"], "stale")
         self.assertIn("chunk_rows:raw/inbox/tamper.md", doctor["stale_reasons"])
+
+    def test_doctor_validates_structure_parents_containment_and_chunk_links(self) -> None:
+        self.raw_path("tamper-structure.md").write_text(
+            "# Parent\n\n## Child\nbody\n", encoding="utf-8"
+        )
+        self.payload("rebuild")
+        database = self.root / "state" / "raw_index.sqlite"
+        with sqlite3.connect(database) as connection:
+            connection.execute(
+                "UPDATE raw_structure_nodes SET subtree_byte_end = byte_start - 1 "
+                "WHERE ordinal = 1"
+            )
+            connection.execute(
+                "UPDATE raw_structure_nodes SET parent_id = 'missing-parent' "
+                "WHERE ordinal = 2"
+            )
+            connection.execute(
+                "UPDATE raw_chunks SET node_id = 'missing-node' WHERE rowid = 1"
+            )
+            connection.commit()
+
+        doctor = json.loads(self.run_cli("doctor", expected_returncode=1).stdout)
+
+        self.assertEqual(doctor["state"], "stale")
+        self.assertIn("structure_rows:raw/inbox/tamper-structure.md", doctor["stale_reasons"])
+        self.assertIn("node_containment", doctor["stale_reasons"])
+        self.assertIn("parent_references", doctor["stale_reasons"])
+        self.assertIn("chunk_node_references", doctor["stale_reasons"])
+        self.assertIn("foreign_keys", doctor["stale_reasons"])
 
 
 if __name__ == "__main__":

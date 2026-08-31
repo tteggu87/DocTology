@@ -36,7 +36,7 @@
         "Doctor validates node containment, parent references, chunk node references, and canonical hashes; focused raw retrieval tests pass."
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "checks": [
         "python3 -m unittest tests.test_wiki_raw_retrieval -v",
         "python3 -m unittest tests.test_wiki_sqlite_index -v",

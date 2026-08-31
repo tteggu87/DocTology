@@ -33,3 +33,22 @@ Started: 2026-09-01
 - Independent read-only code review -> APPROVE with no Critical, High, or Medium findings; exact top-heading record assertions were added in response to its low-severity determinism-test suggestion.
 - Learnings for future iterations: a root with no preamble has an empty byte range (`0:0`) but the current inclusive line convention reports `(1, 1)`; define the persisted/exposed empty-range convention during US-002 before line-based consumers depend on it.
 ---
+
+## 2026-09-01 08:11:28 KST - US-002
+- Classified as `tight-coupled`; implemented the schema, incremental persistence, read-only structure CLI, and doctor validation in the existing raw retrieval runtime without subagents.
+- Bumped the disposable raw schema to `raw-heading-structure-index-v2`, added `raw_structure_nodes`, linked `raw_chunks.node_id`, and made incompatible prior databases rebuild instead of migrate.
+- Preserved existing FTS result fields and behavior while adding `node_id`; small whole-document chunks map to the document root, while split heading chunks map to their exact heading node.
+- Added deterministic `tree`, `ancestors`, and `subtree` JSON commands. Each verifies the indexed document checksum first; stale reads return rebuild guidance without structure or content, never rebuild implicitly, and leave ordinary unchecked FTS search available.
+- Extended doctor to compare canonical document/chunk/node records and validate node containment, parent references, chunk-node references, foreign keys, FTS rows, and stored counts.
+- Added focused coverage for schema replacement, deterministic tree navigation, exact canonical subtree reopening, stale read-only behavior, incremental structure replacement/deletion, FTS node linkage, and structure tampering.
+- Files changed: `.agents/skills/llm-wiki-bootstrap/scripts/raw_retrieval.py`, `tests/test_wiki_raw_retrieval.py`, `.codex/ralph/prd.json`, `.codex/ralph/progress.txt`.
+- Quality checks run and result:
+  - `python3 -m unittest tests.test_wiki_raw_retrieval -v` -> PASS, 12 tests.
+  - `python3 -m unittest tests.test_wiki_sqlite_index -v` -> PASS, 9 tests.
+  - `python3 -m py_compile .agents/skills/llm-wiki-bootstrap/scripts/raw_retrieval.py .agents/skills/llm-wiki-bootstrap/scripts/reindex_sqlite_operational.py` -> PASS.
+  - `python3 -m unittest tests.test_wiki_sqlite_retrieval -v` -> PASS, 25 tests; existing non-failing SQLite `ResourceWarning` messages remained.
+  - `python3 -m unittest discover -s tests` -> PASS, 173 tests; existing non-failing SQLite `ResourceWarning` messages remained.
+  - `python3 scripts/manage_skills.py check` -> PASS, exactly three self-contained skills.
+  - `git diff --check` -> PASS.
+- Learnings for future iterations: preserving the existing one-chunk policy means a small Markdown document's FTS row links to the document root; once threshold splitting activates, each chunk links to its exact fenced-code-aware heading node. Structure reads are content-exact while ordinary search deliberately remains unchecked candidate discovery.
+---
