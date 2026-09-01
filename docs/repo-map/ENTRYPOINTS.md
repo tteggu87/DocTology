@@ -16,6 +16,9 @@ superseded_by: N/A
 - Multi-source snapshot completion: `wiki_loop.py --repo-root <vault> batch
   seal --batch <id> --reviewer <id> --review-ref <path>` finalizes and certifies
   one already-applied, unchanged batch without modifying `wiki/`.
+- Batch discovery and handoff: `wiki_loop.py batch --help` shows the fixed
+  command sequence, and `batch status --batch <id>` returns read-only freshness
+  plus a deterministic advisory `next_action`.
 - Downstream LLM Wiki raw retrieval: `scripts/raw_retrieval.py` owns incremental
   rebuild, stat status, lexical search, exact doctor, and checksum-checked
   `tree`, `ancestors`, and `subtree` navigation for `raw/**/*.md`.

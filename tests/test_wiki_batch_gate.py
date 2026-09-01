@@ -284,6 +284,43 @@ class WikiBatchGateTest(unittest.TestCase):
             with self.assertRaisesRegex(self.batch.BatchError, "unobserved_mutation"):
                 self.batch.apply_batch(root, batch_id, "writer-1")
 
+    def test_batch_status_reports_deterministic_next_action(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, source = self.make_vault(Path(tmp))
+            manifest = self.batch.plan_batch(root, [source])
+            batch_id = manifest["batch_id"]
+            self.assertEqual(
+                self.batch.batch_status(root, batch_id)["next_action"],
+                "link_runs_and_stage_drafts",
+            )
+
+            draft = self.make_draft(root, "status", "# Example\n")
+            self.batch.stage_draft(root, batch_id, source, str(draft.relative_to(root)))
+            self.assertEqual(
+                self.batch.batch_status(root, batch_id)["next_action"],
+                "link_runs_and_stage_drafts",
+            )
+
+            run_id = self.start_preplanned_run(root, source)
+            self.batch.link_run(root, batch_id, source, run_id)
+            self.assertEqual(
+                self.batch.batch_status(root, batch_id)["next_action"],
+                "apply_once",
+            )
+
+            self.batch.apply_batch(root, batch_id, "status-writer")
+            self.assertEqual(
+                self.batch.batch_status(root, batch_id)["next_action"],
+                "complete_source_then_certify",
+            )
+
+            page = root / "wiki" / "sources" / "source-example.md"
+            page.write_text(page.read_text(encoding="utf-8") + "\nChanged.\n", encoding="utf-8")
+            self.assertEqual(
+                self.batch.batch_status(root, batch_id)["next_action"],
+                "create_new_batch",
+            )
+
     def test_single_writer_apply_and_later_state_is_stale(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root, source = self.make_vault(Path(tmp))
@@ -452,10 +489,14 @@ class WikiBatchGateTest(unittest.TestCase):
 
             certification = self.batch.certify_batch(root, prepared["batch_id"])
             _path, manifest = self.batch.load_manifest(root, prepared["batch_id"])
+            next_action = self.batch.batch_status(
+                root, prepared["batch_id"]
+            )["next_action"]
 
         self.assertEqual(certification["status"], "blocked")
         self.assertEqual(certification["blockers"], ["MULTI_SOURCE_SEAL_MISSING"])
         self.assertIsNone(manifest["seal_event"])
+        self.assertEqual(next_action, "inspect_blockers")
 
     def test_multi_source_seal_metadata_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -533,6 +574,10 @@ class WikiBatchGateTest(unittest.TestCase):
             wiki_before_seal = self.batch.corpus_fingerprint(
                 root, self.batch.load_manifest(root, batch_id)[1]
             )
+            self.assertEqual(
+                self.batch.batch_status(root, batch_id)["next_action"],
+                "record_questions_then_seal",
+            )
             refresh_result = {
                 "retrieval_ready": True,
                 "retrieval_status": "ready",
@@ -552,6 +597,10 @@ class WikiBatchGateTest(unittest.TestCase):
                     )
             _path, refreshing_manifest = self.batch.load_manifest(root, batch_id)
             self.assertEqual(refreshing_manifest["seal_attempt"]["status"], "refreshing")
+            self.assertEqual(
+                self.batch.batch_status(root, batch_id)["next_action"],
+                "resume_seal",
+            )
 
             with mock.patch.object(
                 self.batch.workflow,
@@ -652,6 +701,9 @@ class WikiBatchGateTest(unittest.TestCase):
             _path, final_manifest = self.batch.load_manifest(root, batch_id)
             self.assertEqual(final_manifest["status"], "certified")
             self.assertEqual(final_manifest["certification"]["status"], "pass")
+            self.assertEqual(
+                self.batch.batch_status(root, batch_id)["next_action"], "done"
+            )
             self.assertTrue(
                 (root / "state" / "wiki_batches" / batch_id / "final_review.json").is_file()
             )
