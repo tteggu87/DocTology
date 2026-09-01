@@ -58,7 +58,8 @@ operator hint, not an automatic transition or replacement for validation.
 fingerprints. It scans manifest metadata, reports `freshness:
 unchecked`, limits returned rows, and routes every valid result to exact `batch
 status` before action. It never follows symlinked state, batch-root, batch, or
-manifest paths.
+manifest paths. Malformed source metadata or timestamps invalidate only that
+manifest; other recorded batches remain discoverable.
 
 It does not write `scripts/wiki_workflow.py`, `scripts/wiki_batch.py`,
 `scripts/pipeline_check.py`, or a copy of its own template assets.

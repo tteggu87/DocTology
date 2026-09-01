@@ -980,7 +980,14 @@ def batch_next_action(manifest: dict[str, Any], stale: bool) -> str:
 
 
 def batch_source_counts(manifest: dict[str, Any]) -> dict[str, int]:
-    rows = [row for row in manifest.get("sources", []) if isinstance(row, dict)]
+    sources = manifest.get("sources")
+    if (
+        not isinstance(sources, list)
+        or not sources
+        or any(not isinstance(row, dict) for row in sources)
+    ):
+        raise ValueError("manifest sources must be a non-empty list of objects")
+    rows = sources
     return {
         "total": len(rows),
         "linked": sum(bool(row.get("run_id")) for row in rows),
@@ -1020,8 +1027,16 @@ def list_batches(root: Path, *, active_only: bool, limit: int) -> dict[str, Any]
                     raise ValueError("batch id contains unsupported characters")
                 if manifest.get("batch_id") != candidate.name:
                     raise ValueError("manifest batch id does not match its directory")
-                if not isinstance(manifest.get("updated_at"), str):
+                updated_at = manifest.get("updated_at")
+                if not isinstance(updated_at, str):
                     raise ValueError("manifest updated_at must be a string")
+                parsed_updated_at = dt.datetime.fromisoformat(updated_at)
+                if (
+                    parsed_updated_at.tzinfo is None
+                    or parsed_updated_at.utcoffset() is None
+                ):
+                    raise ValueError("manifest updated_at must include a timezone")
+                source_counts = batch_source_counts(manifest)
             except (OSError, ValueError, json.JSONDecodeError):
                 items.append(
                     {
@@ -1050,9 +1065,9 @@ def list_batches(root: Path, *, active_only: bool, limit: int) -> dict[str, Any]
                 {
                     "batch_id": str(manifest.get("batch_id") or candidate.name),
                     "status": status,
-                    "updated_at": manifest.get("updated_at"),
+                    "updated_at": updated_at,
                     "next_action": "run_status",
-                    "source_counts": batch_source_counts(manifest),
+                    "source_counts": source_counts,
                     "certification_status": (
                         certification.get("status") if certification else None
                     ),

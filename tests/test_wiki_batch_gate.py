@@ -461,6 +461,40 @@ class WikiBatchGateTest(unittest.TestCase):
                     with self.assertRaisesRegex(self.batch.BatchError, "symlinked"):
                         self.batch.list_batches(root, active_only=False, limit=20)
 
+    def test_batch_list_isolates_malformed_manifest_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, source = self.make_vault(Path(tmp))
+            valid = self.batch.plan_batch(root, [source])
+
+            malformed = {
+                "null-sources": {
+                    "batch_id": "null-sources",
+                    "status": "planned",
+                    "updated_at": "2026-09-01T00:00:00+00:00",
+                    "sources": None,
+                },
+                "invalid-timestamp": {
+                    "batch_id": "invalid-timestamp",
+                    "status": "planned",
+                    "updated_at": "not-a-date",
+                    "sources": [{"path": source}],
+                },
+            }
+            for batch_id, payload in malformed.items():
+                directory = root / "state" / "wiki_batches" / batch_id
+                directory.mkdir()
+                (directory / "manifest.json").write_text(
+                    json.dumps(payload), encoding="utf-8"
+                )
+
+            listing = self.batch.list_batches(root, active_only=False, limit=20)
+            by_id = {item["batch_id"]: item for item in listing["batches"]}
+            self.assertEqual(listing["available"], 3)
+            self.assertEqual(by_id[valid["batch_id"]]["next_action"], "run_status")
+            for batch_id in malformed:
+                self.assertEqual(by_id[batch_id]["status"], "invalid")
+                self.assertEqual(by_id[batch_id]["next_action"], "inspect_manifest")
+
     def test_single_writer_apply_and_later_state_is_stale(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root, source = self.make_vault(Path(tmp))

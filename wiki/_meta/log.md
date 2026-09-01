@@ -7,6 +7,8 @@ updated: 2026-09-01
 
 # Maintenance log
 
+- 2026-09-01: Hardened batch discovery so malformed source metadata or
+  timestamps invalidate one manifest without interrupting the remaining list.
 - 2026-09-01: Added lightweight read-only batch discovery. `batch list` supports
   bounded and active-only listings, summarizes source progress, surfaces invalid
   manifests, and marks freshness unchecked so agents run exact status before
