@@ -321,6 +321,146 @@ class WikiBatchGateTest(unittest.TestCase):
                 "create_new_batch",
             )
 
+    def test_batch_list_discovers_recorded_batches_without_claiming_freshness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, source_a = self.make_vault(Path(tmp))
+            empty = self.batch.list_batches(root, active_only=False, limit=20)
+            self.assertEqual(empty["batches"], [])
+            self.assertEqual(empty["freshness"], "unchecked")
+
+            first = self.batch.plan_batch(root, [source_a])
+            _path, first_manifest = self.batch.load_manifest(root, first["batch_id"])
+            first_manifest["updated_at"] = "2026-09-01T01:00:00+00:00"
+            self.batch.write_json(
+                self.batch.manifest_path(root, first["batch_id"]), first_manifest
+            )
+
+            source_b = "raw/inbox/second-list.md"
+            (root / source_b).write_text("# Second list source\n", encoding="utf-8")
+            second = self.batch.plan_batch(root, [source_b])
+            _path, second_manifest = self.batch.load_manifest(root, second["batch_id"])
+            second_manifest["status"] = "certified"
+            second_manifest["certification"] = {"status": "pass"}
+            second_manifest["updated_at"] = "2026-09-01T02:00:00+00:00"
+            self.batch.write_json(
+                self.batch.manifest_path(root, second["batch_id"]), second_manifest
+            )
+
+            broken = root / "state" / "wiki_batches" / "batch-broken"
+            broken.mkdir()
+            (broken / "manifest.json").write_text("not json", encoding="utf-8")
+
+            invalid_id = root / "state" / "wiki_batches" / "bad id"
+            invalid_id.mkdir()
+            (invalid_id / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "batch_id": "bad id",
+                        "status": "planned",
+                        "updated_at": "2026-09-01T03:00:00+00:00",
+                        "sources": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            outside = root / "outside-batch"
+            outside.mkdir()
+            (outside / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "batch_id": "batch-link",
+                        "status": "planned",
+                        "updated_at": "2026-09-01T04:00:00+00:00",
+                        "sources": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "state" / "wiki_batches" / "batch-link").symlink_to(
+                outside, target_is_directory=True
+            )
+            file_link = root / "state" / "wiki_batches" / "batch-file-link"
+            file_link.mkdir()
+            (file_link / "manifest.json").symlink_to(outside / "manifest.json")
+
+            listing = self.batch.list_batches(root, active_only=False, limit=2)
+            self.assertEqual(listing["count"], 2)
+            self.assertEqual(listing["available"], 4)
+            self.assertEqual(
+                [item["batch_id"] for item in listing["batches"]],
+                [second["batch_id"], first["batch_id"]],
+            )
+            self.assertEqual(listing["batches"][0]["next_action"], "run_status")
+            self.assertEqual(
+                listing["batches"][1]["source_counts"],
+                {"total": 1, "linked": 0, "staged": 0, "deferred": 0},
+            )
+
+            active = self.batch.list_batches(root, active_only=True, limit=20)
+            self.assertEqual(active["available"], 3)
+            self.assertEqual(
+                {item["batch_id"] for item in active["batches"]},
+                {first["batch_id"], "batch-broken", "bad id"},
+            )
+            invalid = next(
+                item for item in active["batches"] if item["batch_id"] == "batch-broken"
+            )
+            self.assertEqual(invalid["status"], "invalid")
+            self.assertEqual(invalid["next_action"], "inspect_manifest")
+            invalid_name = next(
+                item for item in active["batches"] if item["batch_id"] == "bad id"
+            )
+            self.assertEqual(invalid_name["status"], "invalid")
+            self.assertEqual(invalid_name["next_action"], "inspect_manifest")
+            self.assertNotIn("batch-link", {item["batch_id"] for item in active["batches"]})
+            self.assertNotIn(
+                "batch-file-link", {item["batch_id"] for item in active["batches"]}
+            )
+
+            with self.assertRaisesRegex(self.batch.BatchError, "between 1 and 100"):
+                self.batch.list_batches(root, active_only=False, limit=0)
+
+    def test_batch_list_rejects_symlinked_parent_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            outside_batches = base / "outside-batches"
+            outside_batch = outside_batches / "batch-outside"
+            outside_batch.mkdir(parents=True)
+            (outside_batch / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "batch_id": "batch-outside",
+                        "status": "planned",
+                        "updated_at": "2026-09-01T00:00:00+00:00",
+                        "sources": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            state_link_root = base / "state-link-vault"
+            state_link_root.mkdir()
+            outside_state = base / "outside-state"
+            outside_state.mkdir()
+            (outside_state / "wiki_batches").symlink_to(
+                outside_batches, target_is_directory=True
+            )
+            (state_link_root / "state").symlink_to(
+                outside_state, target_is_directory=True
+            )
+
+            batch_root_link_root = base / "batch-root-link-vault"
+            (batch_root_link_root / "state").mkdir(parents=True)
+            (batch_root_link_root / "state" / "wiki_batches").symlink_to(
+                outside_batches, target_is_directory=True
+            )
+
+            for root in (state_link_root, batch_root_link_root):
+                with self.subTest(root=root.name):
+                    with self.assertRaisesRegex(self.batch.BatchError, "symlinked"):
+                        self.batch.list_batches(root, active_only=False, limit=20)
+
     def test_single_writer_apply_and_later_state_is_stale(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root, source = self.make_vault(Path(tmp))

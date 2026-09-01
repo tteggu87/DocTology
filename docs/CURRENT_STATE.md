@@ -80,3 +80,5 @@ sources cannot certify without a current seal covering the exact run set. Public
 batch help now shows the complete command order and subcommand purposes, while
 read-only batch status returns a deterministic advisory `next_action` for
 handoff and interruption recovery without adding an orchestration runtime.
+Read-only batch list discovers recent or active manifests without repeated
+corpus hashing and explicitly routes each unchecked result through exact status.

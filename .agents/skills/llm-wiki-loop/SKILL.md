@@ -274,6 +274,14 @@ current manifest (`link_runs_and_stage_drafts`, `apply_once`,
 `done`, `create_new_batch`, or `inspect_blockers`). It never executes the action
 or weakens a gate.
 
+When the batch id is unknown, use `batch list` or `batch list --active-only` to
+discover recent manifests. Listing is intentionally lightweight: it does not
+hash the corpus and reports `freshness: unchecked` plus `next_action:
+run_status`. Always run exact `batch status --batch <batch-id>` before acting on
+a listed batch. An invalid manifest is returned as `status: invalid` with
+`next_action: inspect_manifest` instead of hiding the batch or failing the whole
+listing.
+
 If `wiki/_meta/representative_questions.json` is absent, create its target-local
 question contract from this skill's `assets/representative_questions_template.json`
 and tailor it to the corpus before `batch plan`. Do not leave the placeholder

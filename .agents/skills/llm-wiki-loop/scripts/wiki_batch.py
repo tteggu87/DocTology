@@ -34,6 +34,8 @@ def load_sibling(name: str):
 workflow = load_sibling("wiki_workflow")
 pipeline_check = load_sibling("pipeline_check")
 
+DEFAULT_LIST_LIMIT = 20
+MAX_LIST_LIMIT = 100
 BATCH_WORKFLOW_HELP = """Multi-source workflow:
   1. Freeze representative questions before planning.
   2. plan the fixed source set.
@@ -42,7 +44,8 @@ BATCH_WORKFLOW_HELP = """Multi-source workflow:
   5. stage every draft, then apply once with one writer.
   6. record representative-question receipts against the applied fingerprint.
   7. seal once; seal completes linked runs and certifies automatically.
-  8. status reports the current state and deterministic next_action.
+  8. list discovers recorded batches without hashing the corpus.
+  9. status verifies one batch and reports its deterministic next_action.
 """
 
 
@@ -72,9 +75,16 @@ def resolve_inside(root: Path, raw: str) -> Path:
 
 
 def batch_dir(root: Path, batch_id: str) -> Path:
-    if not batch_id or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for character in batch_id):
+    if not valid_batch_id(batch_id):
         raise BatchError("batch id contains unsupported characters")
     return root.resolve() / "state" / "wiki_batches" / batch_id
+
+
+def valid_batch_id(batch_id: str) -> bool:
+    return bool(batch_id) and not any(
+        character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
+        for character in batch_id
+    )
 
 
 def publish_lock_path(root: Path) -> Path:
@@ -969,6 +979,102 @@ def batch_next_action(manifest: dict[str, Any], stale: bool) -> str:
     return "link_runs_and_stage_drafts" if active_rows else "inspect_blockers"
 
 
+def batch_source_counts(manifest: dict[str, Any]) -> dict[str, int]:
+    rows = [row for row in manifest.get("sources", []) if isinstance(row, dict)]
+    return {
+        "total": len(rows),
+        "linked": sum(bool(row.get("run_id")) for row in rows),
+        "staged": sum(bool(row.get("staged_files")) for row in rows),
+        "deferred": sum(
+            row.get("disposition") == "deferred_with_reason" and bool(row.get("reason"))
+            for row in rows
+        ),
+    }
+
+
+def list_batches(root: Path, *, active_only: bool, limit: int) -> dict[str, Any]:
+    if not 1 <= limit <= MAX_LIST_LIMIT:
+        raise BatchError(f"list limit must be between 1 and {MAX_LIST_LIMIT}")
+    root = root.resolve()
+    state_directory = root / "state"
+    directory = state_directory / "wiki_batches"
+    if state_directory.is_symlink() or directory.is_symlink():
+        raise BatchError("batch list refuses symlinked state paths")
+    items: list[dict[str, Any]] = []
+    if directory.is_dir():
+        for candidate in directory.iterdir():
+            manifest_path = candidate / "manifest.json"
+            if (
+                candidate.is_symlink()
+                or manifest_path.is_symlink()
+                or not candidate.is_dir()
+                or not manifest_path.is_file()
+            ):
+                continue
+            try:
+                manifest_path.resolve().relative_to(directory.resolve())
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                if not isinstance(manifest, dict):
+                    raise ValueError("manifest is not an object")
+                if not valid_batch_id(candidate.name):
+                    raise ValueError("batch id contains unsupported characters")
+                if manifest.get("batch_id") != candidate.name:
+                    raise ValueError("manifest batch id does not match its directory")
+                if not isinstance(manifest.get("updated_at"), str):
+                    raise ValueError("manifest updated_at must be a string")
+            except (OSError, ValueError, json.JSONDecodeError):
+                items.append(
+                    {
+                        "batch_id": candidate.name,
+                        "status": "invalid",
+                        "updated_at": None,
+                        "next_action": "inspect_manifest",
+                        "source_counts": {
+                            "total": 0,
+                            "linked": 0,
+                            "staged": 0,
+                            "deferred": 0,
+                        },
+                    }
+                )
+                continue
+            status = str(manifest.get("status") or "unknown")
+            if active_only and status == "certified":
+                continue
+            certification = (
+                manifest.get("certification")
+                if isinstance(manifest.get("certification"), dict)
+                else None
+            )
+            items.append(
+                {
+                    "batch_id": str(manifest.get("batch_id") or candidate.name),
+                    "status": status,
+                    "updated_at": manifest.get("updated_at"),
+                    "next_action": "run_status",
+                    "source_counts": batch_source_counts(manifest),
+                    "certification_status": (
+                        certification.get("status") if certification else None
+                    ),
+                }
+            )
+    items.sort(
+        key=lambda item: (str(item.get("updated_at") or ""), str(item["batch_id"])),
+        reverse=True,
+    )
+    available = len(items)
+    selected = items[:limit]
+    return {
+        "schema_version": 1,
+        "freshness": "unchecked",
+        "active_only": active_only,
+        "limit": limit,
+        "count": len(selected),
+        "available": available,
+        "batches": selected,
+    }
+
+
 def batch_status(root: Path, batch_id: str) -> dict[str, Any]:
     _path, manifest = load_manifest(root, batch_id)
     current = corpus_fingerprint(root, manifest)
@@ -1061,6 +1167,18 @@ def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
     )
     certify.add_argument("--batch", required=True, help="Batch id to certify.")
 
+    listing = sub.add_parser(
+        "list", help="Discover recorded batches; run status before acting."
+    )
+    listing.add_argument(
+        "--active-only", action="store_true",
+        help="Exclude batches recorded as certified.",
+    )
+    listing.add_argument(
+        "--limit", type=int, default=DEFAULT_LIST_LIMIT,
+        help=f"Maximum rows to return (1-{MAX_LIST_LIMIT}; default {DEFAULT_LIST_LIMIT}).",
+    )
+
     status = sub.add_parser("status", help="Report freshness and deterministic next_action.")
     status.add_argument("--batch", required=True, help="Batch id to inspect.")
     return parser
@@ -1091,6 +1209,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "certify":
             result = certify_batch(root, args.batch)
+        elif args.command == "list":
+            result = list_batches(root, active_only=args.active_only, limit=args.limit)
         else:
             result = batch_status(root, args.batch)
         print(json.dumps(result, ensure_ascii=False, indent=2))
