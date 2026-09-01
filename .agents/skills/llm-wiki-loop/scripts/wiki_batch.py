@@ -34,6 +34,17 @@ def load_sibling(name: str):
 workflow = load_sibling("wiki_workflow")
 pipeline_check = load_sibling("pipeline_check")
 
+BATCH_WORKFLOW_HELP = """Multi-source workflow:
+  1. Freeze representative questions before planning.
+  2. plan the fixed source set.
+  3. start and link one run per source; stop after semantic_plan_frozen.
+  4. let workers write only source-owned drafts under state/.
+  5. stage every draft, then apply once with one writer.
+  6. record representative-question receipts against the applied fingerprint.
+  7. seal once; seal completes linked runs and certifies automatically.
+  8. status reports the current state and deterministic next_action.
+"""
+
 
 def utc_now() -> str:
     return dt.datetime.now(dt.UTC).isoformat()
@@ -914,6 +925,50 @@ def certify_batch(root: Path, batch_id: str) -> dict[str, Any]:
     return certification
 
 
+def batch_next_action(manifest: dict[str, Any], stale: bool) -> str:
+    if stale:
+        return "create_new_batch"
+    attempt = (
+        manifest.get("seal_attempt")
+        if isinstance(manifest.get("seal_attempt"), dict)
+        else {}
+    )
+    if attempt.get("status") == "stale":
+        return "create_new_batch"
+    if attempt.get("status") in {"refreshing", "prepared"}:
+        return "resume_seal"
+    certification = (
+        manifest.get("certification")
+        if isinstance(manifest.get("certification"), dict)
+        else {}
+    )
+    if manifest.get("status") == "certified" and certification.get("status") == "pass":
+        return "done"
+    if manifest.get("status") == "blocked":
+        return "inspect_blockers"
+    active_rows = [
+        row
+        for row in manifest.get("sources", [])
+        if isinstance(row, dict)
+        and not (
+            row.get("disposition") == "deferred_with_reason" and row.get("reason")
+        )
+    ]
+    if manifest.get("apply_event") is not None:
+        if manifest.get("seal_event") is not None:
+            return "resume_seal"
+        return (
+            "record_questions_then_seal"
+            if len(active_rows) > 1
+            else "complete_source_then_certify"
+        )
+    if active_rows and all(
+        row.get("run_id") and row.get("staged_files") for row in active_rows
+    ):
+        return "apply_once"
+    return "link_runs_and_stage_drafts" if active_rows else "inspect_blockers"
+
+
 def batch_status(root: Path, batch_id: str) -> dict[str, Any]:
     _path, manifest = load_manifest(root, batch_id)
     current = corpus_fingerprint(root, manifest)
@@ -931,6 +986,7 @@ def batch_status(root: Path, batch_id: str) -> dict[str, Any]:
         "canonical_state_stale": canonical_stale,
         "certification_stale": certification_stale,
         "procedure_contract_stale": contract_stale,
+        "next_action": batch_next_action(manifest, stale),
         "sources": manifest.get("sources", []),
     }
 
@@ -939,51 +995,74 @@ def build_parser(prog: str | None = None) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=prog,
         description="Batch and corpus gate for LLM Wiki.",
+        epilog=BATCH_WORKFLOW_HELP,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         allow_abbrev=False,
     )
     parser.add_argument("--root", default=".", help=argparse.SUPPRESS)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    plan = sub.add_parser("plan")
-    plan.add_argument("--source", action="append", required=True)
+    plan = sub.add_parser("plan", help="Freeze one batch source set and baseline.")
+    plan.add_argument(
+        "--source", action="append", required=True,
+        help="Repository-relative raw source; repeat for every source.",
+    )
 
-    link = sub.add_parser("link-run")
-    link.add_argument("--batch", required=True)
-    link.add_argument("--source", required=True)
-    link.add_argument("--run", required=True)
+    link = sub.add_parser("link-run", help="Link one pre-mutation source run.")
+    link.add_argument("--batch", required=True, help="Batch id from plan.")
+    link.add_argument("--source", required=True, help="Source already frozen in the batch.")
+    link.add_argument("--run", required=True, help="Run stopped after semantic_plan_frozen.")
 
-    defer = sub.add_parser("defer")
-    defer.add_argument("--batch", required=True)
-    defer.add_argument("--source", required=True)
-    defer.add_argument("--reason", required=True)
+    defer = sub.add_parser("defer", help="Defer one source with a bounded reason.")
+    defer.add_argument("--batch", required=True, help="Batch id from plan.")
+    defer.add_argument("--source", required=True, help="Source already frozen in the batch.")
+    defer.add_argument("--reason", required=True, help="Concrete reason for deferral.")
 
-    stage = sub.add_parser("stage")
-    stage.add_argument("--batch", required=True)
-    stage.add_argument("--source", required=True)
-    stage.add_argument("--input-dir", required=True)
+    stage = sub.add_parser("stage", help="Register one state-only source draft.")
+    stage.add_argument("--batch", required=True, help="Batch id from plan.")
+    stage.add_argument("--source", required=True, help="Source that owns this draft.")
+    stage.add_argument("--input-dir", required=True, help="Draft directory inside the repository.")
 
-    apply = sub.add_parser("apply")
-    apply.add_argument("--batch", required=True)
-    apply.add_argument("--writer-id", required=True)
+    apply = sub.add_parser("apply", help="Apply all staged canonical files exactly once.")
+    apply.add_argument("--batch", required=True, help="Batch whose drafts are complete.")
+    apply.add_argument("--writer-id", required=True, help="Identity of the sole canonical writer.")
 
-    question = sub.add_parser("question-receipt")
-    question.add_argument("--batch", required=True)
-    question.add_argument("--case-id", required=True)
-    question.add_argument("--posture", choices=["supported", "partial", "abstain", "escalate"], required=True)
-    question.add_argument("--evidence-ref", action="append", default=[])
-    question.add_argument("--reviewer", required=True)
-    question.add_argument("--corpus-fingerprint", required=True)
+    question = sub.add_parser(
+        "question-receipt", help="Record one representative-question result."
+    )
+    question.add_argument("--batch", required=True, help="Applied batch id.")
+    question.add_argument("--case-id", required=True, help="Frozen question case id.")
+    question.add_argument(
+        "--posture", choices=["supported", "partial", "abstain", "escalate"],
+        required=True, help="Observed answer posture.",
+    )
+    question.add_argument(
+        "--evidence-ref", action="append", default=[],
+        help="Current evidence file; repeat as needed.",
+    )
+    question.add_argument("--reviewer", required=True, help="Reviewer identity.")
+    question.add_argument(
+        "--corpus-fingerprint", required=True,
+        help="Current applied corpus fingerprint.",
+    )
 
-    seal = sub.add_parser("seal")
-    seal.add_argument("--batch", required=True)
-    seal.add_argument("--reviewer", required=True)
-    seal.add_argument("--review-ref", action="append", required=True)
+    seal = sub.add_parser(
+        "seal", help="Finalize linked runs and certify one unchanged snapshot."
+    )
+    seal.add_argument("--batch", required=True, help="Applied batch id.")
+    seal.add_argument("--reviewer", required=True, help="Final reviewer identity.")
+    seal.add_argument(
+        "--review-ref", action="append", required=True,
+        help="Reviewed current file; repeat as needed.",
+    )
 
-    certify = sub.add_parser("certify")
-    certify.add_argument("--batch", required=True)
+    certify = sub.add_parser(
+        "certify", help="Recheck certification; multi-source batches require seal."
+    )
+    certify.add_argument("--batch", required=True, help="Batch id to certify.")
 
-    status = sub.add_parser("status")
-    status.add_argument("--batch", required=True)
+    status = sub.add_parser("status", help="Report freshness and deterministic next_action.")
+    status.add_argument("--batch", required=True, help="Batch id to inspect.")
     return parser
 
 

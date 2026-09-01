@@ -266,6 +266,14 @@ non-deferred source requires a current seal event covering exactly those source
 runs. The legacy direct-certification path remains valid for a single
 non-deferred source.
 
+Use `batch --help` to recover the complete multi-source command order at any
+execution boundary. Use `batch status --batch <batch-id>` after interruption or
+handoff; its deterministic `next_action` is advisory routing derived from the
+current manifest (`link_runs_and_stage_drafts`, `apply_once`,
+`complete_source_then_certify`, `record_questions_then_seal`, `resume_seal`,
+`done`, `create_new_batch`, or `inspect_blockers`). It never executes the action
+or weakens a gate.
+
 If `wiki/_meta/representative_questions.json` is absent, create its target-local
 question contract from this skill's `assets/representative_questions_template.json`
 and tailor it to the corpus before `batch plan`. Do not leave the placeholder

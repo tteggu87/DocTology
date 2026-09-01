@@ -76,4 +76,7 @@ stale prepared attempt restores the original source-run state. A pre-refresh
 journal marker prevents an interrupted seal from running retrieval refresh more
 than once and recovers its posture through a read-only status check. Batch
 certification also enforces this boundary directly: multiple non-deferred
-sources cannot certify without a current seal covering the exact run set.
+sources cannot certify without a current seal covering the exact run set. Public
+batch help now shows the complete command order and subcommand purposes, while
+read-only batch status returns a deterministic advisory `next_action` for
+handoff and interruption recovery without adding an orchestration runtime.

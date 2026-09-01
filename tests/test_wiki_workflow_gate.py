@@ -276,6 +276,10 @@ class WikiWorkflowGateTest(unittest.TestCase):
                     self.assertIn(f"usage: wiki_loop.py {command}", result.stdout)
                     self.assertNotIn("--root", result.stdout)
                     self.assertNotIn(f"{command}.py", result.stdout)
+                if command == "batch" and remainder == ["--help"]:
+                    self.assertIn("Multi-source workflow:", result.stdout)
+                    self.assertIn("semantic_plan_frozen", result.stdout)
+                    self.assertIn("seal completes linked runs", result.stdout)
 
     def test_public_help_router_handles_global_option_edge_cases(self) -> None:
         success_cases = (

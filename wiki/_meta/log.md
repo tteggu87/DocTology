@@ -7,6 +7,11 @@ updated: 2026-09-01
 
 # Maintenance log
 
+- 2026-09-01: Improved batch workflow discovery without adding orchestration.
+  Public help now shows the complete multi-source sequence and explains each
+  subcommand; read-only batch status returns a deterministic advisory
+  `next_action` for normal progress, handoff, interruption, stale state, and
+  completion.
 - 2026-09-01: Closed the multi-source direct-certification bypass. More than
   one non-deferred source now requires a current seal event covering the exact
   linked run set, while single-source direct certification remains compatible;
