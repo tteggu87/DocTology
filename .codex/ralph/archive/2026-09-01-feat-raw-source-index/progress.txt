@@ -1,7 +1,0 @@
-## Archived completed Ralph run
-
-- Product: Optional raw-source retrieval for generated LLM Wiki vaults
-- Branch: `feat/raw-source-index`
-- US-001: complete; focused and full checks passed.
-- US-002: complete; focused and full checks passed.
-- Full historical detail remains recoverable from Git history before the Markdown structure navigation run.
