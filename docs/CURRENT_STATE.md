@@ -63,3 +63,15 @@ base `AGENTS.md` routes full coverage, batch work, and `ready` completion to
 own runtime. Explicit `summary` is the only reduced path. Full final review
 requires one applied ingest receipt bound to the raw source hash, balanced
 projected/omitted/deferred counts, and zero deferred units.
+
+Multi-source ingest now has a snapshot seal path. All linked source runs stop
+after their three pre-mutation stages while drafts remain under `state/`; one
+writer applies the merged canonical files, question receipts bind to that
+result, and `batch seal` records one state-only review, completes every source
+run against the unchanged snapshot, refreshes retrieval once, and immediately
+certifies. A post-apply mutation fails seal instead of forcing sequential
+source-by-source revalidation. Seal prepares complete run payloads before live
+state replacement; an interrupted commit is explicitly resumable, while a
+stale prepared attempt restores the original source-run state. A pre-refresh
+journal marker prevents an interrupted seal from running retrieval refresh more
+than once and recovers its posture through a read-only status check.

@@ -16,7 +16,9 @@ superseded_by: N/A
   self-contained procedure/batch/structural runtime, receipt assets, and a
   `--repo-root` entrypoint. Ordinary ingest compiles to coverage-preserving full
   mode and explicit summary requests remain opt-in. Derived heading structure
-  may guide planning but never changes the coverage receipt boundary.
+  may guide planning but never changes the coverage receipt boundary. Its batch
+  runtime stages outside the wiki, applies once, and seals all source runs plus
+  certification against one unchanged corpus snapshot.
 - `.agents/skills/repo-docs-intelligence-bootstrap/`: templates, validator,
   portable docs-index lifecycle, optional native SQLite readers, shared SQL,
   and dogfood tooling.

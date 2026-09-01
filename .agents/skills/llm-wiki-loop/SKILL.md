@@ -167,7 +167,12 @@ final review must bind to the latest mutation fingerprint. Use the default
 
 For a batch, use `wiki_loop.py ... batch plan` to freeze the manifest and reuse
 `state/wiki_batches/`. Worker drafts stay in the batch draft area; exactly one
-writer may apply canonical files.
+writer may apply canonical files. Start and link every non-deferred source run,
+record exactly the three pre-mutation stages through `semantic_plan_frozen`, and
+then stop those runs while workers prepare drafts. Do not complete one source
+run and mutate the wiki for the next source. Freeze and tailor
+`wiki/_meta/representative_questions.json` before `batch plan`; adding or
+changing that canonical contract after planning intentionally stales the batch.
 
 ### 4. Register The Source Boundary
 
@@ -238,10 +243,28 @@ For a batch, require:
 4. required representative-question receipts match the current corpus
 5. the final corpus fingerprint is certified after the last mutation
 
+Use the snapshot-seal path for multi-source work. After the one writer applies
+the complete merged draft, record all required representative-question
+receipts against its result fingerprint, then seal once:
+
+```bash
+python3 "<SKILL_DIR>/scripts/wiki_loop.py" --repo-root <target-repo> batch seal \
+  --batch <batch-id> --reviewer <reviewer-id> \
+  --review-ref wiki/sources/<reviewed-page>.md
+```
+
+`batch seal` verifies that no canonical file changed after the writer apply,
+requires every full-mode source's applied coverage receipt, writes one bounded
+`state/wiki_batches/<batch-id>/final_review.json`, binds all linked source runs
+to the same batch corpus fingerprint, refreshes optional retrieval at most once,
+and immediately certifies the batch. Seal does not mutate `wiki/`. A missing or
+stale question receipt, review reference, source receipt, staged file, source
+run, or corpus fingerprint fails closed before certification.
+
 If `wiki/_meta/representative_questions.json` is absent, create its target-local
 question contract from this skill's `assets/representative_questions_template.json`
-before recording question receipts. Tailor questions to the corpus; do not leave
-the placeholder text as evidence.
+and tailor it to the corpus before `batch plan`. Do not leave the placeholder
+text as evidence.
 
 Do not replace a missing gate with prose or a checklist and call the batch
 ready.
@@ -249,9 +272,9 @@ ready.
 ### 8. Repair From Structured Blockers
 
 Make the smallest targeted repair, then rerun the same gate. Examples include
-completing a missing source run, resolving a conflicting draft before the
-single writer applies it, repairing broken evidence links, rerunning final
-review after mutation, or refreshing a stale question receipt.
+completing missing pre-mutation source stages, resolving a conflicting draft
+before the single writer applies it, repairing broken evidence links, creating
+a new batch after post-apply mutation, or refreshing a stale question receipt.
 
 Limit automatic repair to three attempts per stable blocker in one run. Stop
 earlier when repair needs new user authority, unavailable semantic judgment, a

@@ -21,7 +21,9 @@ The generated vault contains the base wiki contract and optional retrieval
 helpers, not copied loop executables. `llm-wiki-loop` owns the source procedure,
 batch, and structural gate runtime and runs it from the skill directory against
 the vault. The vault stores only canonical wiki changes plus bounded run, batch,
-and receipt state.
+and receipt state. Multi-source batches prepare drafts outside `wiki/`, publish
+once, and use one state-only snapshot seal to bind all source runs and the final
+certification to the unchanged writer result.
 
 The Repo Docs skill owns that index builder plus optional native SQLite read
 adapters as sibling skill files. Python owns rebuild/status/doctor and remains
