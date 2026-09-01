@@ -141,6 +141,136 @@ class WikiBatchGateTest(unittest.TestCase):
         )
         return draft
 
+    def prepare_two_source_applied_batch(
+        self, root: Path, source_a: str
+    ) -> dict[str, str]:
+        source_b = "raw/inbox/second.md"
+        (root / source_b).write_text("# Second\n\nMore evidence.\n", encoding="utf-8")
+        run_a = self.start_preplanned_run(root, source_a)
+        run_b = self.start_preplanned_run(root, source_b)
+        manifest = self.batch.plan_batch(root, [source_a, source_b])
+        batch_id = manifest["batch_id"]
+        self.batch.link_run(root, batch_id, source_a, run_a)
+        self.batch.link_run(root, batch_id, source_b, run_b)
+
+        draft_a = self.write_source_draft(
+            root, "seal-a", source_a, "source-example", "ingest-example"
+        )
+        index = draft_a / "wiki" / "_meta" / "index.md"
+        index.parent.mkdir(parents=True, exist_ok=True)
+        index.write_text(
+            "# Index\n\n"
+            "- [[source-example]]\n"
+            "- [[ingest-example]]\n"
+            "- [[source-second]]\n"
+            "- [[ingest-second]]\n",
+            encoding="utf-8",
+        )
+        (draft_a / "wiki" / "_meta" / "log.md").write_text(
+            "# Log\n\n"
+            f"- Ingested `{source_a}` through [[source-example]].\n"
+            f"- Ingested `{source_b}` through [[source-second]].\n",
+            encoding="utf-8",
+        )
+        draft_b = self.write_source_draft(
+            root, "seal-b", source_b, "source-second", "ingest-second"
+        )
+        self.batch.stage_draft(root, batch_id, source_a, str(draft_a.relative_to(root)))
+        self.batch.stage_draft(root, batch_id, source_b, str(draft_b.relative_to(root)))
+        self.batch.apply_batch(root, batch_id, "writer-seal")
+
+        fingerprint = self.batch.batch_status(root, batch_id)["current_fingerprint"]
+        self.batch.record_question(
+            root,
+            batch_id,
+            "direct_lookup",
+            "supported",
+            ["wiki/sources/source-example.md", "wiki/sources/source-second.md"],
+            "question-reviewer",
+            fingerprint,
+        )
+        return {
+            "source_b": source_b,
+            "run_a": run_a,
+            "run_b": run_b,
+            "batch_id": batch_id,
+            "fingerprint": fingerprint,
+        }
+
+    def complete_applied_run(
+        self,
+        root: Path,
+        run_id: str,
+        source: str,
+        source_page: str,
+        report: str,
+    ) -> None:
+        stage_args = dict(
+            na_reason=None,
+            result=None,
+            posture=None,
+            reviewed_fingerprint=None,
+        )
+        self.batch.workflow.record_stage(
+            root,
+            run_id,
+            "register_or_resolve_source",
+            refs=[source_page],
+            **stage_args,
+        )
+        self.batch.workflow.record_stage(
+            root,
+            run_id,
+            "update_source_page",
+            refs=[source_page],
+            na_reason="source_page_current",
+            result=None,
+            posture=None,
+            reviewed_fingerprint=None,
+        )
+        self.batch.workflow.record_stage(
+            root,
+            run_id,
+            "update_affected_pages",
+            refs=[source_page],
+            na_reason="no_affected_page_promotion",
+            result=None,
+            posture=None,
+            reviewed_fingerprint=None,
+        )
+        self.batch.workflow.record_stage(
+            root,
+            run_id,
+            "refresh_index_and_log",
+            refs=["wiki/_meta/index.md", "wiki/_meta/log.md", report],
+            na_reason="meta_current_after_batch_apply",
+            result=None,
+            posture=None,
+            reviewed_fingerprint=None,
+        )
+        self.batch.workflow.record_stage(
+            root,
+            run_id,
+            "validate_structure",
+            refs=[source_page, "wiki/_meta/index.md"],
+            na_reason=None,
+            result="passed",
+            posture=None,
+            reviewed_fingerprint=None,
+        )
+        reviewed = self.batch.workflow.state_fingerprint(root, source)
+        self.batch.workflow.record_stage(
+            root,
+            run_id,
+            "final_review_completed",
+            refs=[source_page, report],
+            na_reason=None,
+            result=None,
+            posture="ready",
+            reviewed_fingerprint=reviewed,
+        )
+        self.assertEqual(self.batch.workflow.finish_run(root, run_id)["status"], "pass")
+
     def test_unobserved_mutation_blocks_writer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root, source = self.make_vault(Path(tmp))
@@ -301,55 +431,105 @@ class WikiBatchGateTest(unittest.TestCase):
         self.assertEqual(certification["status"], "pass")
         self.assertEqual(certification["blockers"], [])
 
+    def test_multi_source_certification_requires_seal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, source_a = self.make_vault(Path(tmp))
+            prepared = self.prepare_two_source_applied_batch(root, source_a)
+            self.complete_applied_run(
+                root,
+                prepared["run_a"],
+                source_a,
+                "wiki/sources/source-example.md",
+                "wiki/_meta/ingest_reports/ingest-example.md",
+            )
+            self.complete_applied_run(
+                root,
+                prepared["run_b"],
+                prepared["source_b"],
+                "wiki/sources/source-second.md",
+                "wiki/_meta/ingest_reports/ingest-second.md",
+            )
+
+            certification = self.batch.certify_batch(root, prepared["batch_id"])
+            _path, manifest = self.batch.load_manifest(root, prepared["batch_id"])
+
+        self.assertEqual(certification["status"], "blocked")
+        self.assertEqual(certification["blockers"], ["MULTI_SOURCE_SEAL_MISSING"])
+        self.assertIsNone(manifest["seal_event"])
+
+    def test_multi_source_seal_metadata_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root, source_a = self.make_vault(Path(tmp))
+            prepared = self.prepare_two_source_applied_batch(root, source_a)
+            refresh_result = {
+                "retrieval_ready": True,
+                "retrieval_status": "ready",
+                "semantic_status": "ready",
+            }
+            with mock.patch.object(
+                self.batch.workflow,
+                "run_retrieval_refresh",
+                return_value=refresh_result,
+            ):
+                sealed = self.batch.seal_batch(
+                    root,
+                    prepared["batch_id"],
+                    "batch-reviewer",
+                    ["wiki/sources/source-example.md", "wiki/sources/source-second.md"],
+                )
+            self.assertEqual(sealed["status"], "pass")
+            _path, manifest = self.batch.load_manifest(root, prepared["batch_id"])
+
+            seal_cases = (
+                (
+                    "invalid run list",
+                    {"source_runs": None},
+                    "MULTI_SOURCE_SEAL_RUNS_INVALID",
+                ),
+                (
+                    "run set mismatch",
+                    {"source_runs": [prepared["run_a"]]},
+                    "MULTI_SOURCE_SEAL_RUNS_MISMATCH",
+                ),
+                (
+                    "stale corpus fingerprint",
+                    {"corpus_fingerprint": "sha256:stale"},
+                    "MULTI_SOURCE_SEAL_STALE",
+                ),
+            )
+            for name, updates, expected in seal_cases:
+                with self.subTest(name=name):
+                    changed = json.loads(json.dumps(manifest))
+                    changed["seal_event"].update(updates)
+                    blockers, _results = self.batch.certification_checks(root, changed)
+                    self.assertIn(expected, blockers)
+
+            changed = json.loads(json.dumps(manifest))
+            changed["sources"][0]["sealed_fingerprint"] = "sha256:stale"
+            blockers, _results = self.batch.certification_checks(root, changed)
+            self.assertIn("MULTI_SOURCE_RUN_SEAL_STALE", blockers)
+
+            changed = json.loads(json.dumps(manifest))
+            changed["sources"][0]["run_id"] = None
+            blockers, _results = self.batch.certification_checks(root, changed)
+            self.assertIn("SOURCE_RUN_MISSING:raw/inbox/example.md", blockers)
+            self.assertIn("MULTI_SOURCE_SEAL_RUNS_MISMATCH", blockers)
+
+            changed = json.loads(json.dumps(manifest))
+            changed["seal_event"] = None
+            changed["sources"][1]["disposition"] = "deferred_with_reason"
+            changed["sources"][1]["reason"] = "explicitly deferred for this batch"
+            blockers, _results = self.batch.certification_checks(root, changed)
+            self.assertNotIn("MULTI_SOURCE_SEAL_MISSING", blockers)
+
     def test_two_source_batch_seals_one_snapshot_and_refreshes_once(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root, source_a = self.make_vault(Path(tmp))
-            source_b = "raw/inbox/second.md"
-            (root / source_b).write_text("# Second\n\nMore evidence.\n", encoding="utf-8")
-            run_a = self.start_preplanned_run(root, source_a)
-            run_b = self.start_preplanned_run(root, source_b)
-
-            manifest = self.batch.plan_batch(root, [source_a, source_b])
-            batch_id = manifest["batch_id"]
-            self.batch.link_run(root, batch_id, source_a, run_a)
-            self.batch.link_run(root, batch_id, source_b, run_b)
-
-            draft_a = self.write_source_draft(
-                root, "seal-a", source_a, "source-example", "ingest-example"
-            )
-            index = draft_a / "wiki" / "_meta" / "index.md"
-            index.parent.mkdir(parents=True, exist_ok=True)
-            index.write_text(
-                "# Index\n\n"
-                "- [[source-example]]\n"
-                "- [[ingest-example]]\n"
-                "- [[source-second]]\n"
-                "- [[ingest-second]]\n",
-                encoding="utf-8",
-            )
-            (draft_a / "wiki" / "_meta" / "log.md").write_text(
-                "# Log\n\n"
-                f"- Ingested `{source_a}` through [[source-example]].\n"
-                f"- Ingested `{source_b}` through [[source-second]].\n",
-                encoding="utf-8",
-            )
-            draft_b = self.write_source_draft(
-                root, "seal-b", source_b, "source-second", "ingest-second"
-            )
-            self.batch.stage_draft(root, batch_id, source_a, str(draft_a.relative_to(root)))
-            self.batch.stage_draft(root, batch_id, source_b, str(draft_b.relative_to(root)))
-            self.batch.apply_batch(root, batch_id, "writer-seal")
-
-            fingerprint = self.batch.batch_status(root, batch_id)["current_fingerprint"]
-            self.batch.record_question(
-                root,
-                batch_id,
-                "direct_lookup",
-                "supported",
-                ["wiki/sources/source-example.md", "wiki/sources/source-second.md"],
-                "question-reviewer",
-                fingerprint,
-            )
+            prepared = self.prepare_two_source_applied_batch(root, source_a)
+            run_a = prepared["run_a"]
+            run_b = prepared["run_b"]
+            batch_id = prepared["batch_id"]
+            fingerprint = prepared["fingerprint"]
             wiki_before_seal = self.batch.corpus_fingerprint(
                 root, self.batch.load_manifest(root, batch_id)[1]
             )

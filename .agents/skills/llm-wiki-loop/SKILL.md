@@ -261,6 +261,11 @@ and immediately certifies the batch. Seal does not mutate `wiki/`. A missing or
 stale question receipt, review reference, source receipt, staged file, source
 run, or corpus fingerprint fails closed before certification.
 
+`batch certify` independently enforces this boundary: more than one
+non-deferred source requires a current seal event covering exactly those source
+runs. The legacy direct-certification path remains valid for a single
+non-deferred source.
+
 If `wiki/_meta/representative_questions.json` is absent, create its target-local
 question contract from this skill's `assets/representative_questions_template.json`
 and tailor it to the corpus before `batch plan`. Do not leave the placeholder

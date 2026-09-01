@@ -48,6 +48,9 @@ stale recovery restores the original run payloads. Seal accepts only the exact
 one-writer result fingerprint and does not mutate `wiki/`. A `refreshing`
 journal entry is persisted before the sole retrieval refresh; after an
 interruption, seal reads retrieval status instead of executing a second refresh.
+Certification rejects any batch with more than one non-deferred source unless a
+current seal event covers the exact linked run set and every source row carries
+that seal fingerprint. Single-source direct certification remains compatible.
 
 It does not write `scripts/wiki_workflow.py`, `scripts/wiki_batch.py`,
 `scripts/pipeline_check.py`, or a copy of its own template assets.

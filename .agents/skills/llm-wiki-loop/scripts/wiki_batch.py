@@ -798,6 +798,14 @@ def certification_checks(root: Path, manifest: dict[str, Any]) -> tuple[list[str
     blockers: list[str] = []
     source_results: list[dict[str, Any]] = []
     current = corpus_fingerprint(root, manifest)
+    active_rows = [
+        row
+        for row in manifest.get("sources", [])
+        if isinstance(row, dict)
+        and not (
+            row.get("disposition") == "deferred_with_reason" and row.get("reason")
+        )
+    ]
     if manifest.get("procedure_contract_digest") != workflow.procedure_contract_digest():
         blockers.append("PROCEDURE_CONTRACT_STALE")
     if current != manifest.get("current_fingerprint"):
@@ -805,6 +813,29 @@ def certification_checks(root: Path, manifest: dict[str, Any]) -> tuple[list[str
     if manifest.get("apply_event") is None:
         blockers.append("MISSING_WRITER_APPLY")
     seal_event = manifest.get("seal_event")
+    if len(active_rows) > 1:
+        if not isinstance(seal_event, dict):
+            blockers.append("MULTI_SOURCE_SEAL_MISSING")
+        else:
+            expected_runs = {
+                str(row["run_id"])
+                for row in active_rows
+                if row.get("run_id")
+            }
+            raw_sealed_runs = seal_event.get("source_runs")
+            if not isinstance(raw_sealed_runs, list):
+                blockers.append("MULTI_SOURCE_SEAL_RUNS_INVALID")
+                sealed_runs: set[str] = set()
+            else:
+                sealed_runs = {str(run_id) for run_id in raw_sealed_runs}
+            if seal_event.get("corpus_fingerprint") != current:
+                blockers.append("MULTI_SOURCE_SEAL_STALE")
+            if sealed_runs != expected_runs:
+                blockers.append("MULTI_SOURCE_SEAL_RUNS_MISMATCH")
+            if any(
+                row.get("sealed_fingerprint") != current for row in active_rows
+            ):
+                blockers.append("MULTI_SOURCE_RUN_SEAL_STALE")
     if isinstance(seal_event, dict):
         try:
             review_path = resolve_inside(root, str(seal_event["review_path"]))

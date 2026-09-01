@@ -7,6 +7,10 @@ updated: 2026-09-01
 
 # Maintenance log
 
+- 2026-09-01: Closed the multi-source direct-certification bypass. More than
+  one non-deferred source now requires a current seal event covering the exact
+  linked run set, while single-source direct certification remains compatible;
+  a completed two-source no-seal regression guards the boundary.
 - 2026-09-01: Added a multi-source batch snapshot seal to eliminate cascading
   source-run staleness. Linked runs now stop at the pre-mutation boundary while
   drafts remain under `state/`; one writer applies the merged wiki update, then

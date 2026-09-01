@@ -74,4 +74,6 @@ source-by-source revalidation. Seal prepares complete run payloads before live
 state replacement; an interrupted commit is explicitly resumable, while a
 stale prepared attempt restores the original source-run state. A pre-refresh
 journal marker prevents an interrupted seal from running retrieval refresh more
-than once and recovers its posture through a read-only status check.
+than once and recovers its posture through a read-only status check. Batch
+certification also enforces this boundary directly: multiple non-deferred
+sources cannot certify without a current seal covering the exact run set.
