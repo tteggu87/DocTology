@@ -249,7 +249,7 @@ class WikiWorkflowGateTest(unittest.TestCase):
         cases = (
             ("workflow", ["--help"], "{start,stage,status,finish,fingerprint}"),
             ("workflow", ["start", "--help"], "--coverage-mode"),
-            ("batch", ["--help"], "{plan,link-run,defer,stage,apply,question-receipt,certify,status}"),
+            ("batch", ["--help"], "{plan,link-run,defer,stage,apply,question-receipt,seal,certify,status}"),
             ("check", ["--help"], "--strict"),
             ("preflight", ["--help"], "Validate one exact wiki-only target"),
         )

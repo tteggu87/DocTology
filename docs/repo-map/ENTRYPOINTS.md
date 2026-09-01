@@ -13,6 +13,9 @@ superseded_by: N/A
 - Standalone LLM Wiki loop: `llm-wiki-loop/scripts/wiki_loop.py --repo-root
   <vault> preflight|workflow|batch|check` runs the loop-owned gates without
   copying executables into the vault.
+- Multi-source snapshot completion: `wiki_loop.py --repo-root <vault> batch
+  seal --batch <id> --reviewer <id> --review-ref <path>` finalizes and certifies
+  one already-applied, unchanged batch without modifying `wiki/`.
 - Downstream LLM Wiki raw retrieval: `scripts/raw_retrieval.py` owns incremental
   rebuild, stat status, lexical search, exact doctor, and checksum-checked
   `tree`, `ancestors`, and `subtree` navigation for `raw/**/*.md`.

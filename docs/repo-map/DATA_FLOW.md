@@ -15,6 +15,13 @@ For certified LLM Wiki ingest, the loop owns the executable path:
 
 `target raw/wiki -> llm-wiki-loop runtime --repo-root -> run/batch/receipt state + canonical wiki changes`
 
+Multi-source certification uses one publish boundary:
+
+`source runs through semantic plan -> state-only drafts -> one writer apply -> current question receipts -> state-only batch seal -> certification`
+
+The seal writes no wiki Markdown. It binds every source run and the final
+certificate to the same writer result and reuses one retrieval refresh.
+
 No procedure, batch, or pipeline executable is copied into the target vault.
 
 For Repo Docs retrieval the downstream flow is:

@@ -7,6 +7,7 @@ Started: 2026-09-01
 - `raw/**/*.md` and `wiki/**/*.md` remain canonical. SQLite indexes and structure trees are disposable derived candidates.
 - Raw search reopens canonical byte spans and keeps cheap stat status, unchecked discovery, and exact doctor as separate lifecycle levels.
 - Generated helper scripts live beside `llm-wiki-bootstrap` and are copied through `generated_helper_script()`.
+- Multi-source seal keeps semantic drafts outside `wiki/`, journals `refreshing` before one retrieval refresh, journals prepared run payloads before live replacement, and blocks any out-of-journal run mutation.
 - `.ouroboros/` contains PM runtime artifacts from this task and is not product source.
 
 ## 2026-09-01 - Baseline
@@ -77,4 +78,30 @@ Started: 2026-09-01
 - Verification:
   - Repo Docs validator with the branch changed-file list -> PASS, 0 errors and 0 warnings.
   - `git diff --check` -> PASS.
+---
+
+## 2026-09-01 - US-004 start
+- Active story: seal a multi-source batch on one wiki snapshot.
+- Classified as `tight-coupled`; the main agent owns runtime, tests, docs, Ralph state, verification, and commit without subagent writers.
+- Guardrails: preserve strict single-source freshness, keep drafts and run evidence under `state/`, retain one canonical writer apply, and make the batch seal fail closed on any fingerprint or evidence mismatch.
+---
+
+## 2026-09-01 12:42:10 KST - US-004
+- Classified as `tight-coupled`; implemented one multi-source snapshot seal without parallel writers.
+- Added `batch seal`: linked source runs stop after the three pre-mutation stages, worker outputs remain in batch drafts, one writer applies canonical files, and one state-only review completes and certifies every source against the unchanged batch corpus fingerprint.
+- Preserved strict single-source freshness and source-specific completion fingerprints; seal itself does not mutate `wiki/` and shares one optional retrieval refresh across all source runs.
+- Added a repository-wide publish lock plus a crash-recoverable `refreshing`/`prepared` journal. Interrupted refreshes recover through read-only status, interrupted run commits resume idempotently, stale attempts restore backups, and out-of-journal live-run changes block instead of being overwritten.
+- Strengthened representative-question receipt validation for schema, batch/case identity, reviewer, posture, evidence shape, path containment, and evidence digest.
+- Added two-source happy-path and failure-injection coverage for refresh interruption, partial live-run replacement, review tampering, question receipt tampering, and out-of-journal run mutation.
+- Updated the loop skill, runtime contract, current docs, repo maps, and maintenance log with the required ordering: freeze representative questions before batch planning, apply once, record current question receipts, then seal once.
+- Files changed: `.agents/skills/llm-wiki-loop/SKILL.md`, `.agents/skills/llm-wiki-loop/references/runtime-contract.md`, `.agents/skills/llm-wiki-loop/scripts/wiki_batch.py`, `.agents/skills/llm-wiki-loop/scripts/wiki_workflow.py`, `tests/test_wiki_batch_gate.py`, `tests/test_wiki_workflow_gate.py`, current docs and repo maps, `wiki/_meta/log.md`, `.codex/ralph/prd.json`, `.codex/ralph/progress.txt`.
+- Quality checks run and result:
+  - `python3 -m unittest tests.test_wiki_batch_gate tests.test_wiki_workflow_gate -v` -> PASS, 33 tests.
+  - `python3 -m unittest discover -s tests` -> PASS, 177 tests; existing non-failing SQLite `ResourceWarning` messages remained.
+  - `python3 scripts/manage_skills.py check` -> PASS, exactly three self-contained skills.
+  - `python3 .agents/skills/repo-docs-intelligence-bootstrap/scripts/validate_repo_docs_intelligence.py --repo-root . --format json --changed-files <(git diff --name-only)` -> PASS, 0 errors and 0 warnings.
+  - `python3 -m py_compile .agents/skills/llm-wiki-loop/scripts/wiki_loop.py .agents/skills/llm-wiki-loop/scripts/wiki_workflow.py .agents/skills/llm-wiki-loop/scripts/wiki_batch.py .agents/skills/llm-wiki-loop/scripts/pipeline_check.py` -> PASS.
+  - `git diff --check` -> PASS.
+- Independent read-only review required two recovery hardening rounds, then returned `CLEAR / APPROVE` with no remaining Critical or Important issues.
+- Learnings for future iterations: source-specific fingerprints differ because each includes its own raw source; batch seal therefore records a shared `batch_corpus_fingerprint` alongside, rather than replacing, each run's completion fingerprint.
 ---

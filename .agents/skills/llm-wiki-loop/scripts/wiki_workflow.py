@@ -63,7 +63,7 @@ COVERAGE_MODES = {"full", "summary"}
 RETRIEVAL_REFRESH_TIMEOUT_SECONDS = 300
 SEMANTIC_REFRESH_STATUSES = {"ready", "partial", "pending", "unavailable"}
 RUNTIME_NAME = "llm-wiki-loop"
-RUNTIME_VERSION = 1
+RUNTIME_VERSION = 2
 
 
 class WorkflowError(RuntimeError):
@@ -442,6 +442,106 @@ def record_stage(
     return project_status(root, payload)
 
 
+def prepare_batch_completion(
+    root: Path,
+    source_run: dict[str, Any],
+    *,
+    batch_id: str,
+    batch_fingerprint: str,
+    mutation_refs: list[str],
+    final_refs: list[str],
+    no_affected_page_promotion: bool,
+) -> dict[str, Any]:
+    """Build, but do not publish, a source run bound to one batch snapshot."""
+    root = root.resolve()
+    payload = json.loads(json.dumps(source_run))
+    if payload.get("status") != "active":
+        raise WorkflowError("batch seal requires an active source run")
+    if payload.get("contract_digest") != procedure_contract_digest():
+        raise WorkflowError("procedure contract is stale; start a new run")
+    expected = next_missing_stage(payload)
+    if expected != "register_or_resolve_source":
+        raise WorkflowError(
+            "batch seal requires exactly the three pre-mutation stages"
+        )
+
+    current_fingerprint = state_fingerprint(root, str(payload["source"]))
+    if current_fingerprint == str(payload["baseline_fingerprint"]):
+        raise WorkflowError("batch seal requires an observed canonical mutation")
+    validate_full_coverage_receipt(root, payload, final_refs, "ready")
+
+    mutation_evidence = relative_refs(root, mutation_refs)
+    final_evidence = relative_refs(root, final_refs)
+    if not mutation_evidence:
+        raise WorkflowError("batch seal requires bounded applied-file references")
+
+    sequence = int(payload.get("sequence") or 0)
+    first_mutation_sequence: int | None = None
+    latest_mutation_sequence: int | None = None
+    stages = payload.setdefault("stages", {})
+    batch_binding = {
+        "batch_id": batch_id,
+        "result_fingerprint": batch_fingerprint,
+    }
+    for stage in (
+        "register_or_resolve_source",
+        "update_source_page",
+        "update_affected_pages",
+        "refresh_index_and_log",
+    ):
+        sequence += 1
+        first_mutation_sequence = first_mutation_sequence or sequence
+        latest_mutation_sequence = sequence
+        entry: dict[str, Any] = {
+            "stage_id": stage,
+            "sequence": sequence,
+            "recorded_at": utc_now(),
+            "contract_digest": procedure_contract_digest(),
+            "state_fingerprint": current_fingerprint,
+            "references": mutation_evidence,
+            "batch_apply": batch_binding,
+        }
+        if stage == "update_affected_pages" and no_affected_page_promotion:
+            entry["not_applicable_reason"] = "no_affected_page_promotion"
+        stages[stage] = entry
+
+    sequence += 1
+    stages["validate_structure"] = {
+        "stage_id": "validate_structure",
+        "sequence": sequence,
+        "recorded_at": utc_now(),
+        "contract_digest": procedure_contract_digest(),
+        "state_fingerprint": current_fingerprint,
+        "references": mutation_evidence,
+        "result": "passed",
+        "batch_apply": batch_binding,
+    }
+    sequence += 1
+    stages["final_review_completed"] = {
+        "stage_id": "final_review_completed",
+        "sequence": sequence,
+        "recorded_at": utc_now(),
+        "contract_digest": procedure_contract_digest(),
+        "state_fingerprint": current_fingerprint,
+        "references": final_evidence,
+        "posture": "ready",
+        "reviewed_fingerprint": current_fingerprint,
+        "reviewed_mutation_sequence": latest_mutation_sequence,
+        "batch_apply": batch_binding,
+    }
+    payload["first_mutation_sequence"] = first_mutation_sequence
+    payload["latest_mutation_sequence"] = latest_mutation_sequence
+    payload["sequence"] = sequence
+    payload["last_observed_fingerprint"] = current_fingerprint
+    payload["batch_id"] = batch_id
+    payload["batch_corpus_fingerprint"] = batch_fingerprint
+    payload["updated_at"] = utc_now()
+    projection = project_status(root, payload)
+    if projection["status"] != "pass":
+        raise WorkflowError("prepared batch source run is incomplete")
+    return payload
+
+
 def project_status(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
     root = root.resolve()
     stages = payload.get("stages") if isinstance(payload.get("stages"), dict) else {}
@@ -522,6 +622,69 @@ def project_status(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
         "retrieval_status": refresh.get("retrieval_status", "pending"),
         "semantic_status": refresh.get("semantic_status", "pending"),
         "retrieval_refresh": refresh,
+    }
+
+
+def prepare_completed_run(
+    root: Path, source_run: dict[str, Any], refresh: dict[str, Any]
+) -> dict[str, Any]:
+    """Build, but do not publish, a completed run with shared refresh state."""
+    root = root.resolve()
+    payload = json.loads(json.dumps(source_run))
+    projection = project_status(root, payload)
+    if projection["status"] != "pass" or payload.get("status") != "active":
+        raise WorkflowError("only a current active run can be batch-completed")
+    payload["status"] = "completed"
+    payload["completed_at"] = utc_now()
+    payload["updated_at"] = utc_now()
+    payload["completion_fingerprint"] = projection["current_fingerprint"]
+    payload["retrieval_refresh"] = {
+        **refresh,
+        "attempt": 1,
+        "completed_at": utc_now(),
+    }
+    if project_status(root, payload)["status"] != "pass":
+        raise WorkflowError("prepared completed source run is stale")
+    return payload
+
+
+def run_retrieval_status(root: Path) -> dict[str, Any]:
+    """Recover refresh posture read-only after an interrupted batch refresh."""
+    script = root / "scripts" / "wiki_retrieval.py"
+    if not script.is_file():
+        return {
+            "retrieval_ready": False,
+            "retrieval_status": "not_enabled",
+            "semantic_status": "unavailable",
+            "reason": "SQLite retrieval helpers are not installed",
+        }
+    try:
+        completed = subprocess.run(
+            [sys.executable, str(script), "--repo-root", str(root), "status"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {
+            "retrieval_ready": False,
+            "retrieval_status": "unknown_after_interruption",
+            "semantic_status": "pending",
+            "reason": str(exc),
+        }
+    try:
+        payload = json.loads(completed.stdout) if completed.stdout.strip() else {}
+    except json.JSONDecodeError:
+        payload = {}
+    semantic_status = fallback_semantic_status(payload)
+    ready = completed.returncode == 0 and payload.get("state") == "ready"
+    return {
+        **payload,
+        "retrieval_ready": ready,
+        "retrieval_status": "ready" if ready else "unknown_after_interruption",
+        "semantic_status": semantic_status,
+        "reason": "recovered read-only status after an interrupted batch refresh",
     }
 
 

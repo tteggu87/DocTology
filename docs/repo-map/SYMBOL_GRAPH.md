@@ -24,6 +24,11 @@ superseded_by: N/A
   user-requested `summary` mode into the source run.
 - `wiki_workflow.validate_full_coverage_receipt`: binds full final review to one
   applied raw-source receipt with balanced accounting and no deferred units.
+- `wiki_workflow.prepare_batch_completion`: prepares the post-apply procedure and
+  review stages for one preplanned source without mutating canonical wiki files.
+- `wiki_batch.seal_batch`: validates one writer result, records a state-only
+  batch review, completes every linked source run with one shared retrieval
+  refresh, and immediately certifies the unchanged corpus fingerprint.
 - `raw_retrieval.rebuild`: transactionally updates added, changed, or removed
   `raw/**/*.md` documents by stat identity; `--exact` also repairs checksum drift
   when file size and mtime were preserved.

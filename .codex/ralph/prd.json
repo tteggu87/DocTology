@@ -1,7 +1,7 @@
 {
   "project": "DocTology",
-  "branchName": "feat/markdown-structure-navigation",
-  "description": "Add a small deterministic Markdown heading tree to the existing derived raw SQLite index and teach llm-wiki-loop to use it only as optional navigation context.",
+  "branchName": "fix/wiki-batch-snapshot-seal",
+  "description": "Preserve the completed Markdown navigation work and add a small batch-seal path that finalizes many source runs against one immutable wiki snapshot.",
   "userStories": [
     {
       "id": "US-001",
@@ -65,6 +65,29 @@
         "git diff --check"
       ],
       "notes": "Documentation and integration only except for tests that enforce generated text. Never modify .agents/skills/llm-wiki-loop/scripts/wiki_workflow.py."
+    },
+    {
+      "id": "US-004",
+      "title": "Seal a multi-source batch on one wiki snapshot",
+      "description": "As a wiki batch operator, I need staged source work to be finalized together after one canonical apply so later sources do not make earlier source reviews stale before certification.",
+      "acceptanceCriteria": [
+        "A batch seal operation accepts only a once-applied batch whose current corpus fingerprint still equals the writer result fingerprint.",
+        "Seal records every non-deferred linked source run's batch-applied mutation stages, structural validation, and ready final review against the same corpus snapshot without mutating wiki files.",
+        "Seal requires a bounded review receipt plus one valid applied full-coverage receipt per full-mode source and rejects missing, stale, incomplete, or mismatched evidence.",
+        "All sealed source runs reference the same batch corpus fingerprint while retaining their source-specific completion fingerprints, retrieval refresh runs at most once for the batch, and certification is written immediately from that snapshot.",
+        "Any canonical mutation after apply or after certification remains stale and blocking; single-source workflow freshness behavior is unchanged.",
+        "A two-source regression test proves one apply and one seal produce a passing certification, while focused and full quality gates pass."
+      ],
+      "priority": 4,
+      "passes": true,
+      "checks": [
+        "python3 -m unittest tests.test_wiki_batch_gate tests.test_wiki_workflow_gate -v",
+        "python3 -m unittest discover -s tests",
+        "python3 scripts/manage_skills.py check",
+        "python3 .agents/skills/repo-docs-intelligence-bootstrap/scripts/validate_repo_docs_intelligence.py --repo-root .",
+        "git diff --check"
+      ],
+      "notes": "Keep the patch batch-specific. Do not weaken ordinary source-run freshness, exclude canonical wiki files from fingerprints, or introduce a second canonical ledger."
     }
   ]
 }

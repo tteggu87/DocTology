@@ -7,6 +7,18 @@ updated: 2026-09-01
 
 # Maintenance log
 
+- 2026-09-01: Closed the multi-source direct-certification bypass. More than
+  one non-deferred source now requires a current seal event covering the exact
+  linked run set, while single-source direct certification remains compatible;
+  a completed two-source no-seal regression guards the boundary.
+- 2026-09-01: Added a multi-source batch snapshot seal to eliminate cascading
+  source-run staleness. Linked runs now stop at the pre-mutation boundary while
+  drafts remain under `state/`; one writer applies the merged wiki update, then
+  a state-only review binds every source run to the unchanged batch corpus
+  fingerprint, shares one retrieval refresh, and certifies immediately. Seal
+  fails closed on post-apply mutation or incomplete source/question evidence;
+  prepared run payloads make interrupted state commits resumable and stale
+  attempts restore the original run records.
 - 2026-09-01: Added `raw_retrieval.py rebuild --exact` so checksum-stale raw
   Markdown structure can recover even when content changes preserve file size
   and mtime. Ordinary rebuild remains stat-incremental.
