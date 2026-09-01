@@ -283,6 +283,15 @@ def retrieval_contract(profile: str, sqlite_enabled: bool = True) -> str:
 - `scripts/raw_retrieval.py` maintains a separate `state/raw_index.sqlite` for
   lexical discovery over `raw/**/*.md`. It stores offsets and one FTS copy,
   reopens raw bytes for results, and never adds raw vectors or blended ranking.
+- Raw structure navigation is optional planning context. Use
+  `raw_retrieval.py tree <raw-path>`, `ancestors <node-id>`, or
+  `subtree <node-id>` when a heading path helps locate context, then reopen the
+  canonical Markdown before synthesis. Structure nodes and tree leaves are not
+  source units and do not create a second coverage ledger.
+- Structure reads compare the indexed checksum with the current Markdown. A
+  changed source returns `state: stale`, rebuild guidance, and no structure or
+  subtree content. Read commands never rebuild implicitly; run `rebuild --exact`
+  explicitly when desired, or fall back to reading Markdown directly.
 - Pages at or below the default 64 KiB threshold stay whole. Larger pages split at Markdown headings, with paragraph fallback for oversized sections.
 - `search --mode lexical` is the dependable default: exact title/path, FTS5, then bounded wikilinks.
 - `search --mode lexical --raw-fallback` consults the separate raw index only
@@ -325,6 +334,9 @@ python scripts/wiki_retrieval.py --repo-root . search "your query" --mode lexica
 python scripts/wiki_retrieval.py --repo-root . search "your query" --mode both
 python scripts/raw_retrieval.py --repo-root . rebuild
 python scripts/raw_retrieval.py --repo-root . search "source query"
+python scripts/raw_retrieval.py --repo-root . tree raw/inbox/<source>.md
+python scripts/raw_retrieval.py --repo-root . ancestors <node-id>
+python scripts/raw_retrieval.py --repo-root . subtree <node-id>
 python scripts/raw_retrieval.py --repo-root . status
 python scripts/raw_retrieval.py --repo-root . doctor
 ```
@@ -344,6 +356,14 @@ raw lexical results return `freshness: unchecked`; reopen their listed Markdown
 paths before treating them as evidence. Run `status` for fast path/size/mtime
 readiness and `doctor` for exhaustive content validation, including same-size
 changes whose mtimes were preserved. {profile_note}
+
+The raw `tree <raw-path>`, `ancestors <node-id>`, and `subtree <node-id>`
+commands are optional planning aids, not evidence or coverage units. Use their
+heading paths or exact subtree ranges only when they help navigation, and reopen
+canonical Markdown before synthesis.
+These read commands never rebuild. If the current source checksum differs from
+the index, they return `state: stale` with rebuild guidance and omit structure
+and content; run `rebuild --exact` explicitly or continue by reading Markdown directly.
 """
 
 

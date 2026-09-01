@@ -18,6 +18,7 @@ BOOTSTRAP_PATH = (
     / "scripts"
     / "bootstrap_llm_wiki.py"
 )
+LOOP_SKILL_PATH = ROOT / ".agents" / "skills" / "llm-wiki-loop" / "SKILL.md"
 
 
 def load_bootstrap():
@@ -133,6 +134,36 @@ class WikiSqliteIndexTests(unittest.TestCase):
                     self.assertIn("raw-fallback", document)
                     self.assertIn("separate", document.lower())
                 self.assertIn("no `warehouse/jsonl/`", agents)
+
+    def test_generated_and_loop_guidance_keep_structure_navigation_optional(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "vault"
+            self.bootstrap.scaffold(root, force=False, sqlite_enabled=True)
+            agents = (root / "AGENTS.md").read_text(encoding="utf-8")
+            readme = (root / "README.md").read_text(encoding="utf-8")
+
+        for document in (agents, readme):
+            normalized = " ".join(document.split())
+            self.assertIn("tree <raw-path>", normalized)
+            self.assertIn("ancestors <node-id>", normalized)
+            self.assertIn("subtree <node-id>", normalized)
+            self.assertIn("optional planning", normalized)
+            self.assertIn("canonical Markdown before synthesis", normalized)
+            self.assertIn("state: stale", normalized)
+            self.assertIn("never rebuild", normalized)
+            self.assertIn("rebuild --exact", normalized)
+            self.assertIn("reading Markdown directly", normalized)
+
+        loop_skill = LOOP_SKILL_PATH.read_text(encoding="utf-8")
+        normalized_loop = " ".join(loop_skill.split())
+        self.assertIn("only when they help plan", normalized_loop)
+        self.assertIn("Reopen canonical Markdown before any synthesis", normalized_loop)
+        self.assertIn("SQLite is off, unavailable, or stale", normalized_loop)
+        self.assertIn("fall back to direct Markdown reading", normalized_loop)
+        self.assertIn("do not create a tree coverage ledger", normalized_loop)
+        self.assertIn("existing heading/bounded-chunk inventory", normalized_loop)
 
     def test_force_switch_from_sqlite_on_to_off_removes_managed_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

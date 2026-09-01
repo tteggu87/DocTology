@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: true
-last_updated: 2026-08-27
+last_updated: 2026-09-01
 superseded_by: N/A
 ---
 
@@ -17,6 +17,11 @@ working context must evolve with implementation.
 Install all three with `python3 scripts/manage_skills.py install`. Copying only a `SKILL.md` is unsupported because bootstrap and Repo Docs depend on sibling scripts, assets, references, or eval fixtures.
 
 The wiki skills use Obsidian wikilinks inside generated vaults. Repo Docs memory uses portable relative Markdown links.
+
+SQLite-enabled wiki vaults expose raw heading `tree`, `ancestors`, and `subtree`
+queries as optional planning aids. `llm-wiki-loop` reopens canonical Markdown
+before synthesis and reads Markdown directly when derived structure is off,
+unavailable, or stale. Tree leaves never become a second coverage ledger.
 
 Repo Docs carries five cooperating retrieval files: the portable Python owner,
 POSIX and PowerShell native SQLite readers, and shared search/traversal SQL.

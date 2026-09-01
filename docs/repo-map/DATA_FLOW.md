@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-08-27
+last_updated: 2026-09-01
 superseded_by: N/A
 ---
 
@@ -26,10 +26,12 @@ search and traversal do neither freshness operation on their hot path.
 
 For generated LLM Wiki raw retrieval the downstream flow is:
 
-`raw/**/*.md -> incremental heading/chunk FTS -> state/raw_index.sqlite -> raw candidate offsets -> reopen canonical raw bytes`
+`raw/**/*.md -> incremental heading/chunk FTS + heading tree -> state/raw_index.sqlite -> candidate offsets or optional structure context -> reopen canonical raw bytes`
 
 Raw and wiki indexes publish and age independently. Raw has no vector or blended
 ranking lane; stat status and exact doctor remain separate from unchecked search.
+Structure navigation checks the current checksum and returns no structure or
+content when stale; direct Markdown reading remains available.
 
 The optional composition is one-way:
 
