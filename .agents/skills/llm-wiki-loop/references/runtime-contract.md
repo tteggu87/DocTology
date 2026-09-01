@@ -54,6 +54,11 @@ that seal fingerprint. Single-source direct certification remains compatible.
 `batch status` is read-only and returns one deterministic `next_action` from the
 manifest, seal-attempt, certification, and freshness state. The value is an
 operator hint, not an automatic transition or replacement for validation.
+`batch list` is also read-only but deliberately does not compute corpus
+fingerprints. It scans manifest metadata, reports `freshness:
+unchecked`, limits returned rows, and routes every valid result to exact `batch
+status` before action. It never follows symlinked state, batch-root, batch, or
+manifest paths.
 
 It does not write `scripts/wiki_workflow.py`, `scripts/wiki_batch.py`,
 `scripts/pipeline_check.py`, or a copy of its own template assets.

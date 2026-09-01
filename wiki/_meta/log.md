@@ -7,6 +7,10 @@ updated: 2026-09-01
 
 # Maintenance log
 
+- 2026-09-01: Added lightweight read-only batch discovery. `batch list` supports
+  bounded and active-only listings, summarizes source progress, surfaces invalid
+  manifests, and marks freshness unchecked so agents run exact status before
+  acting instead of repeating corpus hashes across every recorded batch.
 - 2026-09-01: Improved batch workflow discovery without adding orchestration.
   Public help now shows the complete multi-source sequence and explains each
   subcommand; read-only batch status returns a deterministic advisory

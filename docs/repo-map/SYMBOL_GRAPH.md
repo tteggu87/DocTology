@@ -31,6 +31,9 @@ superseded_by: N/A
   refresh, and immediately certifies the unchanged corpus fingerprint.
 - `wiki_batch.batch_next_action`: maps current batch freshness and manifest state
   to one read-only operator hint without executing a transition.
+- `wiki_batch.list_batches`: discovers output-bounded manifest summaries without
+  corpus hashing or symlink traversal and routes valid results to exact batch
+  status.
 - `raw_retrieval.rebuild`: transactionally updates added, changed, or removed
   `raw/**/*.md` documents by stat identity; `--exact` also repairs checksum drift
   when file size and mtime were preserved.

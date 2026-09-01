@@ -249,7 +249,7 @@ class WikiWorkflowGateTest(unittest.TestCase):
         cases = (
             ("workflow", ["--help"], "{start,stage,status,finish,fingerprint}"),
             ("workflow", ["start", "--help"], "--coverage-mode"),
-            ("batch", ["--help"], "{plan,link-run,defer,stage,apply,question-receipt,seal,certify,status}"),
+            ("batch", ["--help"], "{plan,link-run,defer,stage,apply,question-receipt,seal,certify,list,status}"),
             ("check", ["--help"], "--strict"),
             ("preflight", ["--help"], "Validate one exact wiki-only target"),
         )
@@ -289,6 +289,7 @@ class WikiWorkflowGateTest(unittest.TestCase):
                 "--coverage-mode",
             ),
             (["batch", "plan", "-h"], "usage: wiki_loop.py batch plan"),
+            (["batch", "list", "-h"], "--active-only"),
             (["check", "-h"], "usage: wiki_loop.py check"),
         )
         for arguments, expected in success_cases:
