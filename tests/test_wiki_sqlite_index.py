@@ -153,6 +153,7 @@ class WikiSqliteIndexTests(unittest.TestCase):
             self.assertIn("canonical Markdown before synthesis", normalized)
             self.assertIn("state: stale", normalized)
             self.assertIn("never rebuild", normalized)
+            self.assertIn("rebuild --exact", normalized)
             self.assertIn("reading Markdown directly", normalized)
 
         loop_skill = LOOP_SKILL_PATH.read_text(encoding="utf-8")

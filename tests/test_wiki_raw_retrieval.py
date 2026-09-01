@@ -514,6 +514,38 @@ class WikiRawRetrievalTests(unittest.TestCase):
             "document_checksum:raw/inbox/drift.md", doctor["stale_reasons"]
         )
 
+    def test_exact_rebuild_repairs_same_stat_structure_drift(self) -> None:
+        source = self.raw_path("exact-drift.md")
+        source.write_text("# Drift\n\n## Child\nold-token\n", encoding="utf-8")
+        self.payload("rebuild")
+        original = source.stat()
+        source.write_text("# Drift\n\n## Child\nnew-token\n", encoding="utf-8")
+        os.utime(source, ns=(original.st_atime_ns, original.st_mtime_ns))
+
+        stat_only = self.payload("rebuild")
+        stale = json.loads(
+            self.run_cli(
+                "tree", "raw/inbox/exact-drift.md", expected_returncode=1
+            ).stdout
+        )
+        repaired = self.payload("rebuild", "--exact")
+        tree = self.payload("tree", "raw/inbox/exact-drift.md")
+        new_hit = self.payload("search", "new-token")
+        old_hit = self.payload("search", "old-token")
+        doctor = self.payload("doctor")
+
+        self.assertFalse(stat_only["exact"])
+        self.assertEqual(stat_only["changed_files"], 0)
+        self.assertEqual(stale["state"], "stale")
+        self.assertIn("rebuild --exact", stale["guidance"])
+        self.assertTrue(repaired["exact"])
+        self.assertEqual(repaired["changed_files"], 1)
+        self.assertEqual(repaired["unchanged_files"], 0)
+        self.assertEqual(tree["state"], "ready")
+        self.assertEqual(new_hit["results"][0]["candidate_status"], "source_candidate")
+        self.assertEqual(old_hit["results"], [])
+        self.assertEqual(doctor["state"], "ready")
+
     def test_missing_index_and_invalid_limits_fail_without_creation(self) -> None:
         database = self.root / "state" / "raw_index.sqlite"
         missing = self.run_cli("status", expected_returncode=2)

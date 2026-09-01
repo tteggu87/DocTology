@@ -24,8 +24,9 @@ superseded_by: N/A
   user-requested `summary` mode into the source run.
 - `wiki_workflow.validate_full_coverage_receipt`: binds full final review to one
   applied raw-source receipt with balanced accounting and no deferred units.
-- `raw_retrieval.rebuild`: transactionally updates only added, changed, or
-  removed `raw/**/*.md` documents in a separate lexical index.
+- `raw_retrieval.rebuild`: transactionally updates added, changed, or removed
+  `raw/**/*.md` documents by stat identity; `--exact` also repairs checksum drift
+  when file size and mtime were preserved.
 - `reindex_sqlite_operational.structure_nodes_for_page`: deterministically maps
   fenced-code-aware Markdown headings to document, ancestor, and subtree ranges.
 - `raw_retrieval.search`: queries raw FTS, then reopens the canonical source byte

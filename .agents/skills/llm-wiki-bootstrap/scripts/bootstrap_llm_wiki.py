@@ -290,7 +290,7 @@ def retrieval_contract(profile: str, sqlite_enabled: bool = True) -> str:
   source units and do not create a second coverage ledger.
 - Structure reads compare the indexed checksum with the current Markdown. A
   changed source returns `state: stale`, rebuild guidance, and no structure or
-  subtree content. Read commands never rebuild implicitly; run `rebuild`
+  subtree content. Read commands never rebuild implicitly; run `rebuild --exact`
   explicitly when desired, or fall back to reading Markdown directly.
 - Pages at or below the default 64 KiB threshold stay whole. Larger pages split at Markdown headings, with paragraph fallback for oversized sections.
 - `search --mode lexical` is the dependable default: exact title/path, FTS5, then bounded wikilinks.
@@ -363,7 +363,7 @@ heading paths or exact subtree ranges only when they help navigation, and reopen
 canonical Markdown before synthesis.
 These read commands never rebuild. If the current source checksum differs from
 the index, they return `state: stale` with rebuild guidance and omit structure
-and content; run `rebuild` explicitly or continue by reading Markdown directly.
+and content; run `rebuild --exact` explicitly or continue by reading Markdown directly.
 """
 
 

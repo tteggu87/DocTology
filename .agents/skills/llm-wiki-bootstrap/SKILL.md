@@ -117,7 +117,7 @@ The active bootstrap does not generate canonical ontology JSONL, DuckDB, helper-
   thin-page verification or ingest coverage without blended ranking.
 - With SQLite enabled, the scaffold must describe raw `tree`, `ancestors`, and
   `subtree` as optional navigation, require canonical Markdown reopening before
-  synthesis, and explain explicit rebuild or direct-reading fallback for stale
+  synthesis, and explain explicit `rebuild --exact` or direct-reading fallback for stale
   structure state. Tree leaves are not coverage units or a second ledger.
 - If a later wiki-local conventions page is ever added, it must remain subordinate to `AGENTS.md`.
 

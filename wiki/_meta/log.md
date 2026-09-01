@@ -7,6 +7,9 @@ updated: 2026-09-01
 
 # Maintenance log
 
+- 2026-09-01: Added `raw_retrieval.py rebuild --exact` so checksum-stale raw
+  Markdown structure can recover even when content changes preserve file size
+  and mtime. Ordinary rebuild remains stat-incremental.
 - 2026-09-01: Added deterministic raw Markdown heading-tree navigation to the
   disposable SQLite index and documented its boundary across bootstrap and loop
   skills. Generated vaults expose `tree`, `ancestors`, and `subtree` only as

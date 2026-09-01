@@ -46,7 +46,7 @@ Generated wiki lint treats `_meta` navigation links and self-links as non-semant
 
 The raw index also stores a deterministic Markdown heading tree. `tree`,
 `ancestors`, and `subtree` are read-only, checksum-checked navigation aids that
-reopen canonical byte ranges; stale structure returns rebuild guidance and no
+reopen canonical byte ranges; stale structure returns `rebuild --exact` guidance and no
 structure or content. The wiki loop may use these paths when helpful, but direct
 Markdown reading remains the fallback and the existing coverage receipt remains
 the only source-accounting boundary.

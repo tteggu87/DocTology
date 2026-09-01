@@ -352,7 +352,9 @@ def prepare_rebuild(database: Path) -> sqlite3.Connection:
         raise
 
 
-def rebuild(repo_root: Path, database: Path, threshold: int) -> dict[str, Any]:
+def rebuild(
+    repo_root: Path, database: Path, threshold: int, *, exact: bool = False
+) -> dict[str, Any]:
     if threshold <= 0:
         raise RawRetrievalError("chunk bytes must be positive")
     connection = prepare_rebuild(database)
@@ -364,7 +366,7 @@ def rebuild(repo_root: Path, database: Path, threshold: int) -> dict[str, Any]:
         existing = {
             row["path"]: row
             for row in connection.execute(
-                "SELECT id, path, byte_size, mtime_ns FROM raw_documents"
+                "SELECT id, path, byte_size, mtime_ns, checksum FROM raw_documents"
             )
         }
         current_paths = raw_markdown_paths(repo_root)
@@ -400,6 +402,8 @@ def rebuild(repo_root: Path, database: Path, threshold: int) -> dict[str, Any]:
                 or int(row["byte_size"]) != stat.st_size
                 or int(row["mtime_ns"]) != stat.st_mtime_ns
             )
+            if not is_changed and exact:
+                is_changed = sha256(path.read_bytes()) != str(row["checksum"])
             if not is_changed:
                 unchanged += 1
                 continue
@@ -446,6 +450,7 @@ def rebuild(repo_root: Path, database: Path, threshold: int) -> dict[str, Any]:
             "unchanged_files": unchanged,
             "removed_files": removed,
             "chunk_bytes": threshold,
+            "exact": exact,
             "canonical": False,
         }
     except BaseException:
@@ -602,7 +607,7 @@ def stale_structure_payload(path: str) -> dict[str, Any]:
         "state": "stale",
         "freshness": "content",
         "path": path,
-        "guidance": "run raw_retrieval.py rebuild before structure lookup",
+        "guidance": "run raw_retrieval.py rebuild --exact before structure lookup",
         "canonical": False,
     }
 
@@ -863,6 +868,11 @@ def parser() -> argparse.ArgumentParser:
     commands = result.add_subparsers(dest="command", required=True)
     rebuild_parser = commands.add_parser("rebuild")
     rebuild_parser.add_argument("--chunk-bytes", type=int, default=DEFAULT_CHUNK_BYTES)
+    rebuild_parser.add_argument(
+        "--exact",
+        action="store_true",
+        help="hash unchanged-stat raw Markdown files to repair checksum-stale structure",
+    )
     commands.add_parser("status")
     search_parser = commands.add_parser("search")
     search_parser.add_argument("query")
@@ -883,7 +893,7 @@ def main(argv: list[str] | None = None) -> int:
     database = database_path(repo_root, args.database)
     try:
         if args.command == "rebuild":
-            payload = rebuild(repo_root, database, args.chunk_bytes)
+            payload = rebuild(repo_root, database, args.chunk_bytes, exact=args.exact)
         elif args.command == "status":
             payload = status(repo_root, database)
         elif args.command == "search":
