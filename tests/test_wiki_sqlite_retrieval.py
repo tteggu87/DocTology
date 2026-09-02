@@ -121,6 +121,19 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
             self.assertEqual(first["line_start"], 1)
             self.assertGreater(first["byte_end"], first["byte_start"])
 
+    def test_empty_page_remains_available_to_exact_title_search(self) -> None:
+        (self.root / "wiki" / "concepts" / "empty.md").write_text(
+            "", encoding="utf-8"
+        )
+        self.run_cli("rebuild")
+
+        first = self.payload("search", "Empty", "--hops", "0")["results"][0]
+
+        self.assertEqual(first["match_kind"], "exact")
+        self.assertEqual(first["heading_path"], "")
+        self.assertEqual((first["byte_start"], first["byte_end"]), (0, 0))
+        self.assertTrue(first["node_id"].startswith("structure-node-"))
+
     def test_fts_hit_miss_and_default_one_hop_are_bounded(self) -> None:
         hit = self.payload("search", "needle", "--neighbor-limit", "1")
         miss = self.payload("search", "not-present-anywhere")

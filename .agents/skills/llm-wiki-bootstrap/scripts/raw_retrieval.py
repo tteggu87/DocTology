@@ -17,7 +17,7 @@ from urllib.parse import quote
 import reindex_sqlite_operational as chunker
 
 
-SCHEMA_VERSION = "raw-heading-structure-index-v2"
+SCHEMA_VERSION = "raw-heading-structure-index-v3"
 DEFAULT_DB = "state/raw_index.sqlite"
 DEFAULT_CHUNK_BYTES = 8 * 1024
 MAX_RESULTS = 100

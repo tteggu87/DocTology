@@ -7,6 +7,10 @@ updated: 2026-09-02
 
 # Maintenance log
 
+- 2026-09-02: Bumped the disposable raw index to
+  `raw-heading-structure-index-v3` so pre-heading-first v2 indexes rebuild
+  instead of retaining stale whole-file chunks. Empty Markdown now keeps one
+  root chunk in both raw and wiki indexes, preserving exact page lookup.
 - 2026-09-02: Upgraded the disposable generated wiki index to
   `wiki-heading-index-v9`. Fenced-code-aware headings now define wiki and raw
   chunks regardless of total file size, with 8 KiB enforced per section and

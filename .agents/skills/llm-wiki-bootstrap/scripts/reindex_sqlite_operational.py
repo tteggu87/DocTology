@@ -579,6 +579,8 @@ def chunks_for_page(page: Page, threshold: int) -> list[Chunk]:
             else split_oversized(page.text, start, end, threshold, byte_offsets)
         )
         spans.extend((a, b, heading) for a, b in split if a < b)
+    if not spans:
+        spans.append((0, 0, ""))
     chunks: list[Chunk] = []
     for index, (start, end, heading) in enumerate(spans):
         content = page.text[start:end]
