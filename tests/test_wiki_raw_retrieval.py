@@ -183,6 +183,59 @@ class WikiRawRetrievalTests(unittest.TestCase):
             (root.byte_start, root.byte_end),
         )
 
+    def test_shared_chunker_honors_small_headings_and_keeps_fences_opaque(self) -> None:
+        text = (
+            "Preamble.\n\n"
+            "# Slide 1\nfirst\n"
+            "```markdown\n# Not a slide\n```\n"
+            "# Slide 2\nsecond\n"
+        )
+
+        chunks = self.reindex.chunks_for_page(self.structure_page(text), 8192)
+
+        self.assertEqual(
+            [chunk.heading_path for chunk in chunks], ["", "Slide 1", "Slide 2"]
+        )
+        self.assertIn("# Not a slide", chunks[1].content)
+        self.assertEqual("".join(chunk.content for chunk in chunks), text)
+
+    def test_shared_chunker_keeps_small_headingless_text_whole(self) -> None:
+        text = "plain source without headings\n" * 8
+
+        chunks = self.reindex.chunks_for_page(self.structure_page(text), 8192)
+
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0].heading_path, "")
+        self.assertEqual(chunks[0].content, text)
+
+    def test_shared_chunker_only_splits_an_oversized_section_utf8_safely(self) -> None:
+        text = "# Short\nok\n# Large\n" + ("🙂 paragraph " * 30)
+        threshold = 64
+
+        chunks = self.reindex.chunks_for_page(
+            self.structure_page(text), threshold
+        )
+
+        self.assertEqual(chunks[0].heading_path, "Short")
+        self.assertEqual(chunks[0].content, "# Short\nok\n")
+        self.assertGreater(len(chunks), 2)
+        self.assertTrue(
+            all(chunk.heading_path == "Large" for chunk in chunks[1:])
+        )
+        self.assertTrue(
+            all(len(chunk.content.encode("utf-8")) <= threshold for chunk in chunks)
+        )
+        self.assertEqual("".join(chunk.content for chunk in chunks), text)
+
+    def test_raw_rebuild_defaults_to_eight_kib_section_limit(self) -> None:
+        source = self.raw_path("default-limit.md")
+        source.write_text("headingless " * 900, encoding="utf-8")
+
+        rebuilt = self.payload("rebuild")
+
+        self.assertEqual(rebuilt["chunk_bytes"], 8192)
+        self.assertGreater(rebuilt["chunks"], 1)
+
     def test_structure_records_are_byte_stable_for_the_same_schema(self) -> None:
         page = self.structure_page("# Same\n\n## Child\nbody\n")
 
@@ -341,7 +394,7 @@ class WikiRawRetrievalTests(unittest.TestCase):
         self.assertEqual(
             [node["ordinal"] for node in tree["nodes"]], list(range(4))
         )
-        self.assertEqual(found["results"][0]["node_id"], tree["nodes"][0]["node_id"])
+        self.assertEqual(found["results"][0]["node_id"], node_id)
         self.assertEqual(ancestors["node"]["node_id"], node_id)
         self.assertEqual(
             [node["title"] for node in ancestors["ancestors"]],

@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[4]
 SCHEMA_PATH = (
     ROOT / "templates" / "llm-wiki-three-layer" / "sqlite_operational.schema.sql"
 )
-DEFAULT_CHUNK_THRESHOLD = 64 * 1024
+DEFAULT_CHUNK_THRESHOLD = 8 * 1024
 SCHEMA_VERSION = "wiki-heading-index-v8"
 STRUCTURE_SCHEMA_VERSION = "markdown-structure-v1"
 FINITE_ATTESTATION_VERSION = "finite-nonzero-v2"
@@ -138,7 +138,7 @@ def parse_args() -> argparse.Namespace:
         "--chunk-threshold",
         type=int,
         default=DEFAULT_CHUNK_THRESHOLD,
-        help="Maximum UTF-8 bytes per chunk (default: 65536).",
+        help=f"Maximum UTF-8 bytes per section chunk (default: {DEFAULT_CHUNK_THRESHOLD}).",
     )
     return parser.parse_args()
 
@@ -544,16 +544,14 @@ def chunks_for_page(page: Page, threshold: int) -> list[Chunk]:
         raise ValueError("chunk threshold must be positive")
     byte_offsets = utf8_offsets(page.text)
     newline_counts = newline_offsets(page.text)
-    spans = [(0, len(page.text), "")]
-    if page.byte_size > threshold:
-        spans = []
-        for start, end, heading in section_spans(page.text):
-            split = (
-                [(start, end)]
-                if byte_offsets[end] - byte_offsets[start] <= threshold
-                else split_oversized(page.text, start, end, threshold, byte_offsets)
-            )
-            spans.extend((a, b, heading) for a, b in split if a < b)
+    spans: list[tuple[int, int, str]] = []
+    for start, end, heading in section_spans(page.text):
+        split = (
+            [(start, end)]
+            if byte_offsets[end] - byte_offsets[start] <= threshold
+            else split_oversized(page.text, start, end, threshold, byte_offsets)
+        )
+        spans.extend((a, b, heading) for a, b in split if a < b)
     chunks: list[Chunk] = []
     for index, (start, end, heading) in enumerate(spans):
         content = page.text[start:end]

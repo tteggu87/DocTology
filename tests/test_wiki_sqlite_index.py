@@ -190,7 +190,7 @@ class WikiSqliteIndexTests(unittest.TestCase):
             readme = (root / "README.md").read_text(encoding="utf-8")
             self.assertIn("without the optional SQLite", readme)
 
-    def test_small_page_stays_one_chunk_and_records_metadata_fts_links_sources_tags(
+    def test_small_headed_page_chunks_preamble_and_heading_and_records_metadata(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -211,14 +211,15 @@ class WikiSqliteIndexTests(unittest.TestCase):
                 document_id = db.execute(
                     "SELECT id FROM documents WHERE path = 'wiki/concepts/small.md'"
                 ).fetchone()[0]
-                chunk = db.execute(
-                    "SELECT line_start, byte_start, byte_end, content_hash FROM chunks WHERE document_id = ?",
+                chunks = db.execute(
+                    "SELECT heading_path, line_start, byte_start, byte_end, content_hash "
+                    "FROM chunks WHERE document_id = ? ORDER BY chunk_index",
                     (document_id,),
                 ).fetchall()
-                self.assertEqual(len(chunk), 1)
-                self.assertEqual(chunk[0][0:2], (1, 0))
-                self.assertGreater(chunk[0][2], 0)
-                self.assertEqual(len(chunk[0][3]), 64)
+                self.assertEqual([row[0] for row in chunks], ["", "Small"])
+                self.assertEqual(chunks[0][1:3], (1, 0))
+                self.assertTrue(all(row[3] > row[2] for row in chunks))
+                self.assertTrue(all(len(row[4]) == 64 for row in chunks))
                 self.assertEqual(
                     db.execute(
                         "SELECT count(*) FROM chunk_fts WHERE chunk_fts MATCH 'Needle'"
@@ -258,6 +259,34 @@ class WikiSqliteIndexTests(unittest.TestCase):
                 )
             self.rebuild(root)
 
+    def test_small_ppt_style_page_chunks_every_slide_heading(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "vault"
+            self.scaffold(root)
+            content = (
+                "# Slide 1\nFirst point.\n"
+                "# Slide 2\nSecond point.\n"
+                "# Slide 3\nThird point.\n"
+            )
+            self.assertLess(len(content.encode("utf-8")), 8192)
+            (root / "wiki" / "concepts" / "slides.md").write_text(
+                content, encoding="utf-8"
+            )
+
+            db_path = self.rebuild(root)
+
+            with sqlite3.connect(db_path) as db:
+                rows = db.execute(
+                    "SELECT heading_path, content FROM chunks c "
+                    "JOIN documents d ON d.id = c.document_id "
+                    "WHERE d.path = 'wiki/concepts/slides.md' ORDER BY chunk_index"
+                ).fetchall()
+                metadata = dict(db.execute("SELECT key, value FROM index_metadata"))
+            self.assertEqual(
+                [heading for heading, _ in rows], ["Slide 1", "Slide 2", "Slide 3"]
+            )
+            self.assertEqual(metadata["chunk_threshold_bytes"], "8192")
+
     def test_large_heading_page_splits_with_heading_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "vault"
@@ -265,7 +294,7 @@ class WikiSqliteIndexTests(unittest.TestCase):
             content = (
                 "# Large\n" + ("alpha " * 7000) + "\n## Details\n" + ("beta " * 7000)
             )
-            self.assertGreater(len(content.encode("utf-8")), 65536)
+            self.assertGreater(len(content.encode("utf-8")), 8192)
             (root / "wiki" / "concepts" / "large.md").write_text(
                 content, encoding="utf-8"
             )
@@ -278,7 +307,7 @@ class WikiSqliteIndexTests(unittest.TestCase):
                 self.assertTrue(
                     any(heading == "Large > Details" for heading, _, _ in rows)
                 )
-                self.assertTrue(all(end - start <= 65536 for _, start, end in rows))
+                self.assertTrue(all(end - start <= 8192 for _, start, end in rows))
 
     def test_peer_headings_do_not_inherit_the_previous_peer(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
