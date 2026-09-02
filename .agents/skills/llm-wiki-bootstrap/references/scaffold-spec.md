@@ -65,6 +65,9 @@ templates/llm-wiki-three-layer/
   they report unchecked freshness and callers reopen canonical Markdown before
   treating a result as evidence. `status` is the cheap stat gate; `doctor` is
   the exact content/vector gate.
+- Wiki and raw Markdown headings define chunks regardless of total file size.
+  The default 8 KiB maximum applies to each section; only an oversized section
+  falls back to paragraph and UTF-8-safe splitting.
 - `AGENTS.md` is the repo-local contract for future agents.
 - Certified source ingest is owned by `llm-wiki-loop`. The generated
   `AGENTS.md` routes full coverage, batch work, and `ready` completion to that

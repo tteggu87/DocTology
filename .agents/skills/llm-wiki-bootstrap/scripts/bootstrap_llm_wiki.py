@@ -320,7 +320,7 @@ def retrieval_contract(profile: str, sqlite_enabled: bool = True) -> str:
   changed source returns `state: stale`, rebuild guidance, and no structure or
   subtree content. Read commands never rebuild implicitly; run `rebuild --exact`
   explicitly when desired, or fall back to reading Markdown directly.
-- Pages at or below the default 64 KiB threshold stay whole. Larger pages split at Markdown headings, with paragraph fallback for oversized sections.
+- Markdown headings define chunks regardless of total file size. The default 8 KiB limit applies per section; only an oversized section falls back to paragraph and UTF-8-safe splitting.
 - `search --mode lexical` is the dependable default: exact title/path, FTS5, then bounded wikilinks.
 - `search --mode lexical --raw-fallback` consults the separate raw index only
   when wiki lexical results are empty. Raw candidates remain a labeled lane and
@@ -377,8 +377,10 @@ ONNX vectors, RRF, ANN, or daemon. Run `refresh` once after the final canonical
 wiki writer: it atomically rebuilds lexical state, reuses compatible vectors,
 and embeds only missing wiki chunks when local artifacts are configured. Local
 ONNX uses zero API tokens and remains optional. Workflow output keeps
-`wiki_complete`, `retrieval_ready`, and semantic status separate. By default, Markdown files up to
-64 KiB remain one chunk; larger files split at headings and then paragraphs.
+`wiki_complete`, `retrieval_ready`, and semantic status separate. Markdown
+headings define chunks regardless of total file size. The default 8 KiB limit
+applies per section; only an oversized section falls back to paragraph and
+UTF-8-safe splitting.
 Wiki lane ranks stay separate, and BM25 is never compared with cosine. Wiki and
 raw lexical results return `freshness: unchecked`; reopen their listed Markdown
 paths before treating them as evidence. Run `status` for fast path/size/mtime

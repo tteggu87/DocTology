@@ -1,0 +1,51 @@
+# Ralph Progress Log
+Started: 2026-09-02
+
+## Codebase Patterns
+- DocTology distributes exactly three self-contained skills; all retrieval changes belong inside `llm-wiki-bootstrap`.
+- `wiki/**/*.md` and `raw/**/*.md` remain canonical. SQLite indexes and heading trees are disposable derived routing aids.
+- The generated wiki and raw indexes share `reindex_sqlite_operational.chunks_for_page`; keep their Markdown boundary behavior aligned.
+- `structure_nodes_for_page` is the existing fenced-code-aware deterministic tree builder; reuse it instead of adding a PPT-specific parser.
+- Generated schema exists both in the checked-in SQL template and bootstrap-generated schema text; keep both synchronized.
+- Ralph executes exactly one active story per fresh iteration; the main agent owns integration, verification, PRD state, progress, and commits.
+
+## 2026-09-02 - Baseline
+- User-approved direction: PPT-extracted Markdown commonly has one heading per slide.
+- Chosen minimal design: always honor heading boundaries, treat 8 KiB as a per-section maximum, persist existing structure nodes in wiki schema v9, and add `node_id` to existing search results.
+- Explicit exclusions: adaptive thresholds, a PPT-only parser, ranking changes, database migration, new navigation commands, a new canonical store, or a new dependency.
+- Branch: `feat/wiki-section-routing-v9`.
+- Worktree was clean before Ralph artifacts were replaced; prior completed Ralph state was preserved under `.codex/ralph/archive/2026-09-02-batch-seal/`.
+---
+## 2026-09-02 - US-001
+- Implemented heading-first shared chunking for wiki and raw Markdown regardless of total file size, with an 8 KiB per-section default and existing paragraph/UTF-8-safe fallback for only oversized sections.
+- Files changed: `.agents/skills/llm-wiki-bootstrap/scripts/reindex_sqlite_operational.py`, `.agents/skills/llm-wiki-bootstrap/scripts/raw_retrieval.py`, `tests/test_wiki_raw_retrieval.py`, `tests/test_wiki_sqlite_index.py`.
+- Quality checks run and result
+  - `python3 -m unittest tests.test_wiki_raw_retrieval tests.test_wiki_sqlite_index -v` -> pass, 28 tests.
+  - `python3 -m py_compile .agents/skills/llm-wiki-bootstrap/scripts/reindex_sqlite_operational.py .agents/skills/llm-wiki-bootstrap/scripts/raw_retrieval.py` -> pass.
+  - `git diff --check` -> pass.
+- Learnings for future iterations: small headed pages now produce one chunk per real ATX heading plus a root chunk only for legitimate preamble; fenced headings remain opaque, and raw search ownership resolves to the matching heading node even before wiki schema v9 persistence.
+---
+## 2026-09-02 11:09 KST - US-002
+- Implemented disposable wiki schema v9 with deterministic `structure_nodes`, mandatory `chunks.node_id` ownership, and rebuild-only replacement of incompatible v8 indexes.
+- Added `node_id` to compatible lexical and semantic result shapes while preserving heading paths, current line/byte ranges, and existing exact title/path page selection behavior.
+- Extended doctor validation for missing structure tables, exact structure/chunk row divergence, foreign keys, invalid parents, range violations, and invalid chunk ownership.
+- Files changed: `.agents/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py`, `.agents/skills/llm-wiki-bootstrap/scripts/reindex_sqlite_operational.py`, `.agents/skills/llm-wiki-bootstrap/scripts/wiki_retrieval.py`, `tests/test_wiki_sqlite_index.py`, `tests/test_wiki_sqlite_retrieval.py`, `tests/test_wiki_sqlite_semantic.py`, `.codex/ralph/prd.json`, `.codex/ralph/progress.txt`.
+- Quality checks run and result
+  - `python3 -m unittest tests.test_wiki_sqlite_index tests.test_wiki_sqlite_retrieval tests.test_wiki_sqlite_semantic tests.test_wiki_raw_retrieval -v` -> pass, 81 tests.
+  - `python3 -m py_compile .agents/skills/llm-wiki-bootstrap/scripts/reindex_sqlite_operational.py .agents/skills/llm-wiki-bootstrap/scripts/wiki_retrieval.py .agents/skills/llm-wiki-bootstrap/scripts/raw_retrieval.py` -> pass.
+  - `git diff --check` -> pass.
+- Learnings for future iterations: wiki section chunks can reuse the raw index's deterministic heading-node ownership rule without adding navigation commands; schema/version metadata keeps the disposable index rebuild boundary explicit.
+---
+## 2026-09-02 11:14 KST - US-003
+- Synchronized generated `AGENTS.md` and `README.md` guidance with heading-first chunking and the 8 KiB per-section maximum; removed the obsolete 64 KiB whole-file activation wording and added regression assertions.
+- Updated the bootstrap contract/reference, current state, impact summary, repository data flow/symbol map, and `wiki/_meta/log.md` to document wiki schema v9, deterministic structure ownership, `node_id` search routing, and the unchanged Markdown-canonical boundary.
+- Corrected the PRD's Repo Docs validation invocation to pass the newline-delimited changed-files list by process substitution, matching the validator CLI contract.
+- Files changed: `.agents/skills/llm-wiki-bootstrap/SKILL.md`, `.agents/skills/llm-wiki-bootstrap/references/scaffold-spec.md`, `.agents/skills/llm-wiki-bootstrap/scripts/bootstrap_llm_wiki.py`, `tests/test_wiki_sqlite_index.py`, `docs/CURRENT_STATE.md`, `docs/IMPACT_SUMMARY.md`, `docs/repo-map/DATA_FLOW.md`, `docs/repo-map/SYMBOL_GRAPH.md`, `wiki/_meta/log.md`, `.codex/ralph/prd.json`, `.codex/ralph/progress.txt`.
+- Quality checks run and result
+  - `python3 -m unittest tests.test_wiki_sqlite_index -v` -> pass, 12 tests.
+  - `python3 -m unittest discover -s tests` -> pass, 191 tests; pre-existing SQLite `ResourceWarning` messages remained non-failing.
+  - `python3 scripts/manage_skills.py check` -> pass, exactly three self-contained skills.
+  - `python3 .agents/skills/repo-docs-intelligence-bootstrap/scripts/validate_repo_docs_intelligence.py --repo-root . --format json --changed-files <( (git diff --name-only HEAD~2..HEAD; git diff --name-only) | sort -u )` -> pass, 0 errors and 0 warnings for the two prior story commits plus the current uncommitted story.
+  - `git diff --check` -> pass.
+- Learnings for future iterations: `--changed-files` accepts a path to a newline-delimited file, not filenames themselves; shell process substitution provides that path without adding a tracked validation artifact.
+---

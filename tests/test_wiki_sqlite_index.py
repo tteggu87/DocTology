@@ -121,7 +121,13 @@ class WikiSqliteIndexTests(unittest.TestCase):
                 )
                 for document in (agents, readme):
                     self.assertIn("Markdown", document)
-                    self.assertIn("64 KiB", document)
+                    self.assertIn(
+                        "headings define chunks regardless of total file size", document
+                    )
+                    self.assertIn("default 8 KiB limit", document)
+                    self.assertIn("applies per section", document)
+                    self.assertIn("only an oversized section", document)
+                    self.assertNotIn("64 KiB", document)
                     self.assertIn("ONNX", document)
                     self.assertIn("RRF", document)
                     self.assertIn("--mode both", document)
