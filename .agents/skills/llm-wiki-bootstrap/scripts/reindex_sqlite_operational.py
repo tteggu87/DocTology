@@ -22,7 +22,7 @@ SCHEMA_PATH = (
     ROOT / "templates" / "llm-wiki-three-layer" / "sqlite_operational.schema.sql"
 )
 DEFAULT_CHUNK_THRESHOLD = 8 * 1024
-SCHEMA_VERSION = "wiki-heading-index-v8"
+SCHEMA_VERSION = "wiki-heading-index-v9"
 STRUCTURE_SCHEMA_VERSION = "markdown-structure-v1"
 FINITE_ATTESTATION_VERSION = "finite-nonzero-v2"
 PAGE_TYPE_BY_DIR = {
@@ -501,6 +501,33 @@ def structure_nodes_for_page(
     return nodes
 
 
+def structure_owner_node_id(
+    nodes: list[StructureNode], chunk: Chunk, path: str
+) -> str:
+    """Return the one deterministic structure node that owns a chunk."""
+    owners = [
+        node
+        for node in nodes
+        if node.heading_path == chunk.heading_path
+        and (
+            node.byte_start <= chunk.byte_start <= chunk.byte_end <= node.byte_end
+            or (
+                node.parent_id is None
+                and node.subtree_byte_start
+                <= chunk.byte_start
+                <= chunk.byte_end
+                <= node.subtree_byte_end
+            )
+        )
+    ]
+    if len(owners) != 1:
+        raise RebuildError(
+            f"wiki chunk does not have exactly one structure owner: "
+            f"{path}#{chunk.chunk_index}"
+        )
+    return owners[0].node_id
+
+
 def split_oversized(
     text: str,
     start: int,
@@ -872,6 +899,7 @@ def rebuild(repo_root: Path, threshold: int) -> tuple[int, int, Path]:
     temporary_path = Path(temporary_name)
     temporary_path.unlink()
     chunk_count = 0
+    structure_node_count = 0
     try:
         connection = sqlite3.connect(temporary_path)
         try:
@@ -900,12 +928,45 @@ def rebuild(repo_root: Path, threshold: int) -> tuple[int, int, Path]:
                         "Markdown changed during rebuild; refusing to publish index"
                     )
                 chunks = chunks_for_page(page, threshold)
+                nodes = structure_nodes_for_page(page)
                 connection.executemany(
-                    "INSERT INTO chunks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    """
+                    INSERT INTO structure_nodes(
+                      node_id, document_id, parent_id, ordinal, depth, title,
+                      heading_path, line_start, line_end, byte_start, byte_end,
+                      subtree_line_start, subtree_line_end, subtree_byte_start,
+                      subtree_byte_end
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            node.node_id,
+                            node.document_id,
+                            node.parent_id,
+                            node.ordinal,
+                            node.depth,
+                            node.title,
+                            node.heading_path,
+                            node.line_start,
+                            node.line_end,
+                            node.byte_start,
+                            node.byte_end,
+                            node.subtree_line_start,
+                            node.subtree_line_end,
+                            node.subtree_byte_start,
+                            node.subtree_byte_end,
+                        )
+                        for node in nodes
+                    ],
+                )
+                structure_node_count += len(nodes)
+                connection.executemany(
+                    "INSERT INTO chunks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     [
                         (
                             chunk.id,
                             chunk.document_id,
+                            structure_owner_node_id(nodes, chunk, page.path),
                             chunk.chunk_index,
                             chunk.heading_path,
                             chunk.line_start,
@@ -958,6 +1019,7 @@ def rebuild(repo_root: Path, threshold: int) -> tuple[int, int, Path]:
                         attest_semantic_vectors(connection),
                     ),
                     ("chunk_threshold_bytes", str(threshold)),
+                    ("structure_schema_version", STRUCTURE_SCHEMA_VERSION),
                     ("truth_source", "markdown"),
                     ("rebuildable", "true"),
                 ],
@@ -975,6 +1037,9 @@ def rebuild(repo_root: Path, threshold: int) -> tuple[int, int, Path]:
                 "chunks": connection.execute("SELECT count(*) FROM chunks").fetchone()[
                     0
                 ],
+                "structure_nodes": connection.execute(
+                    "SELECT count(*) FROM structure_nodes"
+                ).fetchone()[0],
                 "chunk_fts": connection.execute(
                     "SELECT count(*) FROM chunk_fts"
                 ).fetchone()[0],
@@ -983,6 +1048,7 @@ def rebuild(repo_root: Path, threshold: int) -> tuple[int, int, Path]:
                 "pages": len(pages),
                 "documents": len(pages),
                 "chunks": chunk_count,
+                "structure_nodes": structure_node_count,
                 "chunk_fts": chunk_count,
             }:
                 raise sqlite3.DatabaseError(f"temporary index is incomplete: {counts}")

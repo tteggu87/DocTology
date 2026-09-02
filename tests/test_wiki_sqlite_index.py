@@ -212,25 +212,29 @@ class WikiSqliteIndexTests(unittest.TestCase):
                     "SELECT id FROM documents WHERE path = 'wiki/concepts/small.md'"
                 ).fetchone()[0]
                 chunks = db.execute(
-                    "SELECT heading_path, line_start, byte_start, byte_end, content_hash "
-                    "FROM chunks WHERE document_id = ? ORDER BY chunk_index",
+                    "SELECT c.heading_path, c.line_start, c.byte_start, c.byte_end, "
+                    "c.content_hash, c.node_id, n.title "
+                    "FROM chunks c JOIN structure_nodes n ON n.node_id = c.node_id "
+                    "WHERE c.document_id = ? ORDER BY c.chunk_index",
                     (document_id,),
                 ).fetchall()
                 self.assertEqual([row[0] for row in chunks], ["", "Small"])
                 self.assertEqual(chunks[0][1:3], (1, 0))
                 self.assertTrue(all(row[3] > row[2] for row in chunks))
                 self.assertTrue(all(len(row[4]) == 64 for row in chunks))
+                self.assertEqual([row[6] for row in chunks], ["Small", "Small"])
+                self.assertNotEqual(chunks[0][5], chunks[1][5])
                 self.assertEqual(
                     db.execute(
                         "SELECT count(*) FROM chunk_fts WHERE chunk_fts MATCH 'Needle'"
                     ).fetchone()[0],
                     1,
                 )
+                metadata = dict(db.execute("SELECT key, value FROM index_metadata"))
+                self.assertEqual(metadata["truth_source"], "markdown")
+                self.assertEqual(metadata["schema_version"], "wiki-heading-index-v9")
                 self.assertEqual(
-                    dict(db.execute("SELECT key, value FROM index_metadata"))[
-                        "truth_source"
-                    ],
-                    "markdown",
+                    metadata["structure_schema_version"], "markdown-structure-v1"
                 )
                 small_page_id = db.execute(
                     "SELECT id FROM pages WHERE path = 'wiki/concepts/small.md'"
@@ -277,15 +281,51 @@ class WikiSqliteIndexTests(unittest.TestCase):
 
             with sqlite3.connect(db_path) as db:
                 rows = db.execute(
-                    "SELECT heading_path, content FROM chunks c "
+                    "SELECT c.heading_path, c.content, c.node_id, n.heading_path "
+                    "FROM chunks c JOIN structure_nodes n ON n.node_id = c.node_id "
                     "JOIN documents d ON d.id = c.document_id "
                     "WHERE d.path = 'wiki/concepts/slides.md' ORDER BY chunk_index"
                 ).fetchall()
+                node_count = db.execute(
+                    "SELECT count(*) FROM structure_nodes n "
+                    "JOIN documents d ON d.id = n.document_id "
+                    "WHERE d.path = 'wiki/concepts/slides.md'"
+                ).fetchone()[0]
                 metadata = dict(db.execute("SELECT key, value FROM index_metadata"))
             self.assertEqual(
-                [heading for heading, _ in rows], ["Slide 1", "Slide 2", "Slide 3"]
+                [row[0] for row in rows], ["Slide 1", "Slide 2", "Slide 3"]
             )
+            self.assertEqual([row[0] for row in rows], [row[3] for row in rows])
+            self.assertEqual(len({row[2] for row in rows}), 3)
+            self.assertEqual(node_count, 4)
             self.assertEqual(metadata["chunk_threshold_bytes"], "8192")
+
+    def test_v8_index_is_rebuilt_instead_of_migrated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "vault"
+            self.scaffold(root)
+            db_path = self.rebuild(root)
+            with sqlite3.connect(db_path) as db:
+                db.execute(
+                    "UPDATE index_metadata SET value = 'wiki-heading-index-v8' "
+                    "WHERE key = 'schema_version'"
+                )
+                db.execute("CREATE TABLE legacy_v8_marker(value TEXT)")
+                db.commit()
+
+            self.rebuild(root)
+
+            with sqlite3.connect(db_path) as db:
+                tables = {
+                    row[0]
+                    for row in db.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    )
+                }
+                metadata = dict(db.execute("SELECT key, value FROM index_metadata"))
+            self.assertNotIn("legacy_v8_marker", tables)
+            self.assertIn("structure_nodes", tables)
+            self.assertEqual(metadata["schema_version"], "wiki-heading-index-v9")
 
     def test_large_heading_page_splits_with_heading_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

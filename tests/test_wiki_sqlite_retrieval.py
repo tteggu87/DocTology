@@ -116,6 +116,7 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
         for payload in (title, path):
             first = payload["results"][0]
             self.assertEqual(first["match_kind"], "exact")
+            self.assertTrue(first["node_id"].startswith("structure-node-"))
             self.assertEqual(first["heading_path"], "")
             self.assertEqual(first["line_start"], 1)
             self.assertGreater(first["byte_end"], first["byte_start"])
@@ -126,6 +127,8 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
 
         self.assertEqual(hit["default_link_hops"], 1)
         self.assertEqual(hit["results"][0]["match_kind"], "fts")
+        self.assertTrue(hit["results"][0]["node_id"].startswith("structure-node-"))
+        self.assertEqual(hit["results"][0]["heading_path"], "Alpha")
         self.assertEqual(len(hit["results"][0]["neighbors"]), 1)
         self.assertEqual(miss["results"], [])
 
@@ -300,6 +303,48 @@ class WikiSqliteRetrievalTests(unittest.TestCase):
                     connection.commit()
                 result = self.run_cli("doctor", expected_returncode=1)
                 self.assertIn(reason, json.loads(result.stdout)["stale_reasons"])
+
+    def test_doctor_detects_structure_and_chunk_ownership_corruption(self) -> None:
+        database = self.root / "state" / "wiki_index.sqlite"
+        mutations = (
+            (
+                "UPDATE structure_nodes SET parent_id = 'missing-parent' "
+                "WHERE parent_id IS NOT NULL",
+                {"structure_rows", "parent_references", "foreign_keys"},
+            ),
+            (
+                "UPDATE structure_nodes SET byte_end = byte_start - 1 "
+                "WHERE parent_id IS NOT NULL",
+                {"structure_rows", "range_violations"},
+            ),
+            (
+                "UPDATE chunks SET node_id = ("
+                "SELECT n.node_id FROM structure_nodes n "
+                "WHERE n.document_id = chunks.document_id AND n.parent_id IS NULL"
+                ") WHERE heading_path != ''",
+                {"chunk_rows", "chunk_node_ownership"},
+            ),
+        )
+        for statement, reasons in mutations:
+            with self.subTest(reasons=reasons):
+                self.run_cli("rebuild")
+                with sqlite3.connect(database) as connection:
+                    connection.execute(statement)
+                    connection.commit()
+                result = self.run_cli("doctor", expected_returncode=1)
+                self.assertTrue(
+                    reasons.issubset(set(json.loads(result.stdout)["stale_reasons"]))
+                )
+
+    def test_doctor_rejects_missing_structure_table(self) -> None:
+        database = self.root / "state" / "wiki_index.sqlite"
+        with sqlite3.connect(database) as connection:
+            connection.execute("PRAGMA foreign_keys = OFF")
+            connection.execute("DROP TABLE structure_nodes")
+            connection.commit()
+
+        result = self.run_cli("doctor", expected_returncode=2)
+        self.assertIn("missing: structure_nodes", result.stderr)
 
     def test_doctor_detects_link_source_and_tag_projection_tampering(self) -> None:
         alpha = self.root / "wiki" / "concepts" / "alpha.md"
