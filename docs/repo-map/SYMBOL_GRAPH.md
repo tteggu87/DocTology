@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-09-02
+last_updated: 2026-09-01
 superseded_by: N/A
 ---
 
@@ -39,10 +39,6 @@ superseded_by: N/A
   when file size and mtime were preserved.
 - `reindex_sqlite_operational.structure_nodes_for_page`: deterministically maps
   fenced-code-aware Markdown headings to document, ancestor, and subtree ranges.
-- `reindex_sqlite_operational.chunks_for_page`: applies heading boundaries to
-  every page and enforces the 8 KiB maximum within each section.
-- `reindex_sqlite_operational.structure_owner_node_id`: binds each disposable
-  wiki chunk to exactly one document-root or heading node for result routing.
 - `raw_retrieval.search`: queries raw FTS, then reopens the canonical source byte
   range and labels changed spans stale instead of returning stored text as truth.
 - `raw_retrieval.tree`, `raw_retrieval.ancestors`, and `raw_retrieval.subtree`:

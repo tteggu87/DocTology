@@ -183,67 +183,6 @@ class WikiRawRetrievalTests(unittest.TestCase):
             (root.byte_start, root.byte_end),
         )
 
-    def test_shared_chunker_honors_small_headings_and_keeps_fences_opaque(self) -> None:
-        text = (
-            "Preamble.\n\n"
-            "# Slide 1\nfirst\n"
-            "```markdown\n# Not a slide\n```\n"
-            "# Slide 2\nsecond\n"
-        )
-
-        chunks = self.reindex.chunks_for_page(self.structure_page(text), 8192)
-
-        self.assertEqual(
-            [chunk.heading_path for chunk in chunks], ["", "Slide 1", "Slide 2"]
-        )
-        self.assertIn("# Not a slide", chunks[1].content)
-        self.assertEqual("".join(chunk.content for chunk in chunks), text)
-
-    def test_shared_chunker_keeps_small_headingless_text_whole(self) -> None:
-        text = "plain source without headings\n" * 8
-
-        chunks = self.reindex.chunks_for_page(self.structure_page(text), 8192)
-
-        self.assertEqual(len(chunks), 1)
-        self.assertEqual(chunks[0].heading_path, "")
-        self.assertEqual(chunks[0].content, text)
-
-    def test_shared_chunker_keeps_one_root_chunk_for_empty_text(self) -> None:
-        chunks = self.reindex.chunks_for_page(self.structure_page(""), 8192)
-
-        self.assertEqual(len(chunks), 1)
-        self.assertEqual(chunks[0].heading_path, "")
-        self.assertEqual(chunks[0].content, "")
-        self.assertEqual((chunks[0].byte_start, chunks[0].byte_end), (0, 0))
-
-    def test_shared_chunker_only_splits_an_oversized_section_utf8_safely(self) -> None:
-        text = "# Short\nok\n# Large\n" + ("🙂 paragraph " * 30)
-        threshold = 64
-
-        chunks = self.reindex.chunks_for_page(
-            self.structure_page(text), threshold
-        )
-
-        self.assertEqual(chunks[0].heading_path, "Short")
-        self.assertEqual(chunks[0].content, "# Short\nok\n")
-        self.assertGreater(len(chunks), 2)
-        self.assertTrue(
-            all(chunk.heading_path == "Large" for chunk in chunks[1:])
-        )
-        self.assertTrue(
-            all(len(chunk.content.encode("utf-8")) <= threshold for chunk in chunks)
-        )
-        self.assertEqual("".join(chunk.content for chunk in chunks), text)
-
-    def test_raw_rebuild_defaults_to_eight_kib_section_limit(self) -> None:
-        source = self.raw_path("default-limit.md")
-        source.write_text("headingless " * 900, encoding="utf-8")
-
-        rebuilt = self.payload("rebuild")
-
-        self.assertEqual(rebuilt["chunk_bytes"], 8192)
-        self.assertGreater(rebuilt["chunks"], 1)
-
     def test_structure_records_are_byte_stable_for_the_same_schema(self) -> None:
         page = self.structure_page("# Same\n\n## Child\nbody\n")
 
@@ -365,7 +304,7 @@ class WikiRawRetrievalTests(unittest.TestCase):
         self.assertIn("node_id", columns)
         self.assertIn("raw_structure_nodes", tables)
         self.assertNotIn("chunk_embeddings", tables)
-        self.assertEqual(metadata["schema_version"], "raw-heading-structure-index-v3")
+        self.assertEqual(metadata["schema_version"], "raw-heading-structure-index-v2")
         self.assertEqual(metadata["structure_schema_version"], "markdown-structure-v1")
         self.assertNotEqual(database, self.root / "state" / "wiki_index.sqlite")
 
@@ -402,7 +341,7 @@ class WikiRawRetrievalTests(unittest.TestCase):
         self.assertEqual(
             [node["ordinal"] for node in tree["nodes"]], list(range(4))
         )
-        self.assertEqual(found["results"][0]["node_id"], node_id)
+        self.assertEqual(found["results"][0]["node_id"], tree["nodes"][0]["node_id"])
         self.assertEqual(ancestors["node"]["node_id"], node_id)
         self.assertEqual(
             [node["title"] for node in ancestors["ancestors"]],
@@ -484,61 +423,6 @@ class WikiRawRetrievalTests(unittest.TestCase):
         self.assertNotIn("legacy_sentinel", tables)
         self.assertIn("raw_structure_nodes", tables)
         self.assertIn("node_id", chunk_columns)
-
-    def test_rebuild_replaces_v2_index_after_chunking_algorithm_change(self) -> None:
-        self.raw_path("small-slides.md").write_text(
-            "# Slide 1\nfirst\n# Slide 2\nsecond\n", encoding="utf-8"
-        )
-        self.payload("rebuild")
-        database = self.root / "state" / "raw_index.sqlite"
-        with sqlite3.connect(database) as connection:
-            connection.execute(
-                "UPDATE raw_index_metadata SET value = 'raw-heading-structure-index-v2' "
-                "WHERE key = 'schema_version'"
-            )
-            connection.execute("CREATE TABLE legacy_v2_sentinel(value TEXT)")
-            connection.commit()
-
-        rebuilt = self.payload("rebuild")
-
-        with sqlite3.connect(database) as connection:
-            tables = {
-                row[0]
-                for row in connection.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'table'"
-                )
-            }
-            headings = [
-                row[0]
-                for row in connection.execute(
-                    "SELECT heading_path FROM raw_chunks ORDER BY chunk_index"
-                )
-            ]
-            metadata = dict(
-                connection.execute("SELECT key, value FROM raw_index_metadata")
-            )
-
-        self.assertEqual(rebuilt["changed_files"], 1)
-        self.assertNotIn("legacy_v2_sentinel", tables)
-        self.assertEqual(headings, ["Slide 1", "Slide 2"])
-        self.assertEqual(metadata["schema_version"], "raw-heading-structure-index-v3")
-
-    def test_raw_rebuild_preserves_one_chunk_for_empty_document(self) -> None:
-        self.raw_path("empty.md").write_text("", encoding="utf-8")
-
-        rebuilt = self.payload("rebuild")
-
-        database = self.root / "state" / "raw_index.sqlite"
-        with sqlite3.connect(database) as connection:
-            chunk = connection.execute(
-                "SELECT heading_path, byte_start, byte_end FROM raw_chunks"
-            ).fetchone()
-            fts_count = connection.execute(
-                "SELECT count(*) FROM raw_chunk_fts"
-            ).fetchone()[0]
-        self.assertEqual(rebuilt["chunks"], 1)
-        self.assertEqual(tuple(chunk), ("", 0, 0))
-        self.assertEqual(fts_count, 1)
 
     def test_rebuild_is_incremental_for_add_change_and_remove(self) -> None:
         first = self.raw_path("first.md")

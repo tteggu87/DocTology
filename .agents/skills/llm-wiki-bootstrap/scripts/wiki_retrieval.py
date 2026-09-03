@@ -39,7 +39,6 @@ MAX_EMBED_BATCH_SIZE = 128
 REQUIRED_TABLES = {
     "pages",
     "documents",
-    "structure_nodes",
     "chunks",
     "chunk_fts",
     "chunk_embeddings",
@@ -56,7 +55,6 @@ REQUIRED_METADATA = {
     "semantic_cohort_fingerprint",
     "semantic_finite_attestation",
     "chunk_threshold_bytes",
-    "structure_schema_version",
     "truth_source",
     "rebuildable",
 }
@@ -465,8 +463,6 @@ def lightweight_health(
                 stale_reasons.append("truth_source")
             if values.get("rebuildable") != "true":
                 stale_reasons.append("rebuildable")
-            if values.get("structure_schema_version") != indexer.STRUCTURE_SCHEMA_VERSION:
-                stale_reasons.append("structure_schema_version")
             page_count = connection.execute("SELECT count(*) FROM pages").fetchone()[0]
             chunk_count = connection.execute("SELECT count(*) FROM chunks").fetchone()[
                 0
@@ -526,20 +522,12 @@ def health(repo_root: Path) -> dict[str, object]:
                 stale_reasons.append("truth_source")
             if values.get("rebuildable") != "true":
                 stale_reasons.append("rebuildable")
-            if values.get("structure_schema_version") != indexer.STRUCTURE_SCHEMA_VERSION:
-                stale_reasons.append("structure_schema_version")
             expected_pages = indexer.page_records(repo_root)
-            expected_nodes_by_document = {
-                f"document-{page.id}": indexer.structure_nodes_for_page(page)
+            expected_chunks = [
+                chunk
                 for page in expected_pages
-            }
-            expected_chunks = []
-            for page in expected_pages:
-                nodes = expected_nodes_by_document[f"document-{page.id}"]
-                expected_chunks.extend(
-                    (chunk, indexer.structure_owner_node_id(nodes, chunk, page.path))
-                    for chunk in indexer.chunks_for_page(page, threshold)
-                )
+                for chunk in indexer.chunks_for_page(page, threshold)
+            ]
             expected_page_rows = sorted(
                 (
                     page.id,
@@ -574,44 +562,10 @@ def health(repo_root: Path) -> dict[str, object]:
                     "SELECT id, page_id, path, title, checksum, byte_size FROM documents"
                 )
             )
-            expected_structure_rows = sorted(
-                (
-                    node.node_id,
-                    node.document_id,
-                    node.parent_id,
-                    node.ordinal,
-                    node.depth,
-                    node.title,
-                    node.heading_path,
-                    node.line_start,
-                    node.line_end,
-                    node.byte_start,
-                    node.byte_end,
-                    node.subtree_line_start,
-                    node.subtree_line_end,
-                    node.subtree_byte_start,
-                    node.subtree_byte_end,
-                )
-                for nodes in expected_nodes_by_document.values()
-                for node in nodes
-            )
-            structure_rows = sorted(
-                tuple(row)
-                for row in connection.execute(
-                    """
-                    SELECT node_id, document_id, parent_id, ordinal, depth, title,
-                           heading_path, line_start, line_end, byte_start, byte_end,
-                           subtree_line_start, subtree_line_end, subtree_byte_start,
-                           subtree_byte_end
-                    FROM structure_nodes
-                    """
-                )
-            )
             expected_chunk_rows = sorted(
                 (
                     chunk.id,
                     chunk.document_id,
-                    node_id,
                     chunk.chunk_index,
                     chunk.heading_path,
                     chunk.line_start,
@@ -621,13 +575,13 @@ def health(repo_root: Path) -> dict[str, object]:
                     chunk.content,
                     chunk.content_hash,
                 )
-                for chunk, node_id in expected_chunks
+                for chunk in expected_chunks
             )
             chunk_rows = sorted(
                 tuple(row)
                 for row in connection.execute(
                     """
-                    SELECT id, document_id, node_id, chunk_index, heading_path, line_start,
+                    SELECT id, document_id, chunk_index, heading_path, line_start,
                            line_end, byte_start, byte_end, content, content_hash
                     FROM chunks
                     """
@@ -644,7 +598,7 @@ def health(repo_root: Path) -> dict[str, object]:
                     chunk.heading_path,
                     chunk.content,
                 )
-                for chunk, _node_id in expected_chunks
+                for chunk in expected_chunks
             )
             fts_rows = sorted(
                 tuple(row)
@@ -658,70 +612,10 @@ def health(repo_root: Path) -> dict[str, object]:
                 stale_reasons.append("page_rows")
             if document_rows != expected_document_rows:
                 stale_reasons.append("document_rows")
-            if structure_rows != expected_structure_rows:
-                stale_reasons.append("structure_rows")
             if chunk_rows != expected_chunk_rows:
                 stale_reasons.append("chunk_rows")
             if fts_rows != expected_fts_rows:
                 stale_reasons.append("fts_rows")
-            if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
-                stale_reasons.append("foreign_keys")
-            if connection.execute(
-                """
-                SELECT 1
-                FROM structure_nodes child
-                LEFT JOIN structure_nodes parent ON parent.node_id = child.parent_id
-                WHERE child.parent_id IS NOT NULL
-                  AND (
-                    parent.node_id IS NULL
-                    OR parent.document_id != child.document_id
-                    OR parent.depth >= child.depth
-                    OR parent.subtree_byte_start > child.subtree_byte_start
-                    OR child.subtree_byte_end > parent.subtree_byte_end
-                  )
-                LIMIT 1
-                """
-            ).fetchone():
-                stale_reasons.append("parent_references")
-            if connection.execute(
-                """
-                SELECT 1
-                FROM structure_nodes n
-                JOIN documents d ON d.id = n.document_id
-                WHERE n.line_start < 1 OR n.line_end < n.line_start
-                   OR n.byte_start < 0 OR n.byte_end < n.byte_start
-                   OR n.subtree_line_start < 1
-                   OR n.subtree_line_end < n.subtree_line_start
-                   OR n.subtree_byte_start < 0
-                   OR n.subtree_byte_end < n.subtree_byte_start
-                   OR n.byte_start < n.subtree_byte_start
-                   OR n.byte_end > n.subtree_byte_end
-                   OR n.subtree_byte_end > d.byte_size
-                LIMIT 1
-                """
-            ).fetchone():
-                stale_reasons.append("range_violations")
-            if connection.execute(
-                """
-                SELECT 1
-                FROM chunks c
-                JOIN documents d ON d.id = c.document_id
-                LEFT JOIN structure_nodes n ON n.node_id = c.node_id
-                WHERE c.line_start < 1 OR c.line_end < c.line_start
-                   OR c.byte_start < 0 OR c.byte_end < c.byte_start
-                   OR c.byte_end > d.byte_size
-                   OR n.node_id IS NULL OR n.document_id != c.document_id
-                   OR n.heading_path != c.heading_path
-                   OR NOT (
-                     (n.byte_start <= c.byte_start AND c.byte_end <= n.byte_end)
-                     OR (n.parent_id IS NULL
-                         AND n.subtree_byte_start <= c.byte_start
-                         AND c.byte_end <= n.subtree_byte_end)
-                   )
-                LIMIT 1
-                """
-            ).fetchone():
-                stale_reasons.append("chunk_node_ownership")
             expected_link_rows = Counter(
                 row[:4] for row in indexer.link_records(expected_pages)
             )
@@ -918,7 +812,7 @@ def lexical_rows(
     exact = connection.execute(
         """
         WITH ranked AS (
-          SELECT c.id chunk_id, c.node_id, p.id page_id, p.path, p.title, c.chunk_index,
+          SELECT c.id chunk_id, p.id page_id, p.path, p.title, c.chunk_index,
                  c.heading_path, c.line_start, c.line_end, c.byte_start, c.byte_end,
                  CASE WHEN lower(p.title) = ? THEN 0 ELSE 1 END exact_priority,
                  row_number() OVER (
@@ -929,7 +823,7 @@ def lexical_rows(
           JOIN chunks c ON c.document_id = d.id
           WHERE lower(p.title) = ? OR lower(p.path) = ?
         )
-        SELECT chunk_id, node_id, page_id, path, title, chunk_index, heading_path,
+        SELECT chunk_id, page_id, path, title, chunk_index, heading_path,
                line_start, line_end, byte_start, byte_end
         FROM ranked
         WHERE page_rank = 1
@@ -948,7 +842,7 @@ def lexical_rows(
             rows = connection.execute(
                 """
                 WITH matched AS (
-                  SELECT c.id chunk_id, c.node_id, p.id page_id, p.path, p.title, c.chunk_index,
+                  SELECT c.id chunk_id, p.id page_id, p.path, p.title, c.chunk_index,
                          c.heading_path, c.line_start, c.line_end, c.byte_start, c.byte_end,
                          bm25(chunk_fts) lexical_score
                   FROM chunk_fts
@@ -962,7 +856,7 @@ def lexical_rows(
                   ) page_rank
                   FROM matched
                 )
-                SELECT chunk_id, node_id, page_id, path, title, chunk_index, heading_path,
+                SELECT chunk_id, page_id, path, title, chunk_index, heading_path,
                        line_start, line_end, byte_start, byte_end, lexical_score
                 FROM ranked
                 WHERE page_rank = 1
@@ -1188,7 +1082,7 @@ def semantic_rows(
     dimensions = len(query)
     rows = connection.execute(
         """
-        SELECT e.vector, e.vector_fingerprint, c.id chunk_id, c.node_id, p.id page_id,
+        SELECT e.vector, e.vector_fingerprint, c.id chunk_id, p.id page_id,
                p.path, p.title, c.chunk_index, c.heading_path, c.line_start,
                c.line_end, c.byte_start, c.byte_end
         FROM chunk_embeddings e

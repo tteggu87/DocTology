@@ -17,9 +17,9 @@ from urllib.parse import quote
 import reindex_sqlite_operational as chunker
 
 
-SCHEMA_VERSION = "raw-heading-structure-index-v3"
+SCHEMA_VERSION = "raw-heading-structure-index-v2"
 DEFAULT_DB = "state/raw_index.sqlite"
-DEFAULT_CHUNK_BYTES = 8 * 1024
+DEFAULT_CHUNK_BYTES = 64 * 1024
 MAX_RESULTS = 100
 SQLITE_HEADER = b"SQLite format 3\x00"
 
@@ -867,12 +867,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--database")
     commands = result.add_subparsers(dest="command", required=True)
     rebuild_parser = commands.add_parser("rebuild")
-    rebuild_parser.add_argument(
-        "--chunk-bytes",
-        type=int,
-        default=DEFAULT_CHUNK_BYTES,
-        help=f"maximum UTF-8 bytes per section chunk (default: {DEFAULT_CHUNK_BYTES})",
-    )
+    rebuild_parser.add_argument("--chunk-bytes", type=int, default=DEFAULT_CHUNK_BYTES)
     rebuild_parser.add_argument(
         "--exact",
         action="store_true",

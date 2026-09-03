@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-09-02
+last_updated: 2026-08-27
 superseded_by: N/A
 ---
 
@@ -35,11 +35,6 @@ superseded_by: N/A
   stat-current semantic use, exact `doctor`, one best lexical chunk per page,
   peer-heading correction, page-streamed rebuild/publication verification, and
   bounded vector reuse/embedding batches.
-- Upgraded generated wiki retrieval to `wiki-heading-index-v9`: fenced-code-aware
-  headings define chunks even for small PPT-derived Markdown, 8 KiB is a
-  per-section maximum, deterministic document/heading nodes are persisted, and
-  each lexical or semantic body hit carries its owning `node_id` without changing
-  the Markdown-canonical boundary or adding a navigation runtime.
 - Made generated workflow process locks portable without adding a dependency:
   Unix uses `fcntl.flock`, Windows uses one-byte `msvcrt.locking`, and both keep
   the existing run-finalization and SQLite-refresh serialization contract.
@@ -155,7 +150,7 @@ undefined until the owner selects one.
 
 ## Validator Summary
 
-The full suite passes 195/195, including raw-index rebuild/search/doctor,
+The full suite passes 166/166, including raw-index rebuild/search/doctor,
 standalone loop-runtime, and
 explicit wiki-first fallback checks,
 full-mode receipt requirements, deferred-unit ready rejection, resumable partial

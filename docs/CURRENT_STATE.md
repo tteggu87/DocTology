@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: true
-last_updated: 2026-09-02
+last_updated: 2026-09-01
 superseded_by: N/A
 ---
 
@@ -31,14 +31,6 @@ candidates, `status` remains stat-based, and `doctor` remains content/vector
 exact. Rebuilds stream page bodies, preserve compatible ONNX vectors in bounded
 batches, correct peer-heading paths, and compare a streamed exact fingerprint
 immediately before replacing the disposable index.
-
-The disposable wiki index is now `wiki-heading-index-v9`. Wiki and raw retrieval
-always honor fenced-code-aware ATX heading boundaries, including on small
-PPT-derived Markdown; the default 8 KiB maximum applies per section, and only an
-oversized section uses paragraph/UTF-8-safe fallback. Wiki rebuilds persist the
-existing deterministic document/heading nodes, and every chunk owns one
-`node_id`, so body search hits retain their heading path and routing ranges while
-identifying the exact derived structure node. Markdown remains canonical.
 
 SQLite-enabled generated vaults also include `raw_retrieval.py`. It maintains a
 separate incremental `state/raw_index.sqlite` over `raw/**/*.md`, stores chunk

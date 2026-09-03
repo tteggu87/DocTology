@@ -2,22 +2,11 @@
 title: DocTology maintenance log
 type: meta
 status: active
-updated: 2026-09-02
+updated: 2026-09-01
 ---
 
 # Maintenance log
 
-- 2026-09-02: Bumped the disposable raw index to
-  `raw-heading-structure-index-v3` so pre-heading-first v2 indexes rebuild
-  instead of retaining stale whole-file chunks. Empty Markdown now keeps one
-  root chunk in both raw and wiki indexes, preserving exact page lookup.
-- 2026-09-02: Upgraded the disposable generated wiki index to
-  `wiki-heading-index-v9`. Fenced-code-aware headings now define wiki and raw
-  chunks regardless of total file size, with 8 KiB enforced per section and
-  fallback splitting limited to oversized sections. Wiki rebuilds persist the
-  existing deterministic heading tree and attach each body-search chunk to one
-  `node_id`; Markdown remains canonical and no new navigation or workflow layer
-  was added.
 - 2026-09-01: Hardened batch discovery so malformed source metadata or
   timestamps invalidate one manifest without interrupting the remaining list.
 - 2026-09-01: Added lightweight read-only batch discovery. `batch list` supports

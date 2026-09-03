@@ -115,9 +115,6 @@ The active bootstrap does not generate canonical ontology JSONL, DuckDB, helper-
 - With SQLite enabled, the scaffold must teach wiki-first lookup, explicit raw
   fallback only after an empty wiki lexical result, and direct raw search for
   thin-page verification or ingest coverage without blended ranking.
-- With SQLite enabled, the scaffold must describe heading-first wiki and raw
-  chunks with an 8 KiB per-section maximum; total file size never gates heading
-  parsing, and only oversized sections use paragraph/UTF-8-safe fallback.
 - With SQLite enabled, the scaffold must describe raw `tree`, `ancestors`, and
   `subtree` as optional navigation, require canonical Markdown reopening before
   synthesis, and explain explicit `rebuild --exact` or direct-reading fallback for stale

@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-09-02
+last_updated: 2026-09-01
 superseded_by: N/A
 ---
 
@@ -45,12 +45,3 @@ The optional composition is one-way:
 `wiki lexical search -> hit: wiki lane | miss + --raw-fallback: separate raw lane`
 
 An absent raw index does not block the wiki result.
-
-For generated LLM Wiki wiki retrieval the derived routing flow is:
-
-`wiki/**/*.md -> fenced-code-aware heading sections -> 8 KiB per-section chunks -> wiki-heading-index-v9 structure nodes + chunk node_id -> lexical/semantic candidate -> reopen canonical Markdown`
-
-Small headed pages follow the same section path as large pages. Document roots
-own headingless content and legitimate preambles; matching heading nodes own
-section chunks. The derived tree and chunk ownership improve routing only and do
-not replace Markdown or add a workflow ledger.

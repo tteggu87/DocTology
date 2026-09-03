@@ -614,7 +614,6 @@ class WikiSqliteSemanticTests(unittest.TestCase):
                 connection, [1.0, 0.0], "fake-model-v1", "fake-tokenizer-v1", 10
             )
             self.assertEqual(ordered[0]["title"], "Alpha")
-            self.assertTrue(ordered[0]["node_id"].startswith("structure-node-"))
             self.assertGreater(
                 ordered[0]["semantic_score"], ordered[1]["semantic_score"]
             )

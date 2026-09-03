@@ -107,31 +107,9 @@ CREATE TABLE IF NOT EXISTS documents (
   FOREIGN KEY (page_id) REFERENCES pages(id)
 );
 
-CREATE TABLE IF NOT EXISTS structure_nodes (
-  node_id TEXT PRIMARY KEY,
-  document_id TEXT NOT NULL,
-  parent_id TEXT,
-  ordinal INTEGER NOT NULL,
-  depth INTEGER NOT NULL,
-  title TEXT NOT NULL,
-  heading_path TEXT NOT NULL,
-  line_start INTEGER NOT NULL,
-  line_end INTEGER NOT NULL,
-  byte_start INTEGER NOT NULL,
-  byte_end INTEGER NOT NULL,
-  subtree_line_start INTEGER NOT NULL,
-  subtree_line_end INTEGER NOT NULL,
-  subtree_byte_start INTEGER NOT NULL,
-  subtree_byte_end INTEGER NOT NULL,
-  UNIQUE (document_id, ordinal),
-  FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE,
-  FOREIGN KEY (parent_id) REFERENCES structure_nodes(node_id) ON DELETE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS chunks (
   id TEXT PRIMARY KEY,
   document_id TEXT NOT NULL,
-  node_id TEXT NOT NULL,
   chunk_index INTEGER NOT NULL,
   heading_path TEXT NOT NULL,
   line_start INTEGER NOT NULL,
@@ -141,8 +119,7 @@ CREATE TABLE IF NOT EXISTS chunks (
   content TEXT NOT NULL,
   content_hash TEXT NOT NULL,
   UNIQUE (document_id, chunk_index),
-  FOREIGN KEY (document_id) REFERENCES documents(id),
-  FOREIGN KEY (node_id) REFERENCES structure_nodes(node_id)
+  FOREIGN KEY (document_id) REFERENCES documents(id)
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS chunk_fts USING fts5(
@@ -230,12 +207,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS idx_pages_title ON pages(title);
 CREATE INDEX IF NOT EXISTS idx_documents_page ON documents(page_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks(document_id, chunk_index);
-CREATE INDEX IF NOT EXISTS idx_chunks_node ON chunks(node_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_hash ON chunks(content_hash);
-CREATE INDEX IF NOT EXISTS idx_structure_nodes_document
-  ON structure_nodes(document_id, ordinal);
-CREATE INDEX IF NOT EXISTS idx_structure_nodes_parent
-  ON structure_nodes(parent_id, ordinal);
 CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_identity
   ON chunk_embeddings(model_identity, tokenizer_identity, preprocessing_identity, dimensions);
 CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_hash ON chunk_embeddings(chunk_hash);
@@ -320,7 +292,7 @@ def retrieval_contract(profile: str, sqlite_enabled: bool = True) -> str:
   changed source returns `state: stale`, rebuild guidance, and no structure or
   subtree content. Read commands never rebuild implicitly; run `rebuild --exact`
   explicitly when desired, or fall back to reading Markdown directly.
-- Markdown headings define chunks regardless of total file size. The default 8 KiB limit applies per section; only an oversized section falls back to paragraph and UTF-8-safe splitting.
+- Pages at or below the default 64 KiB threshold stay whole. Larger pages split at Markdown headings, with paragraph fallback for oversized sections.
 - `search --mode lexical` is the dependable default: exact title/path, FTS5, then bounded wikilinks.
 - `search --mode lexical --raw-fallback` consults the separate raw index only
   when wiki lexical results are empty. Raw candidates remain a labeled lane and
@@ -377,10 +349,8 @@ ONNX vectors, RRF, ANN, or daemon. Run `refresh` once after the final canonical
 wiki writer: it atomically rebuilds lexical state, reuses compatible vectors,
 and embeds only missing wiki chunks when local artifacts are configured. Local
 ONNX uses zero API tokens and remains optional. Workflow output keeps
-`wiki_complete`, `retrieval_ready`, and semantic status separate. Markdown
-headings define chunks regardless of total file size. The default 8 KiB limit
-applies per section; only an oversized section falls back to paragraph and
-UTF-8-safe splitting.
+`wiki_complete`, `retrieval_ready`, and semantic status separate. By default, Markdown files up to
+64 KiB remain one chunk; larger files split at headings and then paragraphs.
 Wiki lane ranks stay separate, and BM25 is never compared with cosine. Wiki and
 raw lexical results return `freshness: unchecked`; reopen their listed Markdown
 paths before treating them as evidence. Run `status` for fast path/size/mtime
