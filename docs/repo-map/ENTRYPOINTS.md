@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-09-01
+last_updated: 2026-09-05
 superseded_by: N/A
 ---
 
@@ -31,3 +31,13 @@ superseded_by: N/A
 
 There are no root secondary launchers. The native query wrappers are
 self-contained downstream skill assets, not DocTology root entrypoints.
+
+- Optional local Wiki Studio: `llm-wiki-loop/scripts/wiki_dashboard.py
+  [--repo-root <vault>] [--port <available-port>]` serves the bundled UI and an
+  isolated read-only Pi RPC adapter. It waits for an authenticated loopback ready
+  handshake before prompting and keeps Pi's ambient default model unless a model
+  or provider is explicitly selected. Without a vault it shows a labelled, inert
+  example. Root-bound source-entry
+  routes are `watch-config`, `watch-run`, `watch-ignore`, `chat-save-preview`,
+  and `chat-save`; `GET /api/state?queueOffset=N` selects a bounded queue page.
+  Mutations require the localhost Origin, dashboard token, and expected root.

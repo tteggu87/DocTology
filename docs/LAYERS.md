@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: true
-last_updated: 2026-08-26
+last_updated: 2026-09-05
 superseded_by: N/A
 ---
 
@@ -17,3 +17,7 @@ superseded_by: N/A
   token/trigram FTS, and bounded Markdown-link traversal. Native SQLite wrappers
   are optional read adapters; returned candidates remain unchecked until their
   canonical Markdown is opened.
+
+- **Optional loop UI:** `llm-wiki-loop/dashboard/` and its sibling launcher adapt
+  existing wiki state into local views and Pi task controls. Their downstream
+  process history is operational state, never a second coverage or workflow ledger.

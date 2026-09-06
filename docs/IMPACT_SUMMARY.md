@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-08-27
+last_updated: 2026-09-06
 superseded_by: N/A
 ---
 
@@ -9,6 +9,10 @@ superseded_by: N/A
 
 ## Changed
 
+- Refreshed the Wiki Studio handoff as a sourced what/how/why record across chat, opt-in intake, parallel preparation, folder selection, retrieval observability, and modularization, including rejected alternatives, review lessons, verification limits, and publication scope.
+- Refactored Wiki Studio into injected backend document/folder/HTTP responsibilities and explicit-input frontend factories. HTML is the canonical frontend loading/admission list, and tests execute the real scripts without startup-source rewriting. Existing state, history, execution, and completion boundaries remain intact.
+- Added passive workspace SQLite/ONNX diagnostics and durable per-answer search-call composition. Configuration, file-stat freshness, stored vectors, actual chat routing, and citation evidence remain distinct; status does not activate retrieval engines or model work.
+- Added native and bounded in-app folder selection to Wiki Studio connection, retaining manual entry and all existing connection/write guards. Folder selection does not upload content, connect automatically, invoke a model, or change OS security settings.
 - Restored the original cropped DocTology logo and rebuilt the concise GitHub
   front door around the two actual use cases: human-facing Obsidian LLM Wiki
   and agent-facing Repo Docs, joined by deterministic gates and derived SQLite.
@@ -56,6 +60,65 @@ superseded_by: N/A
 - Removed the active ontology operator, root pipeline copies, workbench, tracked archive, and obsolete launchers and tests.
 
 ### Files
+
+- `.agents/skills/llm-wiki-loop/dashboard/boot.js`
+- `.agents/skills/llm-wiki-loop/dashboard/modules/graph.js`
+- `.agents/skills/llm-wiki-loop/dashboard/modules/history-codec.js`
+- `.agents/skills/llm-wiki-loop/dashboard/modules/markdown.js`
+- `.agents/skills/llm-wiki-loop/dashboard/modules/retrieval-status.js`
+- `.agents/skills/llm-wiki-loop/dashboard/modules/retrieval-usage.js`
+- `.agents/skills/llm-wiki-loop/evals/frontend_modules.test.cjs`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_documents.py`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_folders.py`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_http.py`
+- `docs/evidence/2026-09-06-dashboard-refactor.md`
+- `docs/plans/2026-09-06-dashboard-refactor.md`
+- `tests/test_wiki_dashboard_http.py`
+- `tests/test_wiki_dashboard_modules.py`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_retrieval_status.py`
+- `tests/test_wiki_dashboard_retrieval_status.py`
+- `tests/test_wiki_dashboard_retrieval_integration.py`
+- `docs/evidence/2026-09-06-wiki-retrieval-observability.md`
+- `tests/test_wiki_dashboard_folder_picker.py`
+- `docs/evidence/2026-09-06-wiki-folder-picker.md`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_batch.py`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_batch_tools.py`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_batch_extension.mjs`
+- `.agents/skills/llm-wiki-loop/evals/batch_extension.test.cjs`
+- `tests/test_wiki_dashboard_batch.py`
+- `tests/test_wiki_dashboard_batch_tools.py`
+- `tests/test_wiki_dashboard_parallel.py`
+- `docs/adr/ADR-0003-wiki-parallel-preparation.md`
+- `docs/plans/2026-09-05-wiki-parallel-preparation.md`
+- `docs/evidence/2026-09-06-wiki-parallel-preparation.md`
+- `docs/reviews/2026-09-06-wiki-parallel-preparation.md`
+- `docs/reviews/2026-09-05-wiki-dashboard.md`
+- `docs/reviews/README.md`
+- `wiki/decisions/local-wiki-studio.md`
+
+- `.agents/skills/llm-wiki-loop/dashboard/README.md`
+- `.agents/skills/llm-wiki-loop/dashboard/app.js`
+- `.agents/skills/llm-wiki-loop/dashboard/example.json`
+- `.agents/skills/llm-wiki-loop/dashboard/index.html`
+- `.agents/skills/llm-wiki-loop/dashboard/style.css`
+- `.agents/skills/llm-wiki-loop/evals/dashboard_ui.test.cjs`
+- `.agents/skills/llm-wiki-loop/evals/chat_extension.test.cjs`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_chat_tools.py`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_chat_extension.mjs`
+- `tests/test_wiki_dashboard_chat_tools.py`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard.py`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_automation.py`
+- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_save.py`
+- `tests/test_wiki_dashboard_chat.py`
+- `tests/test_wiki_dashboard_automation.py`
+- `tests/test_wiki_dashboard_save.py`
+- `tests/test_wiki_dashboard_entries.py`
+- `docs/repo-map/README.md`
+- `docs/adr/ADR-0002-local-wiki-dashboard.md`
+- `docs/evidence/2026-09-05-wiki-dashboard.md`
+- `docs/plans/2026-09-05-wiki-dashboard.md`
+- `docs/plans/README.md`
+- `tests/test_wiki_dashboard.py`
 
 - `README.md`
 - `branding/doctology-logo-cropped.jpeg`
@@ -150,7 +213,7 @@ undefined until the owner selects one.
 
 ## Validator Summary
 
-The full suite passes 166/166, including raw-index rebuild/search/doctor,
+The pre-chat delivery baseline passed 198/198 tests, including the local dashboard, raw-index rebuild/search/doctor,
 standalone loop-runtime, and
 explicit wiki-first fallback checks,
 full-mode receipt requirements, deferred-unit ready rejection, resumable partial
@@ -158,3 +221,64 @@ review, explicit summary opt-in, and prior Windows lock regressions. Changed
 workflow Python passes `py_compile`; patch whitespace
 passes `git diff --check`. Final repository validator and skill-distribution
 results are recorded at handoff after the final mutation.
+
+## Optional local Wiki Studio (2026-09-05)
+
+Added the loop-owned bright dashboard with source kanban, Markdown graph,
+coverage/verification details, source upload, document reading, and Pi RPC
+start/steer/abort controls. No root runtime, hosted deployment, extra skill, or
+LangGraph migration was introduced. See [verification](evidence/2026-09-05-wiki-dashboard.md).
+
+The local dashboard now also connects DocTology itself through a read-only
+project documentation graph and complete document library. Incompatible source
+projects cannot start Pi ingest or upload through this mode.
+
+## Wiki Studio handoff preservation
+
+The derived handoff in [wiki decision memory](../wiki/decisions/local-wiki-studio.md)
+records user intent, rationale, implementation, review repairs, limitations,
+and resumption guidance. A [scoped review record](reviews/2026-09-05-wiki-dashboard.md)
+preserves the four resolved findings. The docs portal, current state, review and
+wiki indexes, and maintenance log now expose this route.
+
+The earlier handoff-only pass changed documentation without changing runtime.
+The subsequent chat-first implementation adds no-tools Pi chat, browser-local
+history, explicit citation-to-graph highlighting, and root-bound wiki/raw document
+navigation. Project-mode chat does not authorize ingest or create target state.
+The existing source writer and completion gates are unchanged. Current test and
+browser evidence, including limits, is maintained in the linked verification
+record. That chat-first increment did not include folder watching or conversation
+publication.
+
+## Wiki Studio agentic read-only chat (2026-09-05)
+
+Replaced one-shot excerpt selection with an actual Pi loop over approved list,
+search, document-read, and link tools. Default model selection remains Pi-owned.
+An authenticated per-job bridge and explicit extension provide no general shell,
+write, or external-web tools. Read evidence, final citations, budget limits, and
+actual activity are distinct; cancelled I/O, changed hashes, polling recovery,
+and native disclosure controls have focused regressions. The reader keeps its
+close header visible while its body scrolls, and chat has separate top/bottom
+navigation above the composer. Read-only chat no longer takes a writer slot:
+manual and authorized queued wiki work can run alongside it, with separate
+cancellation and an explicit live-read notice. Writer serialization and root
+switch guards remain intact. Existing source-entry
+and completion gates remain unchanged. Real model/browser observations and
+limits are in [current evidence](evidence/2026-09-05-wiki-dashboard.md).
+
+## Wiki Studio source entry (2026-09-05)
+
+Added separately approved Markdown watching and automatic dispatch, plus exact
+conversation preview and immutable unverified raw capture. Both paths feed the
+existing full-coverage loop instead of creating a new quality gate. Queue pages,
+explicit retries, stale/restored completion, writer contention, and partial-save
+recovery have bounded contracts. Claude execution and a new DAG engine remain
+out of scope. Current verification and limits remain in the
+[dashboard evidence](evidence/2026-09-05-wiki-dashboard.md).
+
+
+## Parallel preparation delivery (2026-09-06)
+
+Completed existing-loop parallel source preparation for explicit two-to-twelve-source Wiki Studio batches. Three workers are the default and four the maximum; workers retain source-owned reads and draft writes, while existing batch planning, pre-mutation runs, one writer apply, question receipts, and snapshot seal remain the sole completion authority. No LangGraph, new completion gate, or multiple canonical writer was added.
+
+The clean fixture proved concurrent first-attempt preparation but correctly stopped after one apply when required ingest-report links were absent. Its original batch remains blocked and unsealed. A new existing-runtime batch repaired only the two links, then certified through the normal procedure. The completed [evidence](evidence/2026-09-06-wiki-parallel-preparation.md), [review](reviews/2026-09-06-wiki-parallel-preparation.md), [plan](plans/2026-09-05-wiki-parallel-preparation.md), and [ADR](adr/ADR-0003-wiki-parallel-preparation.md) record the current handoff, checks, local deployment observation, manual crash boundary, and synthetic-fixture limits.

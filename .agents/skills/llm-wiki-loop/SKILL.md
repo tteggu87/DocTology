@@ -316,6 +316,72 @@ required before changing a skill, `AGENTS.md`, policy, validator, or runtime.
 Do not add automatic canaries, rollback machinery, daemons, runtime
 self-modification, gate relaxation, or truth promotion to this loop.
 
+## Optional Local Dashboard
+
+For a user-requested visual workspace, run
+`python3 "<SKILL_DIR>/scripts/wiki_dashboard.py" [--repo-root <target-repo>]`.
+The conversation-first UI provides read-only agentic Pi chat. Its isolated RPC
+process disables built-in tools, extensions, skills, context files, prompt
+templates, and session reuse, and the backend waits for an authenticated
+loopback ready handshake before it sends a prompt. It keeps Pi's ambient default
+model unless the user explicitly overrides model or provider. The extension
+exposes only `wiki_list`, `wiki_search`, `wiki_read`, and `wiki_links`, each
+bound to the connected root and current document inventory. Shell, writes,
+network, and equivalent terminal capabilities are intentionally absent.
+
+The model can independently inspect inventory, links, and content; generic
+overviews start from inventory rather than literal lexical search. Limits cover
+64 calls, 24 distinct read documents, 160,000 returned characters, 10,000
+characters per read, and 2 MB per file. The UI surfaces actual actions, calls,
+read count, bounded trace, truncation, and budget pressure without exposing
+reasoning. Only actual reads become citation candidates; numbers require an
+explicit subset of those references. Discovery is neither proof nor a read, and
+model citations are not semantic certification. A right sidebar highlights cited
+documents in the full bounded graph and opens references plus verified raw-source
+links.
+
+Chat history is browser-local and is not certified wiki knowledge. Explicit
+preview approval can preserve a conversation as unverified raw data and queue
+full-coverage ingest. A separate opt-in Markdown watcher supports internal raw
+folders and immutable external snapshots; automatic execution requires its own
+approval. Both paths use the existing writer and completion gates. A secondary
+wiki-work view connects existing source runs, coverage receipts, wiki links,
+and batch status to the kanban and document reader. It can start, steer, and
+abort Pi RPC work when Pi 0.82.1 or a compatible `agent_settled` runtime is
+installed. Opening the UI alone never invokes a model. Without a target it shows
+explicitly labelled example data. Projects with `AGENTS.md` and `wiki/` but no
+compatible ingest layout open in read-only project mode, including docs and
+skill references; task execution and upload remain disabled. The adapter never
+promotes process exit into wiki completion and never copies executables into the
+target vault.
+
+See [dashboard usage and boundaries](dashboard/README.md). This optional
+companion does not change any of the workflow or completion gates above.
+
+For an explicit multi-source dashboard request, two to twelve selected raw Markdown
+sources use the existing batch path with parallel preparation. The default is
+three preparation workers and the maximum is four; one source keeps the existing
+single-source path. Each source-owned worker receives four read-tool types bound
+to its assigned raw source, existing wiki context, and exact `AGENTS.md`, plus
+`draft_write` and `draft_submit`, which can write only its batch-state draft area. The coordinator starts with the same reads and
+`wiki_prepare_batch`; only its original built-in tools return after every matching
+worker has submitted a valid draft, and the planning tools retire. Preparation retains source hash and read/draft
+provenance, but it is not canonical mutation, final review, or certification.
+
+The existing batch plan, linked source runs with three pre-mutation stages,
+semantic state-only conflict reconciliation, one writer apply, representative-question
+receipts, and snapshot seal retain exclusive completion authority. Supervisor
+state is durable under `state/dashboard_jobs/parallel/`. Stop and retry are
+explicit per source and restart is hash-bound: nothing resumes a model
+automatically. If every draft is prepared and the coordinator stops before apply,
+explicit integration resume reuses those drafts without rerunning workers.
+A batch with an apply event or stale state cannot be prepared again; inspect its existing batch status/recovery path or create a fresh batch.
+Auto-queue grouping may include only individually authorized, current-hash
+pending sources and keeps each source's provenance. Its parallel retry hook must
+not split siblings into legacy single-source writes. Watching and `autoRun`
+remain independent opt-ins and default off; read-only chat remains independent.
+Older servers hide the parallel controls through the capability flag.
+
 ## Completion Posture
 
 Return exactly one posture:

@@ -19,3 +19,8 @@ superseded_by: N/A
 - [Repo Docs retrieval absorption evidence](evidence/2026-08-26-repo-docs-sqlite-absorption.md)
 
 DocTology's current product boundary is the three directories under `.agents/skills/`. Repository memory is derived context and does not override those sources.
+
+- [Local Wiki Studio usage](../.agents/skills/llm-wiki-loop/dashboard/README.md)
+- [Parallel preparation decision](adr/ADR-0003-wiki-parallel-preparation.md), [completed implementation plan](plans/2026-09-05-wiki-parallel-preparation.md), [verification](evidence/2026-09-06-wiki-parallel-preparation.md), and [review](reviews/2026-09-06-wiki-parallel-preparation.md)
+
+- [Wiki Studio 인수인계 위키](../wiki/decisions/local-wiki-studio.md)

@@ -5,3 +5,7 @@
 
 Derived decision summaries must link to a canonical ADR or equivalent decision
 source.
+
+- [Wiki Studio 작업 배경과 인수인계](local-wiki-studio.md) — 사용자 의도 변화,
+  기술 선택 이유, 대화·병렬 준비·폴더 연결·검색 관측·모듈화의 구현 방식, 리뷰 교훈, 검증 한계와 다음 판단. 정본:
+  [ADR-0002](../../docs/adr/ADR-0002-local-wiki-dashboard.md).

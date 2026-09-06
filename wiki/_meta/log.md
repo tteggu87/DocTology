@@ -2,10 +2,63 @@
 title: DocTology maintenance log
 type: meta
 status: active
-updated: 2026-09-01
+updated: 2026-09-06
 ---
 
 # Maintenance log
+
+- 2026-09-05: Interpreted the reported blocked new chat as a request to separate read-only chat from wiki writes, not to remove writer serialization. Removed cross-lane exclusion, preserved root/writer boundaries, and verified separate stops plus concurrent document mutation. A real Pi read completed alongside a held fixture writer. Multiple semantic source-card builders remain a separate, unimplemented expansion requested for consideration. See [evidence](../../docs/evidence/2026-09-05-wiki-dashboard.md).
+
+- 2026-09-05: Fixed reader scrolling so its title and close button remain visible while only the body scrolls. Added non-overlapping chat top/bottom controls with overflow and endpoint states, reduced-motion support, and independent reader reset. Scoped review, regression tests, and actual end-to-end scrolling passed; see [evidence](../../docs/evidence/2026-09-05-wiki-dashboard.md).
+
+- 2026-09-05: Implemented read-only agentic Pi chat with an authenticated
+  loopback handshake, ambient model selection, four scoped exploration tools,
+  actual-read citations, and visible budgets/activity. Independent review repaired
+  cancellation, post-stop validation, stale citations, and lost polling handles;
+  browser QA repaired disclosure state and compressed reference cards. Actual Pi
+  answered a linked-document fixture and the user wiki's generic summary query
+  without target writes. General shell/write/web tools remain absent, and
+  watch/save opt-ins plus existing loop gates are unchanged. Final checks and
+  limits are in [evidence](../../docs/evidence/2026-09-05-wiki-dashboard.md).
+
+- 2026-09-05: Documented Wiki Studio’s opt-in Markdown watcher, sequential queue,
+  and explicit conversation-to-unverified-raw save path. Watching and `autoRun`
+  stay separate; external files are snapshotted without source mutation, while
+  all compilation and completion still use the existing full-coverage gates.
+  Regression coverage includes disabled dispatch, stale/restored completion,
+  cross-dashboard contention, surviving runners, explicit retry, preview recovery,
+  and bounded queue pages. Live integration and its limits are recorded in
+  [evidence](../../docs/evidence/2026-09-05-wiki-dashboard.md); see
+  [usage](../../.agents/skills/llm-wiki-loop/dashboard/README.md) for operation.
+
+- 2026-09-05: Reoriented Wiki Studio around conversation, with workspace/history
+  on the left and answer-cited graph/reference navigation on the right. Added
+  bounded no-tools Pi chat, current-turn citation mapping, root-bound document
+  reads and verified raw-source navigation. Browser history is not wiki truth.
+  Existing ingest gates and kanban remain separate. GPT chat and reference
+  opening were exercised against a real local wiki; raw navigation was checked
+  in an isolated fixture. See [verification](../../docs/evidence/2026-09-05-wiki-dashboard.md).
+
+- 2026-09-05: Preserved the complete Wiki Studio handoff in
+  [decision memory](../decisions/local-wiki-studio.md), covering the user intent,
+  why Pi RPC and existing gates were chosen, the project/ingest mode distinction,
+  implementation surfaces, verified versus unverified behavior, and next checks.
+  Recorded four resolved findings in the [review](../../docs/reviews/2026-09-05-wiki-dashboard.md).
+  Bounded reading route: AGENTS → docs portal → current state → wiki index/log
+  → ADR-0002 → dashboard verification. No runtime, model call, or global install
+  changed in this documentation-only pass.
+
+- 2026-09-05: Connected the real DocTology project wiki through a read-only
+  dashboard mode that includes wiki meta pages, docs, and skill references.
+  Added inbound/outbound document links, full document inventory, relative-link
+  navigation, and tests proving project mode cannot create ingest state.
+
+- 2026-09-05: Added the optional loop-owned local Wiki Studio with a light
+  kanban, Markdown link graph, source coverage, verification details, and Pi RPC
+  start/steer/abort controls. Existing gates remain the completion authority.
+  Added focused integration and rendering tests; independent review corrected
+  settlement/cancellation protocol and historical-batch/failed-validation display.
+  See [verification](../../docs/evidence/2026-09-05-wiki-dashboard.md).
 
 - 2026-09-01: Hardened batch discovery so malformed source metadata or
   timestamps invalidate one manifest without interrupting the remaining list.
@@ -91,3 +144,13 @@ updated: 2026-09-01
   Windows PowerShell runtime dogfood remains unverified.
 - 2026-08-25: Corrected generated wiki lint orphan detection. `_meta` navigation and self-links no longer count as inbound semantic links; `--strict-orphans` optionally turns orphan findings into a failing exit status.
 - 2026-08-25: Reduced DocTology to three public skills. Moved the prior local workspace to a checksum-verified sibling legacy vault; removed active ontology, workbench, duplicated runtimes, and tracked archive surfaces; added one distribution manager and focused verification. Independent review also aligned the bootstrap command with `~/.codex/skills`, made clean-checkout validation warning-free, and hardened replacement of file and symlink destinations.
+
+- 2026-09-06: Completed Wiki Studio parallel preparation within the existing batch procedure. The clean fixture proved concurrent first-attempt preparation, then correctly stopped at a missing-index-link gate. Its original batch remains blocked and unsealed; a new existing-runtime batch repaired only the two required index links and certified through the ordinary seal. No LangGraph, new completion authority, or multiple canonical writer was added. See the [implemented ADR](../../docs/adr/ADR-0003-wiki-parallel-preparation.md), [completed plan](../../docs/plans/2026-09-05-wiki-parallel-preparation.md), [verification](../../docs/evidence/2026-09-06-wiki-parallel-preparation.md), and [accepted review](../../docs/reviews/2026-09-06-wiki-parallel-preparation.md).
+
+- 2026-09-06: Interpreted local-wiki connection feedback as choosing an existing folder without typing, not uploading a directory or creating a wiki. Added native selection plus a bounded in-app fallback for restricted desktop environments. Verified click-only connection with existing guards and unchanged user files; see [folder selection evidence](../../docs/evidence/2026-09-06-wiki-folder-picker.md). No administrator or security-policy changes were made.
+
+- 2026-09-06: Added Wiki Studio retrieval observability without changing retrieval routing. Workspace status separates SQLite configuration/stat freshness, ONNX environment/artifact presence, and stored vector rows. Per-answer percentages count successful discovery calls, not evidence contribution; old missing telemetry remains unknown. A real-index fixture and actual tool-bridge calls verified the UI and persistence without user-vault test data. See [verification](../../docs/evidence/2026-09-06-wiki-retrieval-observability.md).
+
+- 2026-09-06: Refactored Wiki Studio behind its existing behavior: injected document catalog, folder helpers, and HTTP transport; explicit-input frontend factories and one external bootstrap. HTML owns script order and asset admission. Module-only rendering tests caught hidden app globals before release. Existing retry tests now wait for actual cleanup eligibility rather than terminal labels alone. No writer or completion gate was changed. See [maintenance boundaries](../../.agents/skills/llm-wiki-loop/dashboard/README.md#유지보수와-확장-경계).
+
+- 2026-09-06: 사용자 요청에 따라 Wiki Studio 전체 작업을 하나의 [최신 인수인계](../decisions/local-wiki-studio.md)로 정리했다. 무엇을·어떻게·왜 했는지, 보류한 대안, 구현 경계, 리뷰에서 잡은 오류, 단계별 검증과 한계를 정본 근거에 연결했다. 초기 관측 수치와 최신 상태를 분리하고 커밋 전 소스·테스트·문서 전체를 검증하는 배포 범위를 명시했다. 사용자 코퍼스·브라우저 대화·실행 state는 Git 대상에서 제외한다.

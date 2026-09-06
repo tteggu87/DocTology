@@ -1,0 +1,462 @@
+{
+  "demo": true,
+  "name": "Knowledge Garden",
+  "sources": [
+    {
+      "id": "raw/inbox/source-01.md",
+      "title": "에이전트 메모리 설계",
+      "stage": "queued",
+      "coverage": null,
+      "references": [],
+      "run": {
+        "completed_stages": [],
+        "blockers": []
+      },
+      "modified": 0
+    },
+    {
+      "id": "raw/inbox/source-02.md",
+      "title": "검색을 넘어선 지식 합성",
+      "stage": "queued",
+      "coverage": null,
+      "references": [],
+      "run": {
+        "completed_stages": [],
+        "blockers": []
+      },
+      "modified": 0
+    },
+    {
+      "id": "raw/inbox/source-03.md",
+      "title": "LLM Wiki의 원문 처리",
+      "stage": "reading",
+      "coverage": null,
+      "references": [],
+      "run": {
+        "completed_stages": [
+          "inspect_contract_and_index",
+          "inspect_source_and_existing_scope"
+        ],
+        "blockers": []
+      },
+      "modified": 0
+    },
+    {
+      "id": "raw/inbox/source-04.md",
+      "title": "지식 그래프와 문서 연결",
+      "stage": "writing",
+      "coverage": {
+        "total": 24,
+        "projected": 16,
+        "omitted": 2,
+        "deferred": 6,
+        "valid": true,
+        "path": "wiki/_meta/ingest_reports/ingest-3.md"
+      },
+      "references": [
+        "wiki/concepts/concept-0.md",
+        "wiki/concepts/concept-1.md",
+        "wiki/concepts/concept-5.md",
+        "wiki/concepts/concept-14.md"
+      ],
+      "run": {
+        "completed_stages": [
+          "inspect_contract_and_index",
+          "inspect_source_and_existing_scope",
+          "semantic_plan_frozen",
+          "register_or_resolve_source",
+          "update_source_page"
+        ],
+        "blockers": []
+      },
+      "modified": 0
+    },
+    {
+      "id": "raw/inbox/source-05.md",
+      "title": "출처와 근거의 추적",
+      "stage": "writing",
+      "coverage": {
+        "total": 24,
+        "projected": 16,
+        "omitted": 2,
+        "deferred": 6,
+        "valid": true,
+        "path": "wiki/_meta/ingest_reports/ingest-4.md"
+      },
+      "references": [
+        "wiki/concepts/concept-4.md",
+        "wiki/concepts/concept-8.md"
+      ],
+      "run": {
+        "completed_stages": [
+          "inspect_contract_and_index",
+          "inspect_source_and_existing_scope",
+          "semantic_plan_frozen",
+          "register_or_resolve_source",
+          "update_source_page"
+        ],
+        "blockers": []
+      },
+      "modified": 0
+    },
+    {
+      "id": "raw/inbox/source-06.md",
+      "title": "장기 기억의 구조",
+      "stage": "review",
+      "coverage": {
+        "total": 24,
+        "projected": 22,
+        "omitted": 2,
+        "deferred": 0,
+        "valid": true,
+        "path": "wiki/_meta/ingest_reports/ingest-5.md"
+      },
+      "references": [
+        "wiki/concepts/concept-5.md",
+        "wiki/concepts/concept-9.md"
+      ],
+      "run": {
+        "completed_stages": [
+          "inspect_contract_and_index",
+          "inspect_source_and_existing_scope",
+          "semantic_plan_frozen",
+          "register_or_resolve_source",
+          "update_source_page",
+          "update_affected_pages",
+          "refresh_index_and_log"
+        ],
+        "blockers": []
+      },
+      "modified": 0
+    },
+    {
+      "id": "raw/inbox/source-07.md",
+      "title": "위키 품질 검증",
+      "stage": "done",
+      "coverage": {
+        "total": 24,
+        "projected": 22,
+        "omitted": 2,
+        "deferred": 0,
+        "valid": true,
+        "path": "wiki/_meta/ingest_reports/ingest-6.md"
+      },
+      "references": [
+        "wiki/concepts/concept-6.md",
+        "wiki/concepts/concept-10.md"
+      ],
+      "run": {
+        "completed_stages": [
+          "inspect_contract_and_index",
+          "inspect_source_and_existing_scope",
+          "semantic_plan_frozen",
+          "register_or_resolve_source",
+          "update_source_page",
+          "update_affected_pages",
+          "refresh_index_and_log",
+          "validate_structure",
+          "final_review_completed"
+        ],
+        "blockers": []
+      },
+      "modified": 0
+    },
+    {
+      "id": "raw/inbox/source-08.md",
+      "title": "컨텍스트 엔지니어링",
+      "stage": "done",
+      "coverage": {
+        "total": 24,
+        "projected": 22,
+        "omitted": 2,
+        "deferred": 0,
+        "valid": true,
+        "path": "wiki/_meta/ingest_reports/ingest-7.md"
+      },
+      "references": [
+        "wiki/concepts/concept-7.md",
+        "wiki/concepts/concept-11.md"
+      ],
+      "run": {
+        "completed_stages": [
+          "inspect_contract_and_index",
+          "inspect_source_and_existing_scope",
+          "semantic_plan_frozen",
+          "register_or_resolve_source",
+          "update_source_page",
+          "update_affected_pages",
+          "refresh_index_and_log",
+          "validate_structure",
+          "final_review_completed"
+        ],
+        "blockers": []
+      },
+      "modified": 0
+    }
+  ],
+  "graph": {
+    "nodes": [
+      {
+        "id": "wiki/concepts/concept-0.md",
+        "title": "LLM Wiki",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-1.md",
+        "title": "지식 합성",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-2.md",
+        "title": "원문 보존",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-3.md",
+        "title": "에이전트 메모리",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-4.md",
+        "title": "근거 추적",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-5.md",
+        "title": "문서 링크",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-6.md",
+        "title": "컨텍스트",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-7.md",
+        "title": "검증 게이트",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-8.md",
+        "title": "지속적 학습",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-9.md",
+        "title": "검색 인덱스",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-10.md",
+        "title": "커버리지",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-11.md",
+        "title": "출처 페이지",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-12.md",
+        "title": "의미 판단",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-13.md",
+        "title": "질문과 탐색",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-14.md",
+        "title": "Markdown",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-15.md",
+        "title": "작업 기록",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-16.md",
+        "title": "장기 기억",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/concepts/concept-17.md",
+        "title": "배치 처리",
+        "kind": "concept",
+        "modified": 0
+      },
+      {
+        "id": "wiki/sources/source-04.md",
+        "title": "지식 그래프와 문서 연결",
+        "kind": "source",
+        "modified": 0
+      },
+      {
+        "id": "wiki/sources/source-05.md",
+        "title": "출처와 근거의 추적",
+        "kind": "source",
+        "modified": 0
+      },
+      {
+        "id": "wiki/sources/source-06.md",
+        "title": "장기 기억의 구조",
+        "kind": "source",
+        "modified": 0
+      },
+      {
+        "id": "wiki/sources/source-07.md",
+        "title": "위키 품질 검증",
+        "kind": "source",
+        "modified": 0
+      },
+      {
+        "id": "wiki/sources/source-08.md",
+        "title": "컨텍스트 엔지니어링",
+        "kind": "source",
+        "modified": 0
+      }
+    ],
+    "edges": [
+      {
+        "source": "wiki/concepts/concept-0.md",
+        "target": "wiki/concepts/concept-1.md"
+      },
+      {
+        "source": "wiki/concepts/concept-0.md",
+        "target": "wiki/concepts/concept-2.md"
+      },
+      {
+        "source": "wiki/concepts/concept-0.md",
+        "target": "wiki/concepts/concept-3.md"
+      },
+      {
+        "source": "wiki/concepts/concept-0.md",
+        "target": "wiki/concepts/concept-4.md"
+      },
+      {
+        "source": "wiki/concepts/concept-0.md",
+        "target": "wiki/concepts/concept-5.md"
+      },
+      {
+        "source": "wiki/concepts/concept-0.md",
+        "target": "wiki/concepts/concept-6.md"
+      },
+      {
+        "source": "wiki/concepts/concept-0.md",
+        "target": "wiki/concepts/concept-7.md"
+      },
+      {
+        "source": "wiki/concepts/concept-0.md",
+        "target": "wiki/concepts/concept-14.md"
+      },
+      {
+        "source": "wiki/concepts/concept-1.md",
+        "target": "wiki/concepts/concept-8.md"
+      },
+      {
+        "source": "wiki/concepts/concept-1.md",
+        "target": "wiki/concepts/concept-12.md"
+      },
+      {
+        "source": "wiki/concepts/concept-2.md",
+        "target": "wiki/concepts/concept-10.md"
+      },
+      {
+        "source": "wiki/concepts/concept-3.md",
+        "target": "wiki/concepts/concept-16.md"
+      },
+      {
+        "source": "wiki/concepts/concept-3.md",
+        "target": "wiki/concepts/concept-6.md"
+      },
+      {
+        "source": "wiki/concepts/concept-4.md",
+        "target": "wiki/concepts/concept-11.md"
+      },
+      {
+        "source": "wiki/concepts/concept-5.md",
+        "target": "wiki/concepts/concept-9.md"
+      },
+      {
+        "source": "wiki/concepts/concept-6.md",
+        "target": "wiki/concepts/concept-13.md"
+      },
+      {
+        "source": "wiki/concepts/concept-7.md",
+        "target": "wiki/concepts/concept-15.md"
+      },
+      {
+        "source": "wiki/concepts/concept-7.md",
+        "target": "wiki/concepts/concept-17.md"
+      },
+      {
+        "source": "wiki/concepts/concept-10.md",
+        "target": "wiki/concepts/concept-7.md"
+      },
+      {
+        "source": "wiki/concepts/concept-14.md",
+        "target": "wiki/concepts/concept-2.md"
+      },
+      {
+        "source": "wiki/concepts/concept-16.md",
+        "target": "wiki/concepts/concept-8.md"
+      },
+      {
+        "source": "wiki/concepts/concept-11.md",
+        "target": "wiki/concepts/concept-2.md"
+      },
+      {
+        "source": "wiki/sources/source-04.md",
+        "target": "wiki/concepts/concept-3.md"
+      },
+      {
+        "source": "wiki/sources/source-05.md",
+        "target": "wiki/concepts/concept-4.md"
+      },
+      {
+        "source": "wiki/sources/source-06.md",
+        "target": "wiki/concepts/concept-5.md"
+      },
+      {
+        "source": "wiki/sources/source-07.md",
+        "target": "wiki/concepts/concept-6.md"
+      },
+      {
+        "source": "wiki/sources/source-08.md",
+        "target": "wiki/concepts/concept-7.md"
+      }
+    ]
+  },
+  "batches": [],
+  "warnings": [],
+  "documents": {
+    "raw/inbox/source-01.md": "# 에이전트 메모리 설계\n\n이 원문은 인터페이스를 둘러보기 위한 예시입니다. 실제 실행 결과가 아닙니다.\n\n## 원문과 위키\n\n원문은 보존하고, 위키에서 설명과 근거를 연결합니다.",
+    "raw/inbox/source-02.md": "# 검색을 넘어선 지식 합성\n\n이 원문은 인터페이스를 둘러보기 위한 예시입니다. 실제 실행 결과가 아닙니다.\n\n## 원문과 위키\n\n원문은 보존하고, 위키에서 설명과 근거를 연결합니다.",
+    "raw/inbox/source-03.md": "# LLM Wiki의 원문 처리\n\n이 원문은 인터페이스를 둘러보기 위한 예시입니다. 실제 실행 결과가 아닙니다.\n\n## 원문과 위키\n\n원문은 보존하고, 위키에서 설명과 근거를 연결합니다.",
+    "raw/inbox/source-04.md": "# 지식 그래프와 문서 연결\n\n이 원문은 인터페이스를 둘러보기 위한 예시입니다. 실제 실행 결과가 아닙니다.\n\n## 원문과 위키\n\n원문은 보존하고, 위키에서 설명과 근거를 연결합니다.",
+    "raw/inbox/source-05.md": "# 출처와 근거의 추적\n\n이 원문은 인터페이스를 둘러보기 위한 예시입니다. 실제 실행 결과가 아닙니다.\n\n## 원문과 위키\n\n원문은 보존하고, 위키에서 설명과 근거를 연결합니다.",
+    "raw/inbox/source-06.md": "# 장기 기억의 구조\n\n이 원문은 인터페이스를 둘러보기 위한 예시입니다. 실제 실행 결과가 아닙니다.\n\n## 원문과 위키\n\n원문은 보존하고, 위키에서 설명과 근거를 연결합니다.",
+    "raw/inbox/source-07.md": "# 위키 품질 검증\n\n이 원문은 인터페이스를 둘러보기 위한 예시입니다. 실제 실행 결과가 아닙니다.\n\n## 원문과 위키\n\n원문은 보존하고, 위키에서 설명과 근거를 연결합니다.",
+    "raw/inbox/source-08.md": "# 컨텍스트 엔지니어링\n\n이 원문은 인터페이스를 둘러보기 위한 예시입니다. 실제 실행 결과가 아닙니다.\n\n## 원문과 위키\n\n원문은 보존하고, 위키에서 설명과 근거를 연결합니다.",
+    "wiki/concepts/concept-0.md": "# LLM Wiki\n\nLLM Wiki는 에이전트가 원문을 읽고, 기존 지식과 연결하며 유지하는 Markdown 기반 위키입니다.\n\n## 원문에서 지식으로\n\n**원문 보존 → 의미 합성 → 위키 반영 → 검증**의 흐름으로 지식을 쌓습니다.\n\n## 연결된 개념\n\n[[concept-1|지식 합성]] · [[concept-4|근거 추적]] · [[concept-7|검증 게이트]]\n\n이 내용은 대시보드 화면 예시입니다."
+  }
+}
