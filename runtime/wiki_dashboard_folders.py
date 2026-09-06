@@ -8,6 +8,22 @@ import subprocess
 import sys
 
 
+def windows_drive_roots() -> list[str]:
+    """Enumerate assigned drive letters without probing removable/network media."""
+    if sys.platform != "win32":
+        return []
+    try:
+        import ctypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        get_drives = kernel.GetLogicalDrives
+        get_drives.argtypes = []
+        get_drives.restype = ctypes.c_uint32
+        mask = get_drives()
+        return [f"{chr(65 + index)}:\\" for index in range(26) if mask & (1 << index)]
+    except (OSError, AttributeError):
+        return []
+
+
 def choose_workspace_folder():
     """Ask the server's local desktop for one existing folder; never connect or ingest."""
     if sys.platform == "darwin":
@@ -24,8 +40,12 @@ end try''']
         command = [executable, "-NoProfile", "-NonInteractive", "-STA", "-Command", '''
 Add-Type -AssemblyName System.Windows.Forms
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+[System.Windows.Forms.Application]::EnableVisualStyles()
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
 $dialog.Description = '연결할 위키 폴더를 선택하세요 (AGENTS.md와 wiki 폴더)'
+$dialog.RootFolder = [System.Environment+SpecialFolder]::MyComputer
+$dialog.SelectedPath = ''
+if ($dialog.PSObject.Properties['AutoUpgradeEnabled']) { $dialog.AutoUpgradeEnabled = $true }
 $dialog.ShowNewFolderButton = $false
 try {
     if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
@@ -114,6 +134,13 @@ def browse_folders(body: dict, connected_root: Path | None) -> dict:
             continue
         seen.add(resolved)
         unique_shortcuts.append({"name": name, "path": str(resolved)})
+    # Do not resolve/probe every drive: an empty card reader or offline mapped
+    # share must not delay listing the current directory. Validate on selection.
+    for drive in windows_drive_roots():
+        key = drive.rstrip("\\/").casefold()
+        unique_shortcuts = [item for item in unique_shortcuts
+                            if item["path"].rstrip("\\/").casefold() != key]
+        unique_shortcuts.append({"name": f"드라이브 {drive[:2]}", "path": drive})
     parent = folder.parent if folder.parent != folder else None
     return {"path": str(folder), "parent": str(parent) if parent is not None else None,
             "directories": directories, "shortcuts": unique_shortcuts, "truncated": truncated}

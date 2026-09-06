@@ -1,13 +1,19 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-09-06
+last_updated: 2026-09-07
 superseded_by: N/A
 ---
 
 # Impact summary
 
 ## Changed
+
+- 2026-09-07: Windows native selection starts at This PC; the in-app fallback
+  lists all assigned drive letters without probing unavailable media. UI labels,
+  cross-drive regressions, and the Windows usage guide were updated.
+  See [verification](evidence/2026-09-07-windows-folder-picker.md). Runtime ownership,
+  ingest gates, authentication, and reusable skill distribution are unchanged.
 
 - Moved the application from the loop skill into repository-owned runtime/ and dashboard/, with JavaScript evaluations under tests/dashboard/. No compatibility application copies remain in the skill.
 - Added the one-way wiki_loop_adapter.py binding. Runtime extensions stay in runtime/; Pi still receives the actual loop skill and gate entrypoint. Procedure and completion authority were not duplicated.
@@ -16,6 +22,8 @@ superseded_by: N/A
 - Refreshed this current impact summary rather than retaining obsolete claims that AGENTS and application ownership were unchanged. Earlier feature history remains in Git, the wiki log, and its evidence records.
 
 ### Files
+
+- `docs/evidence/2026-09-07-windows-folder-picker.md`
 
 The list includes removed source paths and their new destinations relative to the current Git baseline.
 

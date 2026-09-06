@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: true
-last_updated: 2026-09-06
+last_updated: 2026-09-07
 superseded_by: N/A
 ---
 
@@ -206,3 +206,9 @@ Wiki Studio connection supports native macOS/Windows folder selection and a boun
 Workspace badges expose passive SQLite configuration/stat freshness and server-environment ONNX package/artifact presence. The runtime adapter never executes target-vault code, loads a model, rebuilds an index, or writes SQLite sidecars. Unknown schemas, journals, changing databases, and bounded-check failures remain unknown. Stored vector rows are not semantic readiness.
 
 Per-answer retrieval usage is aggregated independently of the visible event tail and saved with browser-local messages. Percentages describe successful search/link calls, not answer contribution, quality, coverage, or citations. Current chat uses Python literal search and wiki-link discovery; FTS/vector remain unconnected to chat even when separately configured. Older answers retain unknown usage. Existing model defaults, writer gates, and watcher opt-ins are unchanged. See the [retrieval observability verification](evidence/2026-09-06-wiki-retrieval-observability.md) for the real-index fixture, measured tool calls, current local state, and limits.
+
+Windows workspace selection now starts the native folder dialog at This PC
+and enumerates all assigned drive letters for the in-app fallback, rather than
+offering only the current filesystem root. Drive shortcuts do not probe
+removable or network media until selected. See the
+[Windows folder guide](../dashboard/README.md#windows에서-다른-드라이브-선택).

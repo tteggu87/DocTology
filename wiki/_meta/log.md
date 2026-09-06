@@ -7,6 +7,11 @@ updated: 2026-09-06
 
 # Maintenance log
 
+- 2026-09-07: Fixed Windows cross-drive folder selection. The OS dialog starts
+  at This PC; in-app navigation exposes all assigned drive roots without probing
+  unavailable media. Added drive-mask, fallback, and C-to-D Unicode UI regressions.
+  Actual Windows desktop validation remains pending on a Windows host.
+
 - 2026-09-05: Interpreted the reported blocked new chat as a request to separate read-only chat from wiki writes, not to remove writer serialization. Removed cross-lane exclusion, preserved root/writer boundaries, and verified separate stops plus concurrent document mutation. A real Pi read completed alongside a held fixture writer. Multiple semantic source-card builders remain a separate, unimplemented expansion requested for consideration. See [evidence](../../docs/evidence/2026-09-05-wiki-dashboard.md).
 
 - 2026-09-05: Fixed reader scrolling so its title and close button remain visible while only the body scrolls. Added non-overlapping chat top/bottom controls with overflow and endpoint states, reduced-motion support, and independent reader reset. Scoped review, regression tests, and actual end-to-end scrolling passed; see [evidence](../../docs/evidence/2026-09-05-wiki-dashboard.md).

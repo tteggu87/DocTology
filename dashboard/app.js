@@ -851,7 +851,7 @@ function renderFolderBrowser(location) {
   folderBrowserLocation=location;
   $('#folder-browser-path').textContent=location.path||'현재 폴더를 확인하지 못했습니다.';
   $('#folder-browser-up').disabled=!location.parent;
-  $('#folder-browser-shortcuts').innerHTML=location.shortcuts.map(item=>`<button type="button" data-action="folder-browser-go" data-path="${escapeHTML(item.path)}">${escapeHTML(({Home:'홈','Current wiki':'현재 위키','Filesystem root':'컴퓨터',Volumes:'외장 드라이브'})[item.name]||item.name)}</button>`).join('');
+  $('#folder-browser-shortcuts').innerHTML=location.shortcuts.map(item=>`<button type="button" data-action="folder-browser-go" data-path="${escapeHTML(item.path)}">${escapeHTML(({Home:'홈','Current wiki':'현재 위키','Filesystem root':'최상위 폴더',Volumes:'외장 드라이브'})[item.name]||item.name)}</button>`).join('');
   $('#folder-browser-list').innerHTML=location.directories.length?location.directories.map(item=>`<button type="button" data-action="folder-browser-go" data-path="${escapeHTML(item.path)}">${escapeHTML(item.name)}</button>`).join(''):'<div class="folder-browser-empty">이 폴더 안에 표시할 하위 폴더가 없습니다.</div>';
   $('#folder-browser-truncated').hidden=!location.truncated;
   setFolderBrowserPending(false);

@@ -48,6 +48,9 @@ class FolderPickerTests(unittest.TestCase):
             self.assertIn('-STA', command)
             self.assertIn('-NoProfile', command)
             self.assertIn('FolderBrowserDialog', command[-1])
+            self.assertIn('SpecialFolder]::MyComputer', command[-1])
+            self.assertIn('EnableVisualStyles()', command[-1])
+            self.assertIn("Properties['AutoUpgradeEnabled']", command[-1])
             self.assertIn('ShowNewFolderButton = $false', command[-1])
             self.assertIn('UTF8Encoding', command[-1])
             self.assertIn('Dispose()', command[-1])
@@ -147,6 +150,32 @@ if __name__ == '__main__':
     unittest.main()
 
 class FolderBrowserFallbackTests(unittest.TestCase):
+    def test_windows_drive_mask_includes_d_e_and_mapped_z_without_disk_probes(self):
+        import ctypes
+        get_drives = mock.Mock(return_value=(1 << 2) | (1 << 3) | (1 << 4) | (1 << 25))
+        kernel = mock.Mock(GetLogicalDrives=get_drives)
+        with mock.patch.object(dashboard.sys, 'platform', 'win32'), mock.patch.object(
+            ctypes, 'WinDLL', return_value=kernel, create=True
+        ):
+            self.assertEqual(dashboard.folders_module.windows_drive_roots(), ['C:\\', 'D:\\', 'E:\\', 'Z:\\'])
+            get_drives.assert_called_once_with()
+
+    def test_drive_enumeration_failure_keeps_folder_browser_available(self):
+        import ctypes
+        with mock.patch.object(dashboard.sys, 'platform', 'win32'), mock.patch.object(
+            ctypes, 'WinDLL', side_effect=OSError, create=True
+        ):
+            self.assertEqual(dashboard.folders_module.windows_drive_roots(), [])
+
+    def test_fallback_exposes_other_drives_even_when_current_folder_is_elsewhere(self):
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+            dashboard.folders_module, 'windows_drive_roots', return_value=['C:\\', 'D:\\', 'E:\\']
+        ):
+            payload = dashboard.browse_folders({'path': directory}, None)
+            self.assertIn({'name': '드라이브 D:', 'path': 'D:\\'}, payload['shortcuts'])
+            self.assertIn({'name': '드라이브 E:', 'path': 'E:\\'}, payload['shortcuts'])
+            self.assertEqual(payload['path'], str(Path(directory).resolve()))
+
     def test_unicode_space_path_excludes_hidden_files_and_symlinks(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / '한글 space'

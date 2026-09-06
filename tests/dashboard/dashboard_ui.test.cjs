@@ -1049,7 +1049,7 @@ test('late folder picker results are ignored after dialog closure or manual root
 test('connection dialog exposes both native and in-app folder actions',()=>{
   const html=fs.readFileSync(path.join(assets,'index.html'),'utf8');
   const css=fs.readFileSync(path.join(assets,'style.css'),'utf8');
-  assert.match(html,/<button id="choose-folder"[^>]*data-action="choose-folder"[^>]*>.*폴더 선택…/);
+  assert.match(html,/<button id="choose-folder"[^>]*data-action="choose-folder"[^>]*>.*기본 폴더 선택 창…/);
   assert.match(html,/<button id="browse-folders"[^>]*data-action="browse-folders"[^>]*>작업실에서 폴더 찾기/);
   assert.match(html,/id="folder-browser-dialog"/);
   assert.match(html,/선택한 폴더 <span class="muted">\(직접 입력 가능\)<\/span>/);
@@ -1104,6 +1104,26 @@ test('in-app browser escapes directory names and attributes',async()=>{
   assert.match(c.element('#folder-browser-list').innerHTML,/&quot; onfocus=alert\(1\)/);
   assert.doesNotMatch(c.element('#folder-browser-list').innerHTML,/<img/);
   assert.match(c.element('#folder-browser-shortcuts').innerHTML,/&lt;b&gt;Home&lt;\/b&gt;/);
+});
+
+test('Windows drive shortcuts navigate from C to D and preserve Unicode selection',async()=>{
+  const requests=[];
+  const responses=[
+    {path:'C:\\Users',parent:'C:\\',directories:[],shortcuts:[{name:'드라이브 D:',path:'D:\\'}],truncated:false},
+    {path:'D:\\',parent:null,directories:[{name:'한글 위키',path:'D:\\한글 위키'}],shortcuts:[],truncated:false},
+    {path:'D:\\한글 위키',parent:'D:\\',directories:[],shortcuts:[],truncated:false}
+  ];
+  const c=context({fetchImpl:async(url,options)=>{requests.push([url,JSON.parse(options.body)]);return {ok:true,json:async()=>responses.shift()};}});
+  c.element('#connect-dialog').open=true;
+  c.run('openFolderBrowser()');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.match(c.element('#folder-browser-shortcuts').innerHTML,/드라이브 D:/);
+  await c.run("browseFolders('D:\\\\')");
+  assert.deepEqual(requests[1],['/api/browse-folders',{path:'D:\\'}]);
+  await c.run("browseFolders('D:\\\\한글 위키')");
+  c.run('selectFolderBrowser()');
+  assert.equal(c.element('#connect-root').value,'D:\\한글 위키');
+  assert.equal(requests.some(([url])=>url==='/api/connect'),false);
 });
 
 test('in-app selection fills the connect root and closes only the nested browser',async()=>{
