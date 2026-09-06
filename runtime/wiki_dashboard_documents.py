@@ -105,7 +105,7 @@ class DocumentCatalog:
         pages = set()
         for pattern in ("wiki/**/*.md", "docs/**/*.md", "README.md", "AGENTS.md",
                         ".agents/skills/*/SKILL.md", ".agents/skills/*/references/**/*.md",
-                        ".agents/skills/*/dashboard/README.md"):
+                        "dashboard/README.md", "runtime/README.md"):
             pages.update(files(root, pattern))
         return sorted(pages)
 

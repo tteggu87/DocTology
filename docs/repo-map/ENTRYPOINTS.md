@@ -1,43 +1,20 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-09-05
+last_updated: 2026-09-06
 superseded_by: N/A
 ---
 
 # Entrypoints
 
-- Canonical repository command: `python3 scripts/manage_skills.py check|install`.
+- Canonical repository command: `python3 scripts/manage_skills.py check|install`; it validates and installs exactly the three reusable skills.
+- Studio backend: `runtime/wiki_dashboard.py [--repo-root <vault>] [--port <available-port>]` serves the repository-owned UI and isolated read-only Pi RPC adapter.
+- Studio gate binding: `runtime/wiki_loop_adapter.py` resolves the repository loop skill root and delegates to its unchanged `wiki_loop.py` gates.
+- Studio launchers: `runtime/start_dashboard.command` and `runtime/start_dashboard.bat`; root `Wiki-Studio.command` and `Wiki-Studio.bat` are thin compatibility forwarders.
 - Skill entrypoints: each retained `.agents/skills/*/SKILL.md` and its documented sibling scripts.
+- Standalone LLM Wiki loop gates: `llm-wiki-loop/scripts/wiki_loop.py --repo-root <vault> preflight|workflow|batch|check` runs reusable gates without copying executables into the vault.
 - Verification: `python3 -m unittest discover -s tests` and the bundled Repo Docs validator.
-- Standalone LLM Wiki loop: `llm-wiki-loop/scripts/wiki_loop.py --repo-root
-  <vault> preflight|workflow|batch|check` runs the loop-owned gates without
-  copying executables into the vault.
-- Multi-source snapshot completion: `wiki_loop.py --repo-root <vault> batch
-  seal --batch <id> --reviewer <id> --review-ref <path>` finalizes and certifies
-  one already-applied, unchanged batch without modifying `wiki/`.
-- Batch discovery and handoff: `wiki_loop.py batch --help` shows the fixed
-  command sequence, `batch list [--active-only]` discovers unchecked manifests,
-  and `batch status --batch <id>` returns exact freshness plus a deterministic
-  advisory `next_action`.
-- Downstream LLM Wiki raw retrieval: `scripts/raw_retrieval.py` owns incremental
-  rebuild, stat status, lexical search, exact doctor, and checksum-checked
-  `tree`, `ancestors`, and `subtree` navigation for `raw/**/*.md`.
-- Downstream wiki query fallback: `scripts/wiki_retrieval.py search
-  --raw-fallback` invokes raw lexical lookup only after a wiki lexical miss.
-- Downstream Repo Docs retrieval: `scripts/repo_docs_retrieval.py` owns portable
-  rebuild/status/doctor/search/batch/traversal; `repo_docs_query.sh` and
-  `repo_docs_query.ps1` are optional native read wrappers over shared SQL.
 
-There are no root secondary launchers. The native query wrappers are
-self-contained downstream skill assets, not DocTology root entrypoints.
-
-- Optional local Wiki Studio: `llm-wiki-loop/scripts/wiki_dashboard.py
-  [--repo-root <vault>] [--port <available-port>]` serves the bundled UI and an
-  isolated read-only Pi RPC adapter. It waits for an authenticated loopback ready
-  handshake before prompting and keeps Pi's ambient default model unless a model
-  or provider is explicitly selected. Without a vault it shows a labelled, inert
-  example. Root-bound source-entry
-  routes are `watch-config`, `watch-run`, `watch-ignore`, `chat-save-preview`,
-  and `chat-save`; `GET /api/state?queueOffset=N` selects a bounded queue page.
-  Mutations require the localhost Origin, dashboard token, and expected root.
+The Studio retains the authenticated loopback handshake and root-bound source
+entry routes. Its read-only chat has no shell, write, or external-web tools.
+Gate behavior remains owned by the loop skill. These paths are covered by [migration verification](../evidence/2026-09-06-studio-runtime-separation.md) and [ADR-0004](../adr/ADR-0004-studio-runtime-separation.md).

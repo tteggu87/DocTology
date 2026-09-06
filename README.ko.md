@@ -1,6 +1,6 @@
 # DocTology
 
-DocTology는 아래 세 가지 에이전트 스킬만 배포하는 작은 저장소입니다.
+DocTology는 로컬 Wiki Studio 애플리케이션과 아래 세 가지 재사용 에이전트 스킬을 포함하는 저장소입니다. Studio 백엔드와 실행기는 `runtime/`, UI는 `dashboard/`에 있으며 `scripts/manage_skills.py`는 세 스킬만 설치합니다.
 
 | 스킬 | 역할 |
 | --- | --- |

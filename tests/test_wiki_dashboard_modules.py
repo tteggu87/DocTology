@@ -10,7 +10,9 @@ import tempfile
 import unittest
 from unittest import mock
 
-SCRIPTS = Path(__file__).resolve().parents[1] / ".agents/skills/llm-wiki-loop/scripts"
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS = ROOT / "runtime"
+SKILL_ROOT = ROOT / ".agents" / "skills" / "llm-wiki-loop"
 
 
 def load(name):
@@ -22,6 +24,26 @@ def load(name):
 
 documents = load("wiki_dashboard_documents")
 folders = load("wiki_dashboard_folders")
+
+
+class RuntimeOwnershipTests(unittest.TestCase):
+    def test_runtime_adapter_binds_the_actual_skill_gate_paths(self):
+        adapter = load("wiki_loop_adapter")
+        self.assertEqual(adapter.SKILL_ROOT, SKILL_ROOT)
+        self.assertEqual(adapter.ENTRYPOINT, SKILL_ROOT / "scripts" / "wiki_loop.py")
+        self.assertEqual(adapter.CONTRACT, SKILL_ROOT / "SKILL.md")
+        self.assertTrue(adapter.ENTRYPOINT.is_file())
+        self.assertTrue(adapter.CONTRACT.is_file())
+        self.assertIs(adapter.workflow, adapter.loop.workflow)
+        self.assertTrue(hasattr(adapter.batch, "batch_status"))
+
+    def test_loop_skill_contains_gates_not_runtime_or_dashboard_assets(self):
+        self.assertFalse((SKILL_ROOT / "dashboard").exists())
+        self.assertFalse((SKILL_ROOT / "evals").exists())
+        self.assertFalse(any((SKILL_ROOT / "scripts").glob("wiki_dashboard*")))
+        for source in SKILL_ROOT.rglob("*.py"):
+            text = source.read_text(encoding="utf-8")
+            self.assertNotRegex(text, r"(?m)^\s*(?:from|import)\s+runtime(?:[.\s]|$)")
 
 
 class GateError(Exception):

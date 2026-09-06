@@ -7,9 +7,13 @@ superseded_by: N/A
 
 # Current state
 
-DocTology distributes exactly three skills: `llm-wiki-bootstrap`, `llm-wiki-loop`, and `repo-docs-intelligence-bootstrap`.
+DocTology is a local Wiki Studio application plus exactly three reusable skills: `llm-wiki-bootstrap`, `llm-wiki-loop`, and `repo-docs-intelligence-bootstrap`. `runtime/` owns the Studio backend and launchers, `dashboard/` owns the UI, and `tests/dashboard/` owns Studio JavaScript evaluations. `scripts/manage_skills.py` still installs only the three skills.
 
-The canonical management entrypoint is `python3 scripts/manage_skills.py`. `check` validates the source inventory; `install` synchronizes it to a target skill root. Skill-owned scripts remain inside each skill and are copied with the skill.
+The canonical management entrypoint is `python3 scripts/manage_skills.py`. `check` validates the source inventory; `install` synchronizes only the three reusable skills to a target skill root. Studio application files are not installed with a skill.
+
+## Verified Studio ownership migration
+
+[ADR-0004](adr/ADR-0004-studio-runtime-separation.md) moves current Studio ownership to repository `runtime/` (backend, launchers, and loop adapter), `dashboard/` (UI), and `tests/dashboard/` (JavaScript evaluations). `llm-wiki-loop` retains reusable gates only, invoked by `runtime/wiki_loop_adapter.py`. Root `Wiki-Studio.command` and `Wiki-Studio.bat` forward to `runtime/start_dashboard.command` and `runtime/start_dashboard.bat`. This is implemented and verified: [migration evidence](evidence/2026-09-06-studio-runtime-separation.md). Earlier evidence retains its original paths, fingerprints, and observations; those records are historical, not verification of the new layout.
 
 The repository has no active ontology operator, root ontology pipeline, workbench, canonical corpus, or tracked archive. Optional SQLite in generated wiki vaults is derived retrieval state owned by `llm-wiki-bootstrap`.
 
@@ -84,10 +88,10 @@ Read-only batch list discovers recent or active manifests without repeated
 corpus hashing, isolates malformed manifest metadata, and explicitly routes each
 unchecked valid result through exact status.
 
-The loop skill includes an optional localhost Wiki Studio with conversation as
+The repository-owned Wiki Studio is an optional localhost application with conversation as
 its primary surface. Its chat backend launches a separate Pi RPC process with
 built-in tools and ambient extension, skill, context, and prompt loading disabled.
-It explicitly loads one skill-owned read-only extension, disables session
+It explicitly loads one Studio-owned read-only extension, disables session
 persistence, then waits for an authenticated loopback ready handshake before
 sending a prompt. The main backend preserves Pi's ambient default model unless a
 user explicitly chooses a model or provider. The chat extension exposes only
@@ -146,9 +150,9 @@ save are denied. Claude execution remains unimplemented. The localhost process
 must remain running on the currently connected root; task agents use local
 account permissions rather than a sandbox, and the selected Pi model may be a
 cloud service. Generated vaults receive content and bounded state only, never a
-copy of the dashboard runtime or its skill-owned automation/save modules. See
-[usage](../.agents/skills/llm-wiki-loop/dashboard/README.md) and
-[the ownership decision](adr/ADR-0002-local-wiki-dashboard.md).
+copy of the Studio runtime or its automation/save modules. See
+[usage](../dashboard/README.md) and
+[the ownership decision](adr/ADR-0004-studio-runtime-separation.md).
 
 For explicitly requested multi-source Wiki Studio work, the dashboard now
 uses parallel source preparation inside the existing batch procedure. Batches
@@ -187,7 +191,11 @@ the runtime or its completion gates.
 
 ## Dashboard module boundaries
 
-The dashboard entrypoint composes an injected document catalog, passive folder helpers, and an independent HTTP transport. Frontend history codecs, Markdown, graph logic, and retrieval presentation use explicit-input factories, while application state, storage, and asynchronous lifecycle guards stay in `app.js`. HTML declares the deferred script order and admitted HTTP assets; external boot runs once. This changes neither UI behavior nor execution authority. The [verification](evidence/2026-09-06-dashboard-refactor.md) records regression and live-browser checks. See the [maintenance map](../.agents/skills/llm-wiki-loop/dashboard/README.md#유지보수와-확장-경계).
+The dashboard entrypoint composes an injected document catalog, passive folder helpers, and an independent HTTP transport. Frontend history codecs, Markdown, graph logic, and retrieval presentation use explicit-input factories, while application state, storage, and asynchronous lifecycle guards stay in `dashboard/app.js`. HTML declares the deferred script order and admitted HTTP assets; external boot runs once. This preserves UI behavior and execution authority; the ownership migration is separately verified in the migration evidence. The [verification](evidence/2026-09-06-dashboard-refactor.md) records regression and live-browser checks. See the [maintenance map](../dashboard/README.md#유지보수와-확장-경계).
+
+## Desktop launchers
+
+Repository-root `Wiki-Studio.command` (macOS) and `Wiki-Studio.bat` (Windows) forward to `runtime/start_dashboard.command` and `runtime/start_dashboard.bat`. They check Python 3.11+, start the existing localhost server in unconnected example mode, and request the default browser. An occupied port selects the next available port without stopping any service; each port retains separate browser-local history. No installation, workspace creation, or model request is part of default startup. The direct Python CLI keeps its original defaults; `--open-browser` and `--auto-port` are explicit opt-ins. See [desktop startup](../dashboard/README.md#더블클릭으로-실행) and [launcher verification](evidence/2026-09-06-wiki-launchers.md). macOS shell startup/shutdown was exercised; Windows remains a static-contract check, not real-desktop validation.
 
 ## Local folder selection
 
@@ -195,6 +203,6 @@ Wiki Studio connection supports native macOS/Windows folder selection and a boun
 
 ## Retrieval observability in Wiki Studio
 
-Workspace badges expose passive SQLite configuration/stat freshness and server-environment ONNX package/artifact presence. The skill-owned adapter never executes target-vault code, loads a model, rebuilds an index, or writes SQLite sidecars. Unknown schemas, journals, changing databases, and bounded-check failures remain unknown. Stored vector rows are not semantic readiness.
+Workspace badges expose passive SQLite configuration/stat freshness and server-environment ONNX package/artifact presence. The runtime adapter never executes target-vault code, loads a model, rebuilds an index, or writes SQLite sidecars. Unknown schemas, journals, changing databases, and bounded-check failures remain unknown. Stored vector rows are not semantic readiness.
 
 Per-answer retrieval usage is aggregated independently of the visible event tail and saved with browser-local messages. Percentages describe successful search/link calls, not answer contribution, quality, coverage, or citations. Current chat uses Python literal search and wiki-link discovery; FTS/vector remain unconnected to chat even when separately configured. Older answers retain unknown usage. Existing model defaults, writer gates, and watcher opt-ins are unchanged. See the [retrieval observability verification](evidence/2026-09-06-wiki-retrieval-observability.md) for the real-index fixture, measured tool calls, current local state, and limits.

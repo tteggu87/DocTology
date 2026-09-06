@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const assets = path.join(__dirname, '../dashboard');
+const assets = path.join(__dirname, '../../dashboard');
 const moduleFiles = ['modules/retrieval-usage.js','modules/history-codec.js','modules/markdown.js','modules/graph.js','modules/retrieval-status.js'];
 
 function moduleContext() {

@@ -11,7 +11,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DASHBOARD_SCRIPT = ROOT / ".agents/skills/llm-wiki-loop/scripts/wiki_dashboard.py"
+DASHBOARD_SCRIPT = ROOT / "runtime/wiki_dashboard.py"
 
 
 def load(name, path):

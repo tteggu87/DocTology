@@ -12,8 +12,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DASHBOARD_SCRIPT = ROOT / ".agents/skills/llm-wiki-loop/scripts/wiki_dashboard.py"
-TOOLS_SCRIPT = ROOT / ".agents/skills/llm-wiki-loop/scripts/wiki_dashboard_chat_tools.py"
+DASHBOARD_SCRIPT = ROOT / "runtime/wiki_dashboard.py"
+TOOLS_SCRIPT = ROOT / "runtime/wiki_dashboard_chat_tools.py"
 
 
 def load(name, path):
@@ -500,9 +500,14 @@ class WikiDashboardChatToolsTests(unittest.TestCase):
         (project / "docs/guide.md").write_text("# Guide\n\nproject-only fact\n", encoding="utf-8")
         (project / "wiki/_meta/index.md").write_text("# Meta\n", encoding="utf-8")
         (project / "secret.md").write_text("# unapproved", encoding="utf-8")
-        skill = project / ".agents/skills/demo/SKILL.md"
-        skill.parent.mkdir(parents=True)
-        skill.write_text("# Project skill\n", encoding="utf-8")
+        (project / "dashboard").mkdir()
+        (project / "runtime").mkdir()
+        (project / "dashboard/README.md").write_text("# Dashboard guide\n", encoding="utf-8")
+        (project / "runtime/README.md").write_text("# Runtime guide\n", encoding="utf-8")
+        old_skill_guide = project / ".agents/skills/demo/dashboard/README.md"
+        old_skill_guide.parent.mkdir(parents=True)
+        old_skill_guide.write_text("# Old skill guide\n", encoding="utf-8")
+        (old_skill_guide.parent.parent / "SKILL.md").write_text("# Reusable skill\n", encoding="utf-8")
         bridge = self.bridge(project, mode="project")
         listing = bridge.call("wiki_list", {})
         self.assertEqual(listing["scope"], "wiki")
@@ -510,6 +515,9 @@ class WikiDashboardChatToolsTests(unittest.TestCase):
         paths = {row["path"] for row in listing["documents"]}
         self.assertIn("README.md", paths)
         self.assertIn("docs/guide.md", paths)
+        self.assertIn("dashboard/README.md", paths)
+        self.assertIn("runtime/README.md", paths)
+        self.assertNotIn(".agents/skills/demo/dashboard/README.md", paths)
         self.assertIn(".agents/skills/demo/SKILL.md", paths)
         self.assertNotIn("secret.md", paths)
         explicit_default = bridge.call("wiki_list", {"scope": "wiki"})

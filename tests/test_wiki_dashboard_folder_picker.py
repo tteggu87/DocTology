@@ -10,7 +10,7 @@ import unittest
 from unittest import mock
 from urllib import request, error
 
-SCRIPT = Path(__file__).resolve().parents[1] / '.agents/skills/llm-wiki-loop/scripts/wiki_dashboard.py'
+SCRIPT = Path(__file__).resolve().parents[1] / 'runtime/wiki_dashboard.py'
 spec = importlib.util.spec_from_file_location('dashboard_folder_picker_tests', SCRIPT)
 dashboard = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dashboard)

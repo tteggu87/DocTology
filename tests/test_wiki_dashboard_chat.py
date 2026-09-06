@@ -14,12 +14,15 @@ from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / ".agents/skills/llm-wiki-loop/scripts/wiki_dashboard.py"
+SCRIPT = ROOT / "runtime/wiki_dashboard.py"
 spec = importlib.util.spec_from_file_location("dashboard_chat_under_test", SCRIPT)
 dashboard = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dashboard)
 
-FAKE_WRITER_PI = r'''import json,sys
+FAKE_WRITER_PI = r'''import json,os,sys
+capture=os.environ.get('WIKI_STUDIO_WRITER_CAPTURE')
+if capture:
+ with open(capture,'w',encoding='utf-8') as stream: json.dump(sys.argv[1:],stream)
 for line in sys.stdin:
  event=json.loads(line)
  if event.get('type')=='prompt':
@@ -201,6 +204,22 @@ class WikiDashboardChatTests(unittest.TestCase):
         self.assertNotIn("WIKI_STUDIO_TOOL_TOKEN", captured["message"])
         after = {p.relative_to(self.root): p.read_bytes() for p in self.root.rglob("*") if p.is_file() and not p.is_symlink()}
         self.assertEqual(before, after)
+
+    def test_writer_uses_adapter_skill_and_gate_entrypoint_paths(self):
+        capture = Path(self.temp.name) / "writer-argv.json"
+        app = dashboard.Dashboard(self.root, [sys.executable, str(self.writer)])
+        self.addCleanup(app.stop_all)
+        with mock.patch.dict("os.environ", {"WIKI_STUDIO_WRITER_CAPTURE": str(capture)}):
+            app.start("capture writer command", ["raw/inbox/source.md"])
+        self.wait_for(capture.is_file)
+        argv = json.loads(capture.read_text(encoding="utf-8"))
+        self.assertEqual(argv[argv.index("--skill") + 1], str(dashboard.LOOP_SKILL))
+        instructions = argv[argv.index("--append-system-prompt") + 1]
+        self.assertIn(json.dumps(str(dashboard.LOOP_ENTRYPOINT)), instructions)
+        self.assertIn(str(dashboard.LOOP_SKILL / "SKILL.md"), instructions)
+        self.assertNotIn("--gate-path", argv)  # Not a Pi CLI option.
+        app.action("stop", {})
+        self.wait_for(lambda: app.claim is None)
 
     def test_project_mode_allows_chat_but_still_blocks_ingest(self):
         shutil.rmtree(self.root / "raw")

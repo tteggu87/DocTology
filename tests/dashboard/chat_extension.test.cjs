@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const extensionPath = path.join(__dirname, '../scripts/wiki_dashboard_chat_extension.mjs');
+const extensionPath = path.join(__dirname, '../../runtime/wiki_dashboard_chat_extension.mjs');
 const names = ['wiki_list', 'wiki_search', 'wiki_read', 'wiki_links'];
 const savedEnv = { url: process.env.WIKI_STUDIO_TOOL_URL, token: process.env.WIKI_STUDIO_TOOL_TOKEN, fetch: global.fetch };
 

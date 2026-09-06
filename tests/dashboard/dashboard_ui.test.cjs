@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const assets = path.join(__dirname, '../dashboard');
+const assets = path.join(__dirname, '../../dashboard');
 
 function context({fetchImpl,setTimeoutImpl} = {}) {
   const elements = new Map();

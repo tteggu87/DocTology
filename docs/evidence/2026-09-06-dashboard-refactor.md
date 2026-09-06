@@ -12,7 +12,7 @@ target_fingerprint: sha256:9f0a93009f256be42e697c6feac82b7359fbe3b247c0a00e5f0e5
 
 # Modular refactor verification
 
-The [maintenance map](../../.agents/skills/llm-wiki-loop/dashboard/README.md#유지보수와-확장-경계) defines the current ownership and extension points. This is a behavior-preserving decomposition, not a new engine, framework, or completion authority.
+The [maintenance map](../../dashboard/README.md#유지보수와-확장-경계) defines the current ownership and extension points. This is a behavior-preserving decomposition, not a new engine, framework, or completion authority.
 
 ## Checks
 

@@ -10,7 +10,7 @@ from urllib.error import HTTPError
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / '.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_http.py'
+SCRIPT = ROOT / 'runtime/wiki_dashboard_http.py'
 spec = importlib.util.spec_from_file_location('dashboard_http_tests', SCRIPT)
 http = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(http)
@@ -22,7 +22,7 @@ class PartialError(ValueError):
 
 class DashboardHttpTests(unittest.TestCase):
     def test_manifest_admits_only_declared_scripts_and_fixed_entries(self):
-        assets = ROOT / '.agents/skills/llm-wiki-loop/dashboard'
+        assets = ROOT / 'dashboard'
         admitted = http.frontend_assets(assets)
         self.assertIn('/app.js', admitted)
         self.assertNotIn('/example.json', admitted)
@@ -44,7 +44,7 @@ class DashboardHttpTests(unittest.TestCase):
                     http.frontend_assets(root)
 
     def test_every_production_script_is_served_with_same_bytes_and_csp(self):
-        assets = ROOT / '.agents/skills/llm-wiki-loop/dashboard'
+        assets = ROOT / 'dashboard'
         handler = http.make_handler(asset_root=assets, document_payload=lambda *args: {},
                                     chat_not_found_error=LookupError, save_partial_error=PartialError,
                                     workflow_error=RuntimeError)

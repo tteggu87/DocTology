@@ -1,0 +1,3 @@
+# Preserve platform-native launcher line endings across checkouts.
+*.command text eol=lf
+*.bat text eol=crlf

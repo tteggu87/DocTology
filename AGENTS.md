@@ -9,7 +9,7 @@ DocTology distributes exactly three reusable skills:
 ## Working rules
 
 1. Treat each skill directory as a self-contained product. Keep its scripts, assets, references, and evals beside `SKILL.md`.
-2. Do not add an active ontology profile, workbench, corpus, or root copy of a skill-owned runtime.
+2. Do not add an active ontology profile, workbench, or corpus. DocTology owns the single Studio runtime in `runtime/` and UI in `dashboard/`; do not copy Studio application files into a reusable skill or a generated vault. `llm-wiki-loop` owns gates only.
 3. Keep `scripts/manage_skills.py` thin: it validates and installs only the three source skill directories.
 4. Update affected tests and current docs in the same change.
 5. Use relative Markdown links in repository docs. Obsidian wikilinks belong to vaults created by `llm-wiki-bootstrap`.

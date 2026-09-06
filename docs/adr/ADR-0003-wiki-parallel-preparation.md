@@ -7,11 +7,12 @@ implementation_status: verified
 date: 2026-09-06
 implementation_plan: ../plans/2026-09-05-wiki-parallel-preparation.md
 implementation_refs:
-  - ../../.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_batch.py
-  - ../../.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_batch_tools.py
-  - ../../.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_batch_extension.mjs
+  - ../../runtime/wiki_dashboard_batch.py
+  - ../../runtime/wiki_dashboard_batch_tools.py
+  - ../../runtime/wiki_dashboard_batch_extension.mjs
 implementation_evidence:
   - ../evidence/2026-09-06-wiki-parallel-preparation.md
+  - ../evidence/2026-09-06-studio-runtime-separation.md
 source_of_truth: true
 last_updated: 2026-09-06
 superseded_by: null

@@ -11,7 +11,7 @@ Understood as: preserve the current dashboard's behavior and visual layout while
 
 ## Frozen boundaries
 
-- The loop skill remains the only dashboard owner. No build dependency or fourth product.
+- Historical pre-migration plan observation: the loop skill was the only dashboard owner. No build dependency or fourth product. Superseded ownership is recorded in [ADR-0004](../adr/ADR-0004-studio-runtime-separation.md).
 - Existing writer, batch, coverage, and certification gates remain authoritative.
 - Chat, source workers, root/Origin/token validation, model defaults, opt-in watching, and explicit recovery keep their current contracts.
 - Existing browser history and user-vault files must be preserved.

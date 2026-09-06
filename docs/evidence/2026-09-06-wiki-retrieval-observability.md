@@ -14,7 +14,7 @@ superseded_by: N/A
 
 ## Implemented contract
 
-The [usage guide](../../.agents/skills/llm-wiki-loop/dashboard/README.md#검색-상태와-답변별-사용량) separates workspace configuration, metadata/stat freshness, server ONNX package/artifact presence, stored vector rows, and actual per-answer search calls. Status never activates a model or retrieval engine. Current chat remains Python literal search plus wiki-link discovery; FTS/vector are unconnected.
+The [usage guide](../../dashboard/README.md#검색-상태와-답변별-사용량) separates workspace configuration, metadata/stat freshness, server ONNX package/artifact presence, stored vector rows, and actual per-answer search calls. Status never activates a model or retrieval engine. Current chat remains Python literal search plus wiki-link discovery; FTS/vector are unconnected.
 
 The new skill-owned adapter does not execute target-vault scripts or import model packages. It bounds directory and metadata reads, refuses active journals/WAL modes, uses an immutable read-only connection, and rejects database changes during inspection. It does not certify exact content, vector validity, or successful inference. The version-scoped stat projection intentionally keeps the loop skill self-contained; bootstrap remains the canonical producer of its index protocol.
 

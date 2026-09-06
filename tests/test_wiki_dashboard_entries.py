@@ -13,7 +13,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / ".agents/skills/llm-wiki-loop/scripts/wiki_dashboard.py"
+SCRIPT = ROOT / "runtime/wiki_dashboard.py"
 spec = importlib.util.spec_from_file_location("dashboard_entries_under_test", SCRIPT)
 dashboard = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dashboard)

@@ -6,10 +6,21 @@
 
 > 에이전트가 만들고, 사람이 읽고, 결정적 게이트가 지키는 Markdown 지식 시스템.
 
-DocTology는 별도 서버를 운영하는 지식 플랫폼이 아닙니다. 세 가지 에이전트
+DocTology는 상시 서버를 요구하는 지식 플랫폼이 아닙니다. 선택형 Wiki Studio는 필요할 때 로컬에서 실행합니다. 세 가지 에이전트
 스킬만으로 **사람이 읽는 LLM Wiki**와 **에이전트가 읽는 Repo Docs**를 만들고
 계속 관리합니다. Markdown이 항상 원본이며, SQLite는 필요할 때만 켜는
 삭제·재생성 가능한 검색 인덱스입니다.
+
+## Wiki Studio 바로 열기
+
+Python 3.11 이상이 설치되어 있으면, 저장소 맨 위의 실행 파일을 더블클릭하세요.
+
+- **macOS:** [Wiki-Studio.command](Wiki-Studio.command)
+- **Windows:** [Wiki-Studio.bat](Wiki-Studio.bat)
+
+터미널에서 로컬 서버가 켜지고 기본 브라우저가 열립니다. 왼쪽 위 **위키 폴더 연결**에서 사용할 폴더를 선택하세요. 실행 파일만 따로 복사하지 말고 저장소 전체를 유지하세요. 종료할 때는 터미널에서 **Ctrl+C**를 누릅니다.
+
+문서·그래프 열람은 Python만으로 가능합니다. AI 채팅과 위키 작성에는 **Pi 설치·인증**이 추가로 필요합니다. 설치나 모델 호출은 더블클릭만으로 시작하지 않습니다. 포트 충돌·브라우저 열기 실패·세부 옵션은 [실행 안내](dashboard/README.md#더블클릭으로-실행)를 참고하세요.
 
 ## 두 가지 사용 방식
 
@@ -129,7 +140,7 @@ DocTology는 “에이전트가 작성했으니 완료”라고 간주하지 않
 
 ## 제품 경계
 
-이 저장소가 배포하는 제품은 위 세 스킬뿐입니다. 활성 ontology profile,
+이 저장소의 제품 경계는 Wiki Studio 애플리케이션과 위 세 재사용 스킬입니다. `scripts/manage_skills.py`는 세 스킬만 설치하며 Studio 애플리케이션은 설치하지 않습니다. 활성 ontology profile,
 canonical JSONL warehouse, GUI workbench 또는 내장 corpus는 없습니다. 더 복잡한
 그래프·온톨로지 시스템이 필요해도 Markdown과 현재 스킬의 진실 경계를
 대체하지 않는 별도 제품으로 추가하는 것을 원칙으로 합니다.

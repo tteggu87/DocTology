@@ -1,23 +1,25 @@
 ---
 title: Loop-owned local Wiki Studio
 type: adr
-status: Accepted
+status: Superseded
 decision_id: ADR-0002
-decision_status: accepted
+decision_status: superseded
 implementation_status: verified
 date: 2026-09-05
 implementation_plan: ../plans/2026-09-05-wiki-dashboard.md
-implementation_refs:
+historical_implementation_refs:
   - ../../.agents/skills/llm-wiki-loop/scripts/wiki_dashboard.py
   - ../../.agents/skills/llm-wiki-loop/dashboard/app.js
 implementation_evidence:
   - ../evidence/2026-09-05-wiki-dashboard.md
 source_of_truth: true
 last_updated: 2026-09-05
-superseded_by: null
+superseded_by: ADR-0004-studio-runtime-separation.md
 ---
 
 # ADR-0002: Loop-owned local Wiki Studio
+
+> Superseded by [ADR-0004](ADR-0004-studio-runtime-separation.md). This record preserves the pre-migration decision and verification scope; its skill-relative paths are historical.
 
 ## Decision
 
@@ -47,7 +49,7 @@ The UI shows real document links and source-bound coverage accounting, with
 explicit empty, stale, disconnected, and example states. It checks the latest
 source run and only the batches linked to that run when determining completion.
 
-See [usage](../../.agents/skills/llm-wiki-loop/dashboard/README.md) and
+For current usage, see [Studio usage](../../dashboard/README.md). The former skill-relative usage path is historical. See also
 [verification](../evidence/2026-09-05-wiki-dashboard.md).
 
 Conversation is the primary UI surface. Chat uses a separate Pi RPC process

@@ -29,7 +29,7 @@ updated: 2026-09-06
   cross-dashboard contention, surviving runners, explicit retry, preview recovery,
   and bounded queue pages. Live integration and its limits are recorded in
   [evidence](../../docs/evidence/2026-09-05-wiki-dashboard.md); see
-  [usage](../../.agents/skills/llm-wiki-loop/dashboard/README.md) for operation.
+  [usage](../../dashboard/README.md) for operation.
 
 - 2026-09-05: Reoriented Wiki Studio around conversation, with workspace/history
   on the left and answer-cited graph/reference navigation on the right. Added
@@ -151,6 +151,14 @@ updated: 2026-09-06
 
 - 2026-09-06: Added Wiki Studio retrieval observability without changing retrieval routing. Workspace status separates SQLite configuration/stat freshness, ONNX environment/artifact presence, and stored vector rows. Per-answer percentages count successful discovery calls, not evidence contribution; old missing telemetry remains unknown. A real-index fixture and actual tool-bridge calls verified the UI and persistence without user-vault test data. See [verification](../../docs/evidence/2026-09-06-wiki-retrieval-observability.md).
 
-- 2026-09-06: Refactored Wiki Studio behind its existing behavior: injected document catalog, folder helpers, and HTTP transport; explicit-input frontend factories and one external bootstrap. HTML owns script order and asset admission. Module-only rendering tests caught hidden app globals before release. Existing retry tests now wait for actual cleanup eligibility rather than terminal labels alone. No writer or completion gate was changed. See [maintenance boundaries](../../.agents/skills/llm-wiki-loop/dashboard/README.md#유지보수와-확장-경계).
+- 2026-09-06: Refactored Wiki Studio behind its existing behavior: injected document catalog, folder helpers, and HTTP transport; explicit-input frontend factories and one external bootstrap. HTML owns script order and asset admission. Module-only rendering tests caught hidden app globals before release. Existing retry tests now wait for actual cleanup eligibility rather than terminal labels alone. No writer or completion gate was changed. See [maintenance boundaries](../../dashboard/README.md#유지보수와-확장-경계).
 
 - 2026-09-06: 사용자 요청에 따라 Wiki Studio 전체 작업을 하나의 [최신 인수인계](../decisions/local-wiki-studio.md)로 정리했다. 무엇을·어떻게·왜 했는지, 보류한 대안, 구현 경계, 리뷰에서 잡은 오류, 단계별 검증과 한계를 정본 근거에 연결했다. 초기 관측 수치와 최신 상태를 분리하고 커밋 전 소스·테스트·문서 전체를 검증하는 배포 범위를 명시했다. 사용자 코퍼스·브라우저 대화·실행 state는 Git 대상에서 제외한다.
+
+- 2026-09-06: 더블클릭용 루트 `Wiki-Studio.command` / `Wiki-Studio.bat`와 스킬 소유 실행기를 추가했다. Python 3.11 확인 후 기존 서버를 예시 모드로 열고, 브라우저·포트 자동 선택은 명시적 CLI 옵션으로 재사용한다. 현재 작업 디렉터리와 무관하게 실행하며 기존 서비스·사용자 파일·설정은 변경하지 않는다. macOS 셸의 실제 HTTP 시작과 Ctrl+C 종료, Windows 정적 계약을 구분해 검증했다. 위치와 실행법은 [실행 안내](../../dashboard/README.md#더블클릭으로-실행)에 정리했다.
+
+- 2026-09-06: Recorded the user-approved Studio ownership migration in [ADR-0004](../../docs/adr/ADR-0004-studio-runtime-separation.md). Current documentation now assigns the application backend and launchers to `runtime/`, UI to `dashboard/`, and Studio JavaScript evaluations to `tests/dashboard/`; `llm-wiki-loop` retains only reusable gates through `runtime/wiki_loop_adapter.py`. This record is documentation-only and **not verified yet**. Earlier test counts, fingerprints, commands, and skill-relative paths remain historical observations of the previous layout; verification belongs in the new migration evidence record.
+
+- 2026-09-06: Recorded the user-approved Studio ownership migration in [ADR-0004](../../docs/adr/ADR-0004-studio-runtime-separation.md). Current documentation assigns the application backend and launchers to `runtime/`, UI to `dashboard/`, and Studio JavaScript evaluations to `tests/dashboard/`; `llm-wiki-loop` retains only reusable gates through `runtime/wiki_loop_adapter.py`. This record is documentation-only and **not verified yet**. Earlier test counts, fingerprints, commands, and skill-relative paths remain historical observations of the previous layout; verification belongs in the new migration evidence record.
+
+- 2026-09-06: [ADR-0004](../../docs/adr/ADR-0004-studio-runtime-separation.md)의 소유권 분리를 구현·검증했다. 앱은 `runtime/`·`dashboard/`, JS 검사는 `tests/dashboard/`, 게이트는 독립 루프 스킬에 남는다. Python 402·JavaScript 134 검사와 임시 설치본의 독립 loop CLI, 실제 루트 실행기·브라우저를 확인했다. 게이트 구현 4개·사용자 위키 24개 파일과 대화 2개를 보존했다. 핵심 교훈은 “게이트 호출”과 “앱 소유권”을 혼동하지 않는 것이다. 세부 범위는 [검증 기록](../../docs/evidence/2026-09-06-studio-runtime-separation.md)을 따른다.

@@ -10,7 +10,7 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAVE_SCRIPT = ROOT / ".agents/skills/llm-wiki-loop/scripts/wiki_dashboard_save.py"
+SAVE_SCRIPT = ROOT / "runtime/wiki_dashboard_save.py"
 WORKFLOW_SCRIPT = ROOT / ".agents/skills/llm-wiki-loop/scripts/wiki_workflow.py"
 
 save_spec = importlib.util.spec_from_file_location("dashboard_save_under_test", SAVE_SCRIPT)

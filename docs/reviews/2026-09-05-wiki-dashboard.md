@@ -140,6 +140,6 @@ Pi RPC 제어·위키 완료 판정·파일 접근 경계를 읽기 전용으로
 ## Verification
 
 - [Python 회귀 테스트](../../tests/test_wiki_dashboard.py)
-- [UI 렌더링 계약](../../.agents/skills/llm-wiki-loop/evals/dashboard_ui.test.cjs)
+- Historical UI rendering contract, now located at [tests/dashboard/dashboard_ui.test.cjs](../../tests/dashboard/dashboard_ui.test.cjs)
 - [검증 명령·환경·미검증 범위](../evidence/2026-09-05-wiki-dashboard.md)
 - [다음 작업자 인수인계](../../wiki/decisions/local-wiki-studio.md)

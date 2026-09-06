@@ -7,7 +7,7 @@ superseded_by: N/A
 
 # Roadmap
 
-Keep the public inventory at three skills. Future work should improve a core skill only when tests demonstrate a concrete gap. Do not restore ontology profiles, GUI surfaces, or duplicated root runtimes without an explicit product decision.
+Keep the reusable skill inventory at three skills. Wiki Studio is a repository-owned application in `runtime/` and `dashboard/`, not a fourth installable skill. Future work should improve a core skill or the Studio only when tests demonstrate a concrete gap. Do not restore ontology profiles, duplicated Studio runtimes, or application copies inside skills without an explicit product decision.
 
 Repo Docs SQLite remains lexical and disposable. Do not add vectors, rank fusion,
 a daemon, or another database without a measured retrieval-quality gap. Re-run

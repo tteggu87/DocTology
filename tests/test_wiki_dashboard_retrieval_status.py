@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / ".agents/skills/llm-wiki-loop/scripts/wiki_dashboard_retrieval_status.py"
+SCRIPT = ROOT / "runtime/wiki_dashboard_retrieval_status.py"
 spec = importlib.util.spec_from_file_location("dashboard_retrieval_status_test", SCRIPT)
 status = importlib.util.module_from_spec(spec)
 assert spec and spec.loader

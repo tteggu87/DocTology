@@ -8,12 +8,31 @@
 
 Python 3.11 이상으로 실행합니다. 웹 패키지 설치나 빌드는 필요 없습니다.
 
+### 더블클릭으로 실행
+
+1. 저장소 맨 위에서 macOS는 [Wiki-Studio.command](../Wiki-Studio.command), Windows는 [Wiki-Studio.bat](../Wiki-Studio.bat)를 더블클릭합니다. 이 두 파일은 DocTology 런타임의 실행기로 전달만 합니다. 저장소 전체를 함께 두세요.
+2. Python 버전을 확인한 뒤 로컬 서버를 켜고 기본 브라우저를 엽니다. 처음에는 예시 화면이며, **왼쪽 위 워크스페이스 → 폴더 선택 → 위키 연결하기**로 기존 위키를 연결합니다. 새 위키를 자동 생성하지 않습니다.
+3. 실행 중에는 터미널 창을 유지합니다. 종료할 때 **Ctrl+C**를 누르세요. 진행 중인 작업은 먼저 화면에서 중단하는 편이 좋습니다. 이미 반영된 파일을 되돌리는 기능은 아닙니다.
+
+실행 본체는 DocTology의 [runtime/wiki_dashboard.py](../runtime/wiki_dashboard.py)이고 UI는 루트의 이 `dashboard/` 폴더입니다. 루트 실행 파일은 [runtime/start_dashboard.command](../runtime/start_dashboard.command)와 [runtime/start_dashboard.bat](../runtime/start_dashboard.bat)로 전달합니다. 스킬만 설치해서는 웹 앱이 설치되지 않습니다. DocTology 저장소 전체가 필요하며, 기존 스킬 내부의 앱 경로는 더 이상 사용하지 않습니다.
+
+- **Python이 없거나 너무 오래되면:** 안내를 표시하고 멈춥니다. Python 3.11 이상을 설치하세요. Windows에서는 PATH 등록도 확인합니다. 자동 다운로드·패키지 설치는 하지 않습니다.
+- **Pi가 없으면:** 문서·그래프 탐색은 가능하지만 AI 채팅·원문 작성은 Pi 설치와 인증 후 사용할 수 있습니다. 기본 실행은 위키 미연결이므로 감시나 모델 작업도 시작하지 않습니다. `--repo-root`로 지정한 위키의 기존 opt-in 설정은 기존 서버 동작을 따릅니다.
+- **브라우저가 안 열리면:** 터미널에 출력된 주소를 직접 엽니다. 서버는 계속 실행됩니다. OS 보안 정책이나 기본 브라우저 설정을 바꾸지 않습니다.
+- **4317 포트를 사용 중이면:** 기존 서비스를 건드리지 않고 최대 100개 포트 범위에서 빈 포트를 선택합니다. 실제 주소는 터미널에 표시됩니다. 포트가 바뀌면 브라우저 대화 기록도 별도 공간이 됩니다. 기존 기록은 삭제하지 않지만 자동 이동하지는 않습니다. 이미 실행한 창이 있다면 그 주소를 계속 사용하세요.
+- **특정 Python을 사용하려면:** `WIKI_STUDIO_PYTHON` 환경변수에 실행 파일의 전체 경로를 지정합니다. macOS 실행기는 Homebrew와 흔한 사용자 도구 경로도 확인합니다.
+- **macOS에서 실행 권한이 사라졌으면:** 저장소에서 `chmod +x Wiki-Studio.command`를 실행하거나 `bash Wiki-Studio.command`로 실행합니다. 다운로드 파일의 OS 보안 차단은 자동으로 해제하지 않습니다.
+
+두 실행 파일 모두 인자를 전달합니다. 예: `./Wiki-Studio.command --port 4400 --repo-root "/path/to/wiki"` 또는 Windows의 `Wiki-Studio.bat --port 4400 --repo-root "C:\path\to\wiki"`. 브라우저 열기와 포트 자동 선택을 끄려면 `--no-open-browser --no-auto-port`를 추가합니다.
+
+### 터미널에서 직접 실행
+
 
 ```bash
-python3 .agents/skills/llm-wiki-loop/scripts/wiki_dashboard.py --repo-root /absolute/path/to/wiki
+python3 runtime/wiki_dashboard.py --repo-root /absolute/path/to/wiki
 ```
 
-기본 주소는 `http://127.0.0.1:4317`입니다. 다른 서비스가 사용 중이면 `--port 4318`처럼 다른 포트를 선택하세요. 모델 호출 없이 예시 화면을 보려면 위키 경로 없이 실행합니다. 전역 설치본의 실행 파일은 `~/.codex/skills/llm-wiki-loop/scripts/wiki_dashboard.py`입니다.
+기본 주소는 `http://127.0.0.1:4317`입니다. 다른 서비스가 사용 중이면 `--port 4318`처럼 다른 포트를 선택하세요. 모델 호출 없이 예시 화면을 보려면 위키 경로 없이 실행합니다. 스킬 전역 설치와 이 애플리케이션 실행은 별개입니다.
 
 왼쪽 위 워크스페이스 버튼에서 **폴더 선택…**을 누릅니다. macOS와 Windows에서는 표준 폴더 선택 창을 사용하며, 창 서비스가 없는 제한된 실행 환경에서는 작업실의 클릭형 폴더 선택기로 전환합니다. **작업실에서 폴더 찾기**로 바로 탐색할 수도 있습니다. 상위 폴더와 하위 폴더를 클릭한 뒤 **이 폴더 선택**을 누르면 경로가 채워집니다. 마지막 **위키 연결하기**는 기존 구조 검사와 실행 중 전환 제한을 그대로 거칩니다. 경로 직접 입력도 보조 옵션으로 남습니다.
 
@@ -24,7 +43,7 @@ python3 .agents/skills/llm-wiki-loop/scripts/wiki_dashboard.py --repo-root /abso
 
 연결 후 왼쪽 위에 **로컬 위키** 또는 **프로젝트 문서 · 읽기 전용**이 표시됩니다. 원문 작업이 필요하지만 읽기 모드로 열리면 `wiki_loop.py --repo-root /absolute/path/to/wiki preflight`로 부족한 요건을 확인하세요.
 
-연결은 새 위키를 만드는 동작이 아닙니다. 새 위키의 폴더 구조는 [llm-wiki-bootstrap](../../llm-wiki-bootstrap/SKILL.md)으로 먼저 생성합니다. 사전 검사와 기존 합성·인증 게이트의 자세한 계약은 [loop 스킬](../SKILL.md)을 따릅니다. 이 안내는 Pi가 설치·인증된 환경을 전제로 하며 실제 운영 검증 환경은 macOS입니다.
+연결은 새 위키를 만드는 동작이 아닙니다. 새 위키의 폴더 구조는 [llm-wiki-bootstrap](../.agents/skills/llm-wiki-bootstrap/SKILL.md)으로 먼저 생성합니다. 사전 검사와 기존 합성·인증 게이트의 자세한 계약은 [loop 스킬](../.agents/skills/llm-wiki-loop/SKILL.md)을 따릅니다. 이 안내는 Pi가 설치·인증된 환경을 전제로 하며 실제 운영 검증 환경은 macOS입니다.
 
 ## 대화에서 근거까지
 
@@ -67,7 +86,7 @@ Wiki Studio의 연결된 워크스페이스 폴더 아래 **SQLite / ONNX** 표�
 
 Pi의 ChatGPT 구독 연결은 Pi의 공식 OpenAI Codex 로그인으로 설정합니다. 대시보드가 계정 비밀번호나 API 키를 입력받지는 않습니다. 실행 파일을 발견했다는 표시와 모델 인증·응답 성공은 다릅니다.
 
-채팅은 기본 파일·셸 도구, 확장·스킬 자동 탐색과 컨텍스트 파일 로딩을 끈 별도 Pi 프로세스입니다. 스킬이 소유한 읽기 전용 확장 하나만 명시적으로 로드하고, 작업별 토큰을 가진 localhost 브리지가 준비된 뒤에 질문을 보냅니다. 확장을 초기화하지 못하면 실패를 알리며 도구 없는 답변으로 대체하지 않습니다. 모델에는 연결된 위키·프로젝트의 승인된 문서만 읽는 네 도구를 제공하고 범용 셸·파일 쓰기·외부 웹 접근 도구는 제공하지 않습니다. 채팅은 대상 파일이나 실행 원장을 쓰지 않습니다. 서버의 채팅 상태는 메모리에 있고 재시작하면 사라집니다. 일시적인 상태 조회 실패는 실행 ID와 중단 버튼을 유지한 채 재연결하며, 실패를 곧바로 모델 종료로 취급하지 않습니다.
+채팅은 기본 파일·셸 도구, 확장·스킬 자동 탐색과 컨텍스트 파일 로딩을 끈 별도 Pi 프로세스입니다. DocTology 런타임이 소유한 읽기 전용 확장 하나만 명시적으로 로드하고, 작업별 토큰을 가진 localhost 브리지가 준비된 뒤에 질문을 보냅니다. 확장을 초기화하지 못하면 실패를 알리며 도구 없는 답변으로 대체하지 않습니다. 모델에는 연결된 위키·프로젝트의 승인된 문서만 읽는 네 도구를 제공하고 범용 셸·파일 쓰기·외부 웹 접근 도구는 제공하지 않습니다. 채팅은 대상 파일이나 실행 원장을 쓰지 않습니다. 서버의 채팅 상태는 메모리에 있고 재시작하면 사라집니다. 일시적인 상태 조회 실패는 실행 ID와 중단 버튼을 유지한 채 재연결하며, 실패를 곧바로 모델 종료로 취급하지 않습니다.
 
 대화 기록과 인용 발췌는 이 브라우저의 로컬 저장소에 워크스페이스별로 보관합니다. **지우기**는 현재 워크스페이스의 브라우저 기록만 삭제합니다. 이는 그 자체로 위키 저장·인증이 아니며 다른 기기로 동기화되지 않습니다. 아래의 명시적 **대화를 위키 원문으로 저장** 절차만 예외적으로 원문과 작업 대기열을 만듭니다.
 
@@ -152,13 +171,13 @@ seal만이 완료 권한을 가집니다. apply 또는 stale 상태의 배치는
 
 ## 소유권과 검증 범위
 
-`dashboard/` UI와 `scripts/wiki_dashboard*` 서버·실행 모듈은 모두 `llm-wiki-loop` 스킬이 소유합니다. 생성한 위키에는 이 실행 파일이나 UI를 복사하지 않습니다. 합성 작업의 연결 메타데이터와 세션은 대상 위키의 `state/dashboard_jobs/`, 감시 설정·기준선·대기열은 `state/dashboard_automation/`에 남지만 기존 source run과 batch 게이트를 대체하는 완료 원장은 아닙니다.
+루트의 `dashboard/` UI와 `runtime/` 서버·실행 모듈은 DocTology 본체가 소유합니다. `runtime/wiki_loop_adapter.py`가 루프 스킬의 위치와 기존 게이트 구현을 연결하며, 스킬은 대시보드를 import하거나 포함하지 않습니다. 생성한 위키에는 이 실행 파일이나 UI를 복사하지 않습니다. 합성 작업의 연결 메타데이터와 세션은 대상 위키의 `state/dashboard_jobs/`, 감시 설정·기준선·대기열은 `state/dashboard_automation/`에 남지만 기존 source run과 batch 게이트를 대체하는 완료 원장은 아닙니다.
 
 localhost 바인딩, Host·Origin·세션 토큰 검사, 문서 목록과 경로 제한을 사용합니다. 공개 호스팅이나 다중 사용자 서비스는 지원하지 않습니다. 상태 화면은 약 2.5초마다 갱신하고 원문 상태 스냅샷은 최대 4초 캐시합니다. 대규모 위키 성능은 별도 측정이 필요합니다.
 
 ```bash
 python3 -m unittest discover -s tests -p "test_wiki_dashboard*.py"
-node --test .agents/skills/llm-wiki-loop/evals/*.test.cjs
+node --test tests/dashboard/*.test.cjs
 ```
 
 Python 테스트는 임시 위키·HTTP 서버·제어 가능한 RPC 프로세스를 사용합니다. JavaScript 테스트는 렌더링·상태 계약을 검사하며 실제 브라우저나 모델 품질 검증을 대신하지 않습니다. 실제 모델 호출과 브라우저 검증의 결과는 각 실행 환경에서 별도로 기록해야 합니다.
@@ -169,18 +188,19 @@ Python 테스트는 임시 위키·HTTP 서버·제어 가능한 RPC 프로세�
 
 | 변경할 내용 | 소유 모듈 |
 |---|---|
-| 서버 조립, 워크스페이스 전환, 채팅·쓰기 프로세스 수명 | [wiki_dashboard.py](../scripts/wiki_dashboard.py) |
-| 문서 목록, 링크·근거, 문자열 후보, 기존 게이트 기반 스냅샷 | [wiki_dashboard_documents.py](../scripts/wiki_dashboard_documents.py)의 `DocumentCatalog` |
-| OS 선택 창과 제한된 폴더 탐색 | [wiki_dashboard_folders.py](../scripts/wiki_dashboard_folders.py) |
-| HTTP, 인증 검사, 상태 코드, 정적 파일 제공 | [wiki_dashboard_http.py](../scripts/wiki_dashboard_http.py) |
-| SQLite·ONNX 읽기 전용 진단 | [wiki_dashboard_retrieval_status.py](../scripts/wiki_dashboard_retrieval_status.py) |
+| 루프 스킬 위치와 기존 게이트 연결 | [wiki_loop_adapter.py](../runtime/wiki_loop_adapter.py) |
+| 서버 조립, 워크스페이스 전환, 채팅·쓰기 프로세스 수명 | [wiki_dashboard.py](../runtime/wiki_dashboard.py) |
+| 문서 목록, 링크·근거, 문자열 후보, 기존 게이트 기반 스냅샷 | [wiki_dashboard_documents.py](../runtime/wiki_dashboard_documents.py)의 `DocumentCatalog` |
+| OS 선택 창과 제한된 폴더 탐색 | [wiki_dashboard_folders.py](../runtime/wiki_dashboard_folders.py) |
+| HTTP, 인증 검사, 상태 코드, 정적 파일 제공 | [wiki_dashboard_http.py](../runtime/wiki_dashboard_http.py) |
+| SQLite·ONNX 읽기 전용 진단 | [wiki_dashboard_retrieval_status.py](../runtime/wiki_dashboard_retrieval_status.py) |
 | 브라우저 상태·저장소, 비동기 요청·취소·오래된 응답 방어, 이벤트 연결 | [app.js](app.js) |
 | 대화 직렬화·검증 | [history-codec.js](modules/history-codec.js) |
 | 검색 호출 구성과 상태 표시 | [retrieval-usage.js](modules/retrieval-usage.js), [retrieval-status.js](modules/retrieval-status.js) |
 | 안전한 Markdown·인용 렌더링 | [markdown.js](modules/markdown.js) |
 | 그래프 배치·인용 경로·표시 | [graph.js](modules/graph.js) |
 
-문서 카탈로그는 서버 조립부가 `wiki_loop.py`에서 읽은 `workflow`와 `wiki_batch`를 생성자로 받습니다. 완료 판정을 새로 구현하거나 서버 전체를 다시 import하지 않습니다. 기존 Python 호출자는 `wiki_dashboard.py`의 호환 별칭을 계속 사용할 수 있습니다.
+문서 카탈로그는 서버 조립부가 `wiki_loop_adapter.py`를 통해 루프 스킬에서 읽은 `workflow`와 `wiki_batch`를 생성자로 받습니다. 완료 판정을 새로 구현하거나 서버 전체를 다시 import하지 않습니다. 기존 Python 호출자는 `wiki_dashboard.py`의 호환 별칭을 계속 사용할 수 있습니다.
 
 프런트엔드 모듈은 내부 조립용 `WikiStudioModules`에 팩토리만 등록합니다. 이는 외부 플러그인 API가 아닙니다. 입력 데이터·정책 한도·필요한 함수는 명시적으로 전달하고, 앱 전역 변수나 브라우저 저장소를 직접 참조하지 않습니다. 변경 가능한 앱 상태와 요청 세대 번호는 `app.js`에 남습니다.
 

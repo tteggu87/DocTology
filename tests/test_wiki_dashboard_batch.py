@@ -16,7 +16,8 @@ from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / ".agents" / "skills" / "llm-wiki-loop" / "scripts"
+GATE_SCRIPTS = ROOT / ".agents" / "skills" / "llm-wiki-loop" / "scripts"
+RUNTIME = ROOT / "runtime"
 
 
 def load(name, path):
@@ -27,10 +28,10 @@ def load(name, path):
     return module
 
 
-workflow = load("wiki_workflow_for_dashboard_batch", SCRIPTS / "wiki_workflow.py")
-batch = load("wiki_batch_for_dashboard_batch", SCRIPTS / "wiki_batch.py")
-chat_tools = load("wiki_chat_tools_for_dashboard_batch", SCRIPTS / "wiki_dashboard_chat_tools.py")
-supervisor = load("wiki_dashboard_batch_under_test", SCRIPTS / "wiki_dashboard_batch.py")
+workflow = load("wiki_workflow_for_dashboard_batch", GATE_SCRIPTS / "wiki_workflow.py")
+batch = load("wiki_batch_for_dashboard_batch", GATE_SCRIPTS / "wiki_batch.py")
+chat_tools = load("wiki_chat_tools_for_dashboard_batch", RUNTIME / "wiki_dashboard_chat_tools.py")
+supervisor = load("wiki_dashboard_batch_under_test", RUNTIME / "wiki_dashboard_batch.py")
 
 
 FAKE_PI = r'''import json,os,re,sys,time

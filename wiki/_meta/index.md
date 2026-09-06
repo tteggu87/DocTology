@@ -13,7 +13,9 @@ This wiki is derived repository memory. It contains no personal corpus and does 
 
 Current structural evidence is indexed from the [documentation portal](../../docs/README.md); this repository keeps the reusable SQLite absorption record canonical under `docs/evidence/` rather than duplicating it as an ignored local analysis page.
 
-Current decision memory includes [LLM Wiki loop runtime ownership](../decisions/loop-runtime-ownership.md), backed by [ADR-0001](../../docs/adr/ADR-0001-loop-runtime-ownership.md).
+Current decision memory includes  [LLM Wiki loop runtime ownership](../decisions/loop-runtime-ownership.md), backed by [ADR-0001](../../docs/adr/ADR-0001-loop-runtime-ownership.md).
+
+Current Studio ownership is [ADR-0004](../../docs/adr/ADR-0004-studio-runtime-separation.md): repository `runtime/` and `dashboard/` own the approved application layout, while the three skills remain reusable. Verification is pending.
 
 ## Wiki Studio 작업 이어받기
 

@@ -10,7 +10,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / ".agents/skills/llm-wiki-loop/scripts"
+SCRIPTS = ROOT / "runtime"
 
 
 def load(name, path):

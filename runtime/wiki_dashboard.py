@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Loop-owned localhost dashboard. Markdown and existing gates remain authoritative."""
+"""DocTology localhost runtime. Markdown and skill-owned gates remain authoritative."""
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import importlib.util
 import json
@@ -17,15 +18,11 @@ import sys
 import threading
 import time
 import unicodedata
+import webbrowser
 from http.server import ThreadingHTTPServer
 
 HERE = Path(__file__).resolve().parent
 ASSETS = HERE.parent / "dashboard"
-spec = importlib.util.spec_from_file_location("dashboard_loop", HERE / "wiki_loop.py")
-loop = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(loop)
-workflow = loop.workflow
-batch = loop.load_sibling("wiki_batch")
 
 
 def load_dashboard_module(name):
@@ -34,6 +31,12 @@ def load_dashboard_module(name):
     sys.modules[name] = module
     module_spec.loader.exec_module(module)
     return module
+
+
+loop_adapter = load_dashboard_module("wiki_loop_adapter")
+loop, workflow, batch = loop_adapter.loop, loop_adapter.workflow, loop_adapter.batch
+LOOP_SKILL = loop_adapter.SKILL_ROOT
+LOOP_ENTRYPOINT = loop_adapter.ENTRYPOINT
 
 
 automation_module = load_dashboard_module("wiki_dashboard_automation")
@@ -773,8 +776,8 @@ class Dashboard:
             session_dir = inside(self.root, "state/dashboard_jobs/sessions")
             instructions = (
                 f"You are the semantic owner for this requested LLM Wiki task. Target vault: {self.root}. "
-                f"Read {HERE.parent / 'SKILL.md'} and target AGENTS.md first. "
-                f"Use only {json.dumps(sys.executable)} {json.dumps(str(HERE / 'wiki_loop.py'))} "
+                f"Read {loop_adapter.CONTRACT} and target AGENTS.md first. "
+                f"Use only {json.dumps(sys.executable)} {json.dumps(str(LOOP_ENTRYPOINT))} "
                 f"--repo-root {json.dumps(str(self.root))} for gates. "
                 "Preserve raw source bytes. Full coverage is required. Inspect existing source runs and batch status "
                 "before starting or resuming. For multiple sources use one-writer snapshot seal. "
@@ -812,7 +815,7 @@ class Dashboard:
                         "Inspect batch status after interruptions; never apply twice or bypass stale/structural gates. "
                         "Only the representative-question file may be published before planning by the host; worker drafts are not canonical. "
                         "Never use a second framework or change skills, gates, AGENTS.md, or policy.\n\n"
-                        "<trusted-loop-contract>\n" + (HERE.parent / "SKILL.md").read_text(encoding="utf-8") +
+                        "<trusted-loop-contract>\n" + loop_adapter.CONTRACT.read_text(encoding="utf-8") +
                         "\n</trusted-loop-contract>"
                     )
                 if resume is not None:
@@ -830,7 +833,7 @@ class Dashboard:
                             "\n</frozen-prepare-arguments>"
                         )
                 command = [*self.pi_command, "--mode", "rpc", "--no-extensions", "--no-prompt-templates",
-                           "--no-skills", "--skill", str(HERE.parent), "--session-dir", str(session_dir),
+                           "--no-skills", "--skill", str(LOOP_SKILL), "--session-dir", str(session_dir),
                            *extension_args, "--append-system-prompt", instructions]
                 if model:
                     command.extend(["--model", model])
@@ -1102,19 +1105,58 @@ Handler = http_module.make_handler(
 )
 
 
-def main():
+def dashboard_server(app, port, *, auto_port=False):
+    """Bind localhost only. Never terminate or attach to an occupied service."""
+    if not 0 <= port <= 65535:
+        raise ValueError("port must be between 0 and 65535")
+    last_port = min(65535, port + 99) if auto_port and port else port
+    for candidate in range(port, last_port + 1):
+        try:
+            server = ThreadingHTTPServer(("127.0.0.1", candidate), Handler)
+        except OSError as exc:
+            if exc.errno != errno.EADDRINUSE or candidate == last_port:
+                raise
+            continue
+        server.app = app
+        return server
+
+
+def open_dashboard_browser(url):
+    """Desktop integration is optional; a browser failure must not stop HTTP."""
+    try:
+        opened = webbrowser.open(url, new=2)
+    except Exception:
+        opened = False
+    if not opened:
+        print(f"Could not open the browser automatically. Open this URL: {url}", flush=True)
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, help="Existing generated wiki; omit for clearly labelled example")
     parser.add_argument("--port", type=int, default=4317)
     parser.add_argument("--chat-model", default="", help="Default model for chat requests that omit model")
     parser.add_argument("--chat-agent-dir", type=Path, help="Pi agent directory override used only by chat subprocesses")
-    args = parser.parse_args()
+    parser.add_argument("--open-browser", action=argparse.BooleanOptionalAction, default=False,
+                        help="Open the default browser after the local server binds")
+    parser.add_argument("--auto-port", action=argparse.BooleanOptionalAction, default=False,
+                        help="Try up to 100 ports if the requested port is occupied")
+    args = parser.parse_args(argv)
+    if not 0 <= args.port <= 65535:
+        parser.error("--port must be between 0 and 65535")
     app = Dashboard(args.repo_root, chat_model=args.chat_model, chat_agent_dir=args.chat_agent_dir)
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-    server.app = app
-    app.automation.start_worker()
-    print(f"DocTology local dashboard: http://127.0.0.1:{server.server_port}", flush=True)
+    server = dashboard_server(app, args.port, auto_port=args.auto_port)
+    url = f"http://127.0.0.1:{server.server_port}/"
+    if args.port and server.server_port != args.port:
+        print(f"Port {args.port} is occupied; using {server.server_port}. Existing services were not changed.", flush=True)
+        print("Browser history is separate for each port; previous history is not deleted.", flush=True)
+    print(f"DocTology local dashboard: {url}", flush=True)
+    print("Keep this terminal open. Press Ctrl+C here to stop Wiki Studio.", flush=True)
     try:
+        app.automation.start_worker()
+        if args.open_browser:
+            opener = threading.Thread(target=open_dashboard_browser, args=(url,), daemon=True)
+            opener.start()
         server.serve_forever()
     except KeyboardInterrupt:
         pass
