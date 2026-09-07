@@ -25,7 +25,7 @@ receipt, seal, and certification gates. `runtime/wiki_loop_adapter.py` resolves
 the repository loop skill root and calls that existing runtime against a target
 vault. It does not reimplement gates or create another completion ledger.
 
-The Studio runtime serves the repository-owned UI on localhost. Its default chat
+The Studio runtime serves the repository-owned UI on localhost. Its wiki-reading chat
 extension remains limited to root- and inventory-bound `wiki_list`,
 `wiki_search`, `wiki_read`, and `wiki_links` reads; shell, write, external-web,
 and ambient extension tools remain disabled. The existing loopback handshake,

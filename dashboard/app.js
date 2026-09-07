@@ -196,7 +196,8 @@ function isRunning() { return ['running','starting','stopping'].includes(state?.
 function isProject() { return state?.mode === 'project'; }
 function storageKey(root) { return `doctology.wiki-studio.chat.v2:${String(root || '__example__')}`; }
 function storageAvailable() { return typeof localStorage !== 'undefined'; }
-function makeConversation() { return {id:`local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title:'새 대화',createdAt:Date.now(),updatedAt:Date.now(),messages:[],saves:[],job:null,error:''}; }
+function defaultChatEngine() { return state?.nativePiAvailable===true?'native':'wiki'; }
+function makeConversation(engine=defaultChatEngine()) { return {engine,id:`local-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,title:'새 대화',createdAt:Date.now(),updatedAt:Date.now(),messages:[],saves:[],job:null,error:''}; }
 function currentConversation() { return conversations.find(conversation => conversation.id === activeConversationId) || null; }
 function storageNotice(message) {
   if (historyStorageNotice !== message) toast(message);
@@ -257,9 +258,9 @@ function guardChatNavigation() {
   toast('응답 생성이 끝나거나 중단된 뒤 대화를 변경할 수 있습니다.');
   return false;
 }
-function newConversation(engine=currentConversation()?.engine==='native'?'native':'wiki') {
+function newConversation(engine=currentConversation()?.engine||defaultChatEngine()) {
   if (!guardChatNavigation()) return false;
-  const conversation = makeConversation();
+  const conversation = makeConversation(engine);
   if(engine==='native'){
     if(!state?.nativePiAvailable){toast('작업용 위키를 연결하고 Pi 설치·인증을 확인하세요.');return false;}
     conversation.engine='native';
@@ -528,11 +529,11 @@ function chatDisclosureKey(detail) {
   return `${owner?.dataset?.answerIndex ?? 'pending'}:${detail.classList.contains('candidate-box')?'candidates':'tools'}`;
 }
 function renderChat() {
+  const conversation = ensureConversation();
   renderNativeControls();
   renderNativeInteraction();
   renderRetrievalStatus();
   const container = $('#chat-messages');
-  const conversation = ensureConversation();
   const ownerKey=`${historyRoot}:${conversation.id}`;
   const openDisclosures=new Set(renderedChatOwner===ownerKey ? [...container.querySelectorAll('details[open]')].map(chatDisclosureKey) : []);
   renderedChatOwner=ownerKey;

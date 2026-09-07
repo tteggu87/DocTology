@@ -1561,3 +1561,20 @@ test('clipboard denial opens selected-text fallback without claiming success',as
   c.run("ensureConversation().messages=[{role:'assistant',content:'복사할 원문'}];");
   await c.run('copyAnswer(0)');assert.equal(c.element('#answer-copy-dialog').open,true);assert.equal(c.element('#answer-copy-text').value,'복사할 원문');
 });
+
+test('fresh eligible workspaces default to native while explicit wiki choice survives reload',async()=>{
+  const c=context();
+  c.run("state.demo=false;state.nativePiAvailable=true;conversations=[];activeConversationId='';renderChat();");
+  assert.equal(c.run('currentConversation().engine'),'native');
+  assert.match(c.element('#chat-mode-button').textContent,/Pi 기본 대화/);
+  await c.run("selectChatMode('wiki');saveHistory();loadHistoryForRoot(state.root);newConversation();");
+  assert.equal(c.run('currentConversation().engine'),'wiki');
+});
+test('legacy conversations stay unchanged but new defaults are native, with project fallback',()=>{
+  const c=context();
+  c.run("state.nativePiAvailable=true;conversations=[{id:'legacy',messages:[{role:'assistant',content:'old answer'}]}];activeConversationId='legacy';");
+  assert.equal(c.run('ensureConversation().engine'),undefined);
+  c.run('newConversation()');assert.equal(c.run('currentConversation().engine'),'native');
+  c.run("state.nativePiAvailable=false;state.mode='project';conversations=[];activeConversationId='';renderChat();");
+  assert.equal(c.run('currentConversation().engine'),'wiki');
+});
