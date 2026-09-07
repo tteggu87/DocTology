@@ -53,3 +53,5 @@ cached graph. Keys cover actual dependency file identities, resolved symlink
 targets and the procedure contract; consumer copies isolate cached values.
 The dashboard still computes outside its main lock and atomically publishes
 only a current root/revision. Exact gate code remains in the loop skill.
+
+The opt-in native path lives in `runtime/wiki_dashboard_native.py` and `dashboard/modules/native-pi.js`. It uses the native Pi RPC process and transcript instead of the four-tool chat bridge. The server owns conversation/turn identity, a thin derived registry and the live-session writer lease; the UI owns bounded activity cards and interaction controls. See [native operation](../../dashboard/README.md#pi-기본-세션-사용하기--실험).

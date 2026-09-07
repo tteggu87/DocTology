@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-09-06
+last_updated: 2026-09-07
 superseded_by: N/A
 ---
 
@@ -30,12 +30,11 @@ copied into the target vault.
 
 The optional Studio paths remain separate:
 
-`chat + bounded history -> authenticated loopback handshake -> isolated Pi RPC + four inventory reads -> actual-read citation subset -> browser history + graph highlighting`
+`default wiki chat + bounded history -> authenticated loopback handshake -> isolated Pi RPC + four inventory reads -> actual-read citation subset -> browser history + graph highlighting`
 
 `wiki-work request -> Studio runtime -> Pi RPC -> loop adapter -> reusable loop gates -> target raw/wiki/state`
 
 `opt-in watched Markdown or approved conversation -> immutable/raw-bound queue item -> existing full loop -> current gate-derived status`
 
-Chat remains read-only. The Studio has no shell, write, network, or equivalent
-terminal capability in its chat extension. Process records remain operational
+The default wiki chat remains read-only; its extension has no shell, write, network, or equivalent terminal capability. The opt-in native path is `conversation/turn ID -> persistent Pi RPC + native transcript -> generic activity and interaction UI`. It may write files, holds the existing writer lease for the live session, and resumes only server-recorded sessions. See [native operation](../../dashboard/README.md#pi-기본-세션-사용하기--실험). Process records remain operational
 state, never a completion ledger. The [migration evidence](../evidence/2026-09-06-studio-runtime-separation.md) verifies the moved paths and preserved boundaries; earlier evidence retains the former skill-owned layout.

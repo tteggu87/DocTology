@@ -1,0 +1,28 @@
+# Native Pi RPC: first complete Studio slice
+
+Weight: full. Provisional version kind: minor/new user capability; v1.1.0 is a casebook label only, not a package or release bump.
+
+Understood as: implement the previously reviewed small native-Pi session slice inside the existing Studio UI, drive it with real Pi and browser evidence, and preserve the current default until Windows and cutover gates are satisfied.
+
+Thesis: Pi owns reasoning, tool selection, native context/history and compaction. Studio owns display, session/turn routing and user controls. Preserve the existing UI and exact wiki completion gates instead of rebuilding another agent.
+
+Scope: an explicit experimental native-Pi option behind a launch flag; one active native conversation session at a time per Studio; repeated turns reuse the same live RPC process and native session; generic tool start/update/end cards; native context/cache statistics when reported; user interaction requests; stop, explicit session close and resume from server-owned native session metadata. Existing wiki read-only mode remains available and the default.
+
+Non-goals: default cutover, wholesale agent/UI replacement, new retrieval/vector stack, importing arbitrary terminal sessions, universal provenance extraction from bash, universal TUI extension compatibility, same-prose/cache-hit guarantees, and claiming a Windows test from macOS evidence.
+
+Decision boundaries: native mode can write like terminal Pi and must be labelled accordingly; native turns/session cannot overlap Studio-managed canonical writers. The native session holds the existing writer lease while live; this is cooperative serialization, not a sandbox. Closing or switching must finish owned-process cleanup before releasing that lease. Uncertain accepted requests are never automatically replayed. Pi native session files are authoritative; Studio registry/UI projections are derived and do not replace native history. Existing browser-only history remains readable. Native output never inherits the old verified-numbered-citation claim without evidence. No target-vault application files are installed.
+
+G1 Native identity: use the installed Pi CLI RPC with native resources/tools enabled, preserving requested/default model and cwd. No four-tool replacement bridge or replayed 12-message history in native mode.
+G2 Conversation continuity: one conversation keeps one live Pi/session across at least three user turns; prior native tool results remain available without client text-history reconstruction. An explicit resume uses only a server-recorded native session file bound to the same root/conversation.
+G3 Lifecycle: prompt acceptance differs from completion; agent_settled closes a turn, not the process. Browser reconnect does not resend. Same request ID is idempotent; conflicting reuse is rejected. Interrupted/uncertain turns are surfaced, not auto-replayed. Abort and explicit close are distinct.
+G4 Ownership: root/conversation IDs and session records are validated; only one active native turn; native session and Studio writers exclude one another via existing writer claim. Root switch and cleanup cannot expose old-root events. Unmanaged external writers are outside the lease guarantee.
+G5 Real UI: existing chat layout streams native text and generic tool cards; native-mode history metadata survives reload. Unknown FTS/vector/link classification stays unknown. Default wiki mode regressions pass.
+G6 Interaction: supported native confirm/select/input/editor requests receive explicit user responses or cancellation; unsupported interaction fails visibly rather than hanging. Process errors and protocol errors are bounded and actionable.
+G7 Observability/privacy: native model/session/context/cache usage comes from RPC where available; absent values stay unknown. Do not expose hidden reasoning, credentials, unbounded outputs or claim Studio masking sanitizes Pi's own session files. Explain native session storage instead of browser-only persistence.
+G8 Wiki authority: a Pi answer/process end is not canonical source/batch certification. Existing workflow gates and three-skill distribution remain unchanged.
+G9 Documentation reflection: this repo uses AGENTS.md, not CLAUDE.md. Internal ownership/rules belong in AGENTS.md and current architecture/module docs; user-visible native option, lifecycle and storage belong in dashboard/README.md and root README where relevant. Reflect this local convention instead of creating redundant CLAUDE.md. Maintain wiki/_meta/log.md and warning-free Repo Docs validation.
+G10 Proof: focused lifecycle/negative tests and full Python/JS/skill/docs checks; real HTTP/browser and native Pi three-turn run on a disposable vault. Preserve raw evidence and failures in this casebook. Windows terminal-versus-RPC comparison with matching version/model/thinking/resources is a separate cutover gate; do not mark it passed without Windows execution.
+
+Sizing: recommended_tier frontier; recommended_effort thorough. Rationale: session lifetime, native write authority, subprocess protocol and existing UI boundaries cross. Move up if ownership/recovery cannot be explained or reproduced; move down to standard/measured for mechanical UI/docs once contracts pass. This is advisory; provider/model configuration is unchanged. Proof is the real native/browser surface plus negative lifecycle checks regardless of tier.
+
+Pre-mortem: hidden extension dialog stalls => explicit UI request lane; root/history/accepted-request confusion => server-owned identity and no automatic replay; native privileges race writers => explicit mode and conservative session lease, with existing gate authority.

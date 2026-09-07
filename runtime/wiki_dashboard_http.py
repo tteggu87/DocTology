@@ -100,6 +100,8 @@ def make_handler(*, asset_root, document_payload, chat_not_found_error,
                         return self.reply(app.connection_status(parse_qs(url.query).get('id', [''])[0]))
                     except ValueError as exc:
                         return self.reply({'error':str(exc),'code':'connection_not_found'},404)
+                if url.path == '/api/native-chat':
+                    return self.reply(app.native_status(parse_qs(url.query).get('id', [''])[0]))
                 if url.path == '/api/chat':
                     job_id = parse_qs(url.query).get('id', [''])[0]
                     return self.reply(app.chat_status(job_id))

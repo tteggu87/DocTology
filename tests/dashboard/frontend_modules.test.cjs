@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const assets = path.join(__dirname, '../../dashboard');
-const moduleFiles = ['modules/retrieval-usage.js','modules/history-codec.js','modules/markdown.js','modules/graph.js','modules/retrieval-status.js'];
+const moduleFiles = ['modules/retrieval-usage.js','modules/history-codec.js','modules/markdown.js','modules/graph.js','modules/retrieval-status.js','modules/native-pi.js'];
 
 function moduleContext() {
   const sandbox = vm.createContext({console,URL,TextEncoder});
@@ -16,7 +16,7 @@ test('frontend factories load without app or DOM globals',()=>{
   const sandbox=moduleContext();
   assert.equal('document' in sandbox,false);
   assert.equal('state' in sandbox,false);
-  assert.deepEqual(Object.keys(sandbox.WikiStudioModules).sort(),['createGraphTools','createHistoryCodec','createMarkdownRenderer','createRetrievalStatusTools','createRetrievalUsage']);
+  assert.deepEqual(Object.keys(sandbox.WikiStudioModules).sort(),['createGraphTools','createHistoryCodec','createMarkdownRenderer','createNativePiTools','createRetrievalStatusTools','createRetrievalUsage']);
   const usage=sandbox.WikiStudioModules.createRetrievalUsage({escapeHTML:value=>String(value)});
   assert.equal(usage.normalize({version:1,basis:'successful_discovery_calls',counts:{grep:2,fts:1,wikilinks:0,vector:0},listCalls:1,readCalls:1,unsupported:['wikilinks','vector']}).counts.grep,2);
   const graph=sandbox.WikiStudioModules.createGraphTools({escapeHTML:value=>String(value)});

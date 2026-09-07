@@ -9,160 +9,56 @@ superseded_by: N/A
 
 ## Changed
 
-- 2026-09-07: Enlarged Full HD desktop typography and coordinated sidebar,
-  composer, and document widths. Compact layouts retain their defaults.
-- 2026-09-07: Kept Pi onboarding as static manual preparation help. The user
-  rejected the extra management layer, so its unpublished runtime adapter,
-  setup APIs, model preferences, and terminal launcher were removed. Existing
-  backend invocation, authentication, and model-override behavior is unchanged.
-  Missing-wiki and missing-Pi guidance are distinct. See
-  [verification](evidence/2026-09-07-pi-setup.md).
+The opt-in `--native-pi` path keeps Pi's native process, tools and transcript across turns inside the existing Studio UI. Runtime owns session/turn identity, durable request receipts, native interaction forwarding and the existing writer lease for the live session. The UI displays native tools and reported statistics without verified-citation claims. See [operation and storage](../dashboard/README.md#pi-기본-세션-사용하기--실험).
 
-- 2026-09-07: Windows native selection starts at This PC; the in-app fallback
-  lists all assigned drive letters without probing unavailable media. UI labels,
-  cross-drive regressions, and the Windows usage guide were updated.
-  See [verification](evidence/2026-09-07-windows-folder-picker.md). Runtime ownership,
-  ingest gates, authentication, and reusable skill distribution are unchanged.
-
-- Moved the application from the loop skill into repository-owned runtime/ and dashboard/, with JavaScript evaluations under tests/dashboard/. No compatibility application copies remain in the skill.
-- Added the one-way wiki_loop_adapter.py binding. Runtime extensions stay in runtime/; Pi still receives the actual loop skill and gate entrypoint. Procedure and completion authority were not duplicated.
-- Root macOS/Windows entry files forward to runtime-owned launchers. The pending desktop launcher work includes version checks, optional browser opening, bounded port selection, and native line-ending rules.
-- Updated the loop skill's guidance, AGENTS, current architecture, repo maps, ADR-0004, and the sourced wiki handoff. ADR-0002 is historical; its original locations and fingerprints are not presented as current runtime paths.
-- Refreshed this current impact summary rather than retaining obsolete claims that AGENTS and application ownership were unchanged. Earlier feature history remains in Git, the wiki log, and its evidence records.
+Current architecture, maps and usage distinguish default read-only chat from native file-changing sessions. Lifecycle regressions preserve delayed-turn cleanup and canceled-start ownership failures found in review. The local cycle casebook records proof and next gates.
 
 ### Files
 
-- `docs/evidence/2026-09-07-pi-setup.md`
-
-- `docs/evidence/2026-09-07-windows-folder-picker.md`
-
-The list includes removed source paths and their new destinations relative to the current Git baseline.
-
-- `.agents/skills/llm-wiki-loop/SKILL.md`
-- `.agents/skills/llm-wiki-loop/dashboard/README.md`
-- `.agents/skills/llm-wiki-loop/dashboard/app.js`
-- `.agents/skills/llm-wiki-loop/dashboard/boot.js`
-- `.agents/skills/llm-wiki-loop/dashboard/example.json`
-- `.agents/skills/llm-wiki-loop/dashboard/index.html`
-- `.agents/skills/llm-wiki-loop/dashboard/modules/graph.js`
-- `.agents/skills/llm-wiki-loop/dashboard/modules/history-codec.js`
-- `.agents/skills/llm-wiki-loop/dashboard/modules/markdown.js`
-- `.agents/skills/llm-wiki-loop/dashboard/modules/retrieval-status.js`
-- `.agents/skills/llm-wiki-loop/dashboard/modules/retrieval-usage.js`
-- `.agents/skills/llm-wiki-loop/dashboard/style.css`
-- `.agents/skills/llm-wiki-loop/evals/batch_extension.test.cjs`
-- `.agents/skills/llm-wiki-loop/evals/chat_extension.test.cjs`
-- `.agents/skills/llm-wiki-loop/evals/dashboard_ui.test.cjs`
-- `.agents/skills/llm-wiki-loop/evals/frontend_modules.test.cjs`
-- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard.py`
-- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_automation.py`
-- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_batch.py`
-- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_batch_extension.mjs`
-- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_batch_tools.py`
-- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_chat_extension.mjs`
-- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_chat_tools.py`
-- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_documents.py`
-- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_folders.py`
-- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_http.py`
-- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_retrieval_status.py`
-- `.agents/skills/llm-wiki-loop/scripts/wiki_dashboard_save.py`
-- `.gitattributes`
+- `.re0/iteration/v1.1.0-provisional-native-pi-rpc/DESIGN.local.md`
+- `.re0/iteration/v1.1.0-provisional-native-pi-rpc/EVIDENCE.local.md`
+- `.re0/iteration/v1.1.0-provisional-native-pi-rpc/REF-decisions.local.md`
+- `.re0/iteration/v1.1.0-provisional-native-pi-rpc/RETRO.local.md`
+- `.re0/iteration/v1.1.0-provisional-native-pi-rpc/WORKFLOW.local.md`
 - `AGENTS.md`
-- `README.ko.md`
 - `README.md`
-- `Wiki-Studio.bat`
-- `Wiki-Studio.command`
 - `dashboard/README.md`
 - `dashboard/app.js`
-- `dashboard/boot.js`
-- `dashboard/example.json`
 - `dashboard/index.html`
-- `dashboard/modules/graph.js`
 - `dashboard/modules/history-codec.js`
-- `dashboard/modules/markdown.js`
+- `dashboard/modules/native-pi.js`
 - `dashboard/modules/retrieval-status.js`
-- `dashboard/modules/retrieval-usage.js`
 - `dashboard/style.css`
 - `docs/ARCHITECTURE.md`
 - `docs/CURRENT_STATE.md`
 - `docs/IMPACT_SUMMARY.md`
-- `docs/LAYERS.md`
-- `docs/README.md`
-- `docs/ROADMAP.md`
-- `docs/adr/ADR-0002-local-wiki-dashboard.md`
-- `docs/adr/ADR-0003-wiki-parallel-preparation.md`
-- `docs/adr/ADR-0004-studio-runtime-separation.md`
-- `docs/adr/README.md`
-- `docs/evidence/2026-09-06-dashboard-refactor.md`
-- `docs/evidence/2026-09-06-studio-runtime-separation.md`
-- `docs/evidence/2026-09-06-wiki-launchers.md`
-- `docs/evidence/2026-09-06-wiki-retrieval-observability.md`
-- `docs/evidence/README.md`
-- `docs/plans/2026-09-06-dashboard-refactor.md`
 - `docs/repo-map/DATA_FLOW.md`
 - `docs/repo-map/ENTRYPOINTS.md`
 - `docs/repo-map/MODULES.md`
-- `docs/repo-map/README.md`
-- `docs/reviews/2026-09-05-wiki-dashboard.md`
-- `runtime/README.md`
-- `runtime/start_dashboard.bat`
-- `runtime/start_dashboard.command`
 - `runtime/wiki_dashboard.py`
-- `runtime/wiki_dashboard_automation.py`
-- `runtime/wiki_dashboard_batch.py`
-- `runtime/wiki_dashboard_batch_extension.mjs`
-- `runtime/wiki_dashboard_batch_tools.py`
-- `runtime/wiki_dashboard_chat_extension.mjs`
-- `runtime/wiki_dashboard_chat_tools.py`
-- `runtime/wiki_dashboard_documents.py`
-- `runtime/wiki_dashboard_folders.py`
 - `runtime/wiki_dashboard_http.py`
-- `runtime/wiki_dashboard_retrieval_status.py`
-- `runtime/wiki_dashboard_save.py`
-- `runtime/wiki_loop_adapter.py`
-- `tests/dashboard/batch_extension.test.cjs`
-- `tests/dashboard/chat_extension.test.cjs`
+- `runtime/wiki_dashboard_native.py`
 - `tests/dashboard/dashboard_ui.test.cjs`
 - `tests/dashboard/frontend_modules.test.cjs`
-- `tests/test_wiki_dashboard.py`
-- `tests/test_wiki_dashboard_automation.py`
-- `tests/test_wiki_dashboard_batch.py`
-- `tests/test_wiki_dashboard_batch_tools.py`
-- `tests/test_wiki_dashboard_chat.py`
-- `tests/test_wiki_dashboard_chat_tools.py`
-- `tests/test_wiki_dashboard_entries.py`
-- `tests/test_wiki_dashboard_folder_picker.py`
-- `tests/test_wiki_dashboard_http.py`
-- `tests/test_wiki_dashboard_launchers.py`
-- `tests/test_wiki_dashboard_modules.py`
-- `tests/test_wiki_dashboard_parallel.py`
-- `tests/test_wiki_dashboard_retrieval_integration.py`
-- `tests/test_wiki_dashboard_retrieval_status.py`
-- `tests/test_wiki_dashboard_save.py`
-- `wiki/_meta/index.md`
+- `tests/test_wiki_dashboard_native.py`
 - `wiki/_meta/log.md`
-- `wiki/decisions/README.md`
-- `wiki/decisions/local-wiki-studio.md`
 
 ## Checked Not Changed
 
-- All four loop implementation files remain byte-identical. The other two skills and the three-skill installer implementation are unchanged.
-- Ten UI assets are byte-identical to the pre-move committed assets; their README and locations changed.
-- Host/Origin/token/root checks, isolated chat, explicit automation, one canonical writer, source provenance, and existing completion gates remain in force.
-- User raw/wiki files (24) and existing browser conversations (2) were preserved. No model prompt or canonical write was performed during migration.
+The default isolated read-only chat, reusable loop gates, three source skills and installer retain their responsibilities. Native file writes are not wiki certification. No global install or default-mode switch is part of this slice.
 
 ## Legacy split
 
-The removed skill-internal app paths are not supported startup locations. Historical evidence keeps its original scope. Existing legacy ontology/workbench archives remain outside the active repository; this change does not restore them.
+Studio remains in repository `runtime/` and `dashboard/`; no application copy or gate executable is installed into a vault or skill. Earlier migration outcomes remain historical in [migration evidence](evidence/2026-09-06-studio-runtime-separation.md).
 
 ## Wiki memory
 
-[The handoff](../wiki/decisions/local-wiki-studio.md) explains why calling a gate does not make the caller application part of that gate's skill. It links the corrected ownership, implementation, checks, and limits rather than duplicating runtime policy.
+[The log](../wiki/_meta/log.md) records the native boundary. The local re0 casebook retains lifecycle anti-patterns, negative tests and Windows parity as the next gate. Browser history is a display projection; losing it does not delete Pi history, but Studio cannot re-import that history in this slice.
 
 ## Remaining Drift
 
-Windows launcher/Pi-process behavior is not real-desktop tested. Existing SQLite ResourceWarnings remain. Background process inspection/signalling was restricted, so older services were preserved; use the latest local URL recorded in ignored state/dashboard-server.json. Global skills were not updated; a fresh temporary installation was used to test independence.
+Actual Windows terminal/RPC parity and default cutover are unpassed. Generic tool activity does not establish citation validity or retrieval method. Custom TUI interfaces are not universally supported. Existing SQLite ResourceWarnings remain in the Python suite.
 
 ## Validator Summary
 
-Python 402 and JavaScript 134 passed. Three-skill distribution checks and a copied standalone loop CLI passed. Browser and preservation checks are recorded in [migration evidence](evidence/2026-09-06-studio-runtime-separation.md). Repo Docs finalization verifies the complete changed-file set after the final documentation update.
+Python 456 tests and JavaScript 152 tests passed; three-skill check passed. Real local Pi/browser checks covered read/recall/write, native resume, supported dialogs, browser reload and abort. Separate architecture and acceptance reviews approved the bounded opt-in slice. Repo Docs validation reports zero errors and warnings with the changed-file list.

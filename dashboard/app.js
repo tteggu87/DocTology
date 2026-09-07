@@ -88,10 +88,62 @@ function utf8Size(value) {
   try { return encodeURIComponent(text).replace(/%[0-9A-F]{2}|./gi,'x').length; } catch { return text.length*3; }
 }
 
+const nativePiTools = WikiStudioModules.createNativePiTools({escapeHTML});
+let nativeUiOwner=null;
+let nativeUiSubmitting=false;
+const nativeUiAnswered=new Set();
+function renderNativeControls(){
+  const native=currentConversation()?.engine==='native';
+  const session=state?.nativeSession;
+  $('#native-pi-controls').hidden=!(state?.nativePiAvailable||native||session?.open);
+  $('[data-action="new-native-chat"]').disabled=!state?.nativePiAvailable||Boolean(activeChatJob);
+  $('#native-pi-close').hidden=!session?.open;
+  $('#native-pi-close').disabled=Boolean(activeChatJob)||session?.busy===true;
+  $('#native-pi-session-note').textContent=session?.error?session.error:native?'파일 변경 가능 · Pi 세션에 대화 보관 · Windows 동등성 검증 전':session?.open?'Pi 세션이 위키 작성 작업을 예약 중입니다.':'기본 대화는 기존 읽기 전용 모드를 유지합니다.';
+  $('.local-note').textContent=native?'Pi 기본 대화는 Pi 세션에도 저장됩니다.':'대화는 이 브라우저에만 저장됩니다.';
+}
+function renderNativeInteraction(){
+  const request=activeChatJob?.native?.interaction;
+  const key=request?`${activeChatJob.id}:${request.id}`:'';
+  if(!request||nativeUiAnswered.has(key)){
+    if(nativeUiOwner){$('#native-ui-dialog').close();nativeUiOwner=null;}
+    return;
+  }
+  if(nativeUiOwner?.key===key)return;
+  nativeUiOwner={key,id:request.id,jobId:activeChatJob.id,root:activeChatJob.root};
+  $('#native-ui-title').textContent=request.title;
+  $('#native-ui-message').textContent=request.message;
+  $('#native-ui-error').textContent='';
+  $('#native-ui-input').value=request.initialValue;
+  $('#native-ui-input-field').hidden=!['input','editor'].includes(request.method);
+  $('#native-ui-select-field').hidden=request.method!=='select';
+  $('#native-ui-select').innerHTML=request.options.map((label,index)=>`<option value="${index}">${escapeHTML(label)}</option>`).join('');
+  $('#native-ui-decline').hidden=request.method!=='confirm';
+  $('#native-ui-submit').textContent=request.method==='confirm'?'확인':'전달';
+  if(!$('#native-ui-dialog').open)$('#native-ui-dialog').showModal();
+}
+async function respondNativeInteraction(choice={}){
+  if(!nativeUiOwner||nativeUiSubmitting)return;
+  const owner=nativeUiOwner,request=activeChatJob?.native?.interaction;
+  if(!request||activeChatJob.id!==owner.jobId)return;
+  nativeUiSubmitting=true;$('#native-ui-submit').disabled=true;
+  try{
+    await api('native-ui',{expectedRoot:owner.root,id:owner.jobId,interactionId:owner.id,...choice});
+    nativeUiAnswered.add(owner.key);if(nativeUiAnswered.size>64)nativeUiAnswered.delete(nativeUiAnswered.values().next().value);
+    if(nativeUiOwner===owner){$('#native-ui-dialog').close();nativeUiOwner=null;}
+  }catch(error){$('#native-ui-error').textContent=error.message;}
+  finally{nativeUiSubmitting=false;$('#native-ui-submit').disabled=false;}
+}
+async function closeNativeSession(){
+  const session=state?.nativeSession;if(!session?.open)return;
+  await api('native-close',{expectedRoot:currentRoot(),conversationId:session.conversationId,generation:session.generation});
+  await refresh(true);toast('Pi 세션 종료를 요청했습니다. 대화 파일은 유지됩니다.');
+}
+
 const retrievalUsageTools = WikiStudioModules.createRetrievalUsage({escapeHTML});
 const historyCodec = WikiStudioModules.createHistoryCodec({
   limits:{conversations:LOCAL_CONVERSATION_LIMIT,messages:LOCAL_MESSAGE_LIMIT,messageText:LOCAL_MESSAGE_TEXT_LIMIT,evidence:LOCAL_EVIDENCE_LIMIT,excerpt:LOCAL_EXCERPT_LIMIT,explorationEvents:LOCAL_EXPLORATION_EVENT_LIMIT,explorationText:LOCAL_EXPLORATION_TEXT_LIMIT,storageBytes:LOCAL_STORAGE_BYTES_LIMIT},
-  byteSize:utf8Size, normalizeRetrievalUsage:retrievalUsageTools.normalize
+  byteSize:utf8Size, normalizeRetrievalUsage:retrievalUsageTools.normalize, normalizeNative:nativePiTools.normalize
 });
 const markdownRenderer = WikiStudioModules.createMarkdownRenderer({escapeHTML,knownDocumentIds:references=>allKnownDocumentIds(references)});
 const graphTools = WikiStudioModules.createGraphTools({escapeHTML});
@@ -196,9 +248,13 @@ function guardChatNavigation() {
   toast('응답 생성이 끝나거나 중단된 뒤 대화를 변경할 수 있습니다.');
   return false;
 }
-function newConversation() {
+function newConversation(engine=currentConversation()?.engine==='native'?'native':'wiki') {
   if (!guardChatNavigation()) return false;
   const conversation = makeConversation();
+  if(engine==='native'){
+    if(!state?.nativePiAvailable){toast('--native-pi로 실행한 로컬 위키에서 사용할 수 있습니다.');return false;}
+    conversation.engine='native';
+  }
   conversations.unshift(conversation);
   activeConversationId = conversation.id;
   selectedAnswerIndex = -1;
@@ -294,6 +350,7 @@ function chatSaveMessages(scope='answer',answerIndex=selectedAnswerIndex) {
 }
 function chatSaveCharCount(messages,title='') { return String(title).length+messages.reduce((sum,message)=>sum+String(message.content||'').length+(message.references||[]).reduce((subtotal,reference)=>subtotal+String(reference.id||'').length+String(reference.title||'').length+String(reference.excerpt||'').length,0),0); }
 function chatSaveReason(answerIndex=selectedAnswerIndex,scope='answer') {
+  if(currentConversation()?.engine==='native')return 'Pi 기본 세션에서는 Pi에 직접 저장을 요청하세요. 기존 인용 저장 경로는 사용하지 않습니다.';
   if (state?.demo) return '예시 작업실에서는 저장하지 않습니다. 내 위키를 연결하세요.';
   if (isProject()) return '프로젝트는 읽기 전용이라 대화를 원문으로 저장할 수 없습니다.';
   try { chatSaveMessages(scope,answerIndex); return ''; } catch(error) { return error.message; }
@@ -434,7 +491,7 @@ function renderPendingAnswer() {
   if (!activeChatJob) return '';
   const references=activeChatJob.references||[],answer=String(activeChatJob.answer||''),exploration=activeChatJob.exploration,elapsed=elapsedChatSeconds(activeChatJob);
   const readLabel=exploration?'읽은 문서':'검색 후보';
-  return `<article class="message assistant-message pending"><div class="assistant-avatar">D</div><div class="assistant-content"><div class="message-label">DocTology · ${elapsed}초</div>${answer?`<div class="answer-body partial-answer">${renderAnswerMarkdown(answer,references)}</div><div class="provisional-note">생성 중인 초안입니다. 인용과 문장은 완료 전 바뀔 수 있습니다.</div>`:''}${renderLiveProgress(activeChatJob)}${renderRetrievalUsage(exploration?.retrievalUsage)}${renderExploration(exploration)}${activeChatJob.candidates?.length?`<div class="pending-candidates">${readLabel} ${activeChatJob.candidates.length}개 · 아직 답변의 인용이 아닙니다</div>`:''}</div></article>`;
+  return `<article class="message assistant-message pending"><div class="assistant-avatar">D</div><div class="assistant-content"><div class="message-label">DocTology · ${elapsed}초</div>${answer?`<div class="answer-body partial-answer">${renderAnswerMarkdown(answer,references)}</div><div class="provisional-note">생성 중인 초안입니다. 인용과 문장은 완료 전 바뀔 수 있습니다.</div>`:''}${activeChatJob.native?nativePiTools.render(activeChatJob.native,{progress:activeChatJob.progress,processRunning:activeChatJob.processRunning}):renderLiveProgress(activeChatJob)}${activeChatJob.native?'':renderRetrievalUsage(exploration?.retrievalUsage)}${renderExploration(exploration)}${activeChatJob.candidates?.length?`<div class="pending-candidates">${readLabel} ${activeChatJob.candidates.length}개 · 아직 답변의 인용이 아닙니다</div>`:''}</div></article>`;
 }
 function updateChatScrollControls() {
   const area=$('#chat-messages'),maximum=Math.max(0,(Number(area.scrollHeight)||0)-(Number(area.clientHeight)||0));
@@ -462,20 +519,24 @@ function chatDisclosureKey(detail) {
   return `${owner?.dataset?.answerIndex ?? 'pending'}:${detail.classList.contains('candidate-box')?'candidates':'tools'}`;
 }
 function renderChat() {
+  renderNativeControls();
+  renderNativeInteraction();
+  renderRetrievalStatus();
   const container = $('#chat-messages');
   const conversation = ensureConversation();
   const ownerKey=`${historyRoot}:${conversation.id}`;
   const openDisclosures=new Set(renderedChatOwner===ownerKey ? [...container.querySelectorAll('details[open]')].map(chatDisclosureKey) : []);
   renderedChatOwner=ownerKey;
   if (!activeChatJob && openDisclosures.has('pending:tools')) openDisclosures.add(`${latestAssistantIndex(conversation)}:tools`);
-  const chatUnavailable = state?.chatAvailable === false;
+  const nativeUnavailable=conversation.engine==='native'&&!state?.nativePiAvailable;
+  const chatUnavailable = state?.chatAvailable === false||nativeUnavailable;
   if (!conversation.messages.length && !activeChatJob) container.innerHTML = renderEmptyChat();
   else {
     const wholeReason=chatSaveReason(latestAssistantIndex(conversation),'conversation');
     const conversationSaves=(conversation.saves||[]).map(savedSummary).join('');
     container.innerHTML = `<div class="message-stack"><div class="conversation-save-bar"><div><strong>현재 대화를 원문으로 보존</strong><span>검증된 사실이 아니며 저장 뒤 기존 게이트를 통과해야 합니다.</span></div><button data-action="save-conversation" ${wholeReason?'disabled':''} title="${escapeHTML(wholeReason||'현재 대화 전체를 미리보고 저장')}">대화 전체 저장</button></div>${conversationSaves}${conversation.messages.map((message,index) => message.role === 'user'
       ? `<article class="message user-message"><div class="message-label">나</div><div class="user-bubble">${escapeHTML(message.content)}</div></article>`
-      : (()=>{const saveReason=chatSaveReason(index,'answer');return `<article class="message assistant-message ${selectedAnswerIndex===index?'focused':''}" data-answer-index="${index}" tabindex="0"><div class="assistant-avatar">D</div><div class="assistant-content"><div class="message-label">DocTology</div><div class="answer-body">${renderAnswerMarkdown(message.content,message.references)}</div>${renderRetrievalUsage(message.exploration?.retrievalUsage)}${message.truncated?'<div class="provisional-note">로컬 저장 한도 때문에 이 메시지의 뒷부분은 저장되지 않았습니다. 불완전한 원문으로 내보내지 않습니다.</div>':''}${message.partial?'<div class="provisional-note">응답 연결이 종료되어 마지막으로 받은 초안입니다. 완료된 답변이 아닙니다.</div>':''}${renderExploration(message.exploration)}${renderCandidates(message.candidates,message.exploration)}<div class="answer-actions">${message.references?.length ? `<button class="answer-reference-summary" data-answer-index="${index}">참고문헌 ${message.references.length}개 보기</button>` : '<span class="no-citations">이 답변에는 명시된 인용이 없습니다.</span>'}<button class="answer-save-button" data-save-answer="${index}" ${saveReason?'disabled':''} title="${escapeHTML(saveReason||'이 질문과 답변을 원문으로 미리보기')}">위키에 저장</button></div><p class="unverified-chat-note">대화 저장은 사실 검증이나 위키 완료를 뜻하지 않습니다.</p>${savedSummary(message.save)}</div></article>`;})()).join('')}${renderPendingAnswer()}${conversation.error ? `<div class="chat-error" role="alert"><span>${escapeHTML(conversation.error)}</span><button data-action="${activeChatJob?'reconnect-chat':'retry-chat'}">${activeChatJob?'연결 다시 확인':'다시 시도'}</button></div>${renderExploration(conversation.diagnostics)}` : ''}</div>`;
+      : (()=>{const saveReason=chatSaveReason(index,'answer');return `<article class="message assistant-message ${selectedAnswerIndex===index?'focused':''}" data-answer-index="${index}" tabindex="0"><div class="assistant-avatar">D</div><div class="assistant-content"><div class="message-label">DocTology</div><div class="answer-body">${renderAnswerMarkdown(message.content,message.references)}</div>${message.native?nativePiTools.render(message.native):renderRetrievalUsage(message.exploration?.retrievalUsage)}${message.truncated?'<div class="provisional-note">로컬 저장 한도 때문에 이 메시지의 뒷부분은 저장되지 않았습니다. 불완전한 원문으로 내보내지 않습니다.</div>':''}${message.partial?'<div class="provisional-note">응답 연결이 종료되어 마지막으로 받은 초안입니다. 완료된 답변이 아닙니다.</div>':''}${renderExploration(message.exploration)}${renderCandidates(message.candidates,message.exploration)}<div class="answer-actions">${message.references?.length ? `<button class="answer-reference-summary" data-answer-index="${index}">참고문헌 ${message.references.length}개 보기</button>` : message.native?'<span class="no-citations">Pi 기본 응답 · 인용 자동 검증 없음</span>':'<span class="no-citations">이 답변에는 명시된 인용이 없습니다.</span>'}<button class="answer-save-button" data-save-answer="${index}" ${saveReason?'disabled':''} title="${escapeHTML(saveReason||'이 질문과 답변을 원문으로 미리보기')}">위키에 저장</button></div><p class="unverified-chat-note">대화 저장은 사실 검증이나 위키 완료를 뜻하지 않습니다.</p>${savedSummary(message.save)}</div></article>`;})()).join('')}${renderPendingAnswer()}${conversation.error ? `<div class="chat-error" role="alert"><span>${escapeHTML(conversation.error)}</span><button data-action="${activeChatJob?'reconnect-chat':'retry-chat'}">${activeChatJob?'연결 다시 확인':'다시 시도'}</button></div>${renderExploration(conversation.diagnostics)}` : ''}</div>`;
   }
   for (const detail of container.querySelectorAll('details')) {
     if (openDisclosures.has(chatDisclosureKey(detail))) detail.open=true;
@@ -483,7 +544,7 @@ function renderChat() {
   $('#chat-work-notice').hidden = Boolean(state?.demo) || !(isRunning() || state?.job?.status === 'external');
   $('#chat-submit').disabled = Boolean(activeChatJob) || chatUnavailable;
   $('#chat-stop').hidden = !activeChatJob;
-  $('#chat-status').textContent = activeChatJob ? `${elapsedChatSeconds(activeChatJob)}초 · 응답 생성 중` : chatUnavailable ? chatSetupReason() : historyStorageNotice;
+  $('#chat-status').textContent = activeChatJob ? `${elapsedChatSeconds(activeChatJob)}초 · 응답 생성 중` : nativeUnavailable?'Pi 기본 세션 기록입니다. --native-pi로 서버를 실행하면 이어갈 수 있습니다.':chatUnavailable ? chatSetupReason() : historyStorageNotice;
   $('#chat-setup-actions').hidden=!chatUnavailable||Boolean(activeChatJob);
   $('#chat-connect-help').hidden=Boolean(state?.root)&&!state?.demo;
   $('#chat-pi-help').hidden=Boolean(state?.piAvailable);
@@ -525,6 +586,7 @@ async function submitChat(message, {reuseLast=false} = {}) {
   if (state?.chatAvailable === false) { toast(chatSetupReason()); return; }
   if (text.length > 8000) { toast('질문은 8,000자 이하로 입력해 주세요.'); return; }
   const conversation = ensureConversation();
+  if(conversation.engine==='native'&&!state?.nativePiAvailable){toast('--native-pi로 실행한 서버에서 이어갈 수 있습니다.');return;}
   conversation.error = '';
   conversation.diagnostics=null;
   let historyMessages = conversation.messages;
@@ -543,15 +605,20 @@ async function submitChat(message, {reuseLast=false} = {}) {
   saveHistory(); renderChat(); renderReferences(); renderKnowledgeGraph();
   try {
     const model = String($('#chat-model').value || '').trim();
-    const body = {message:text,history:chatHistoryPayload(historyMessages)};
+    const native=conversation.engine==='native';
+    const body = native?{message:text,expectedRoot:rootAtStart,conversationId:conversation.id,requestId:`native-${Date.now()}-${Math.random().toString(36).slice(2)}`}:{message:text,history:chatHistoryPayload(historyMessages)};
     if (model) body.model = model;
-    const started = await api('chat',body);
+    if(native){activeChatJob.id=body.requestId;activeChatJob.native=nativePiTools.normalize({tools:[],notice:'Pi 세션 준비 중'});conversation.job={id:body.requestId,status:'running',startedAt:activeChatJob.startedAt};saveHistory();}
+    const started = await api(native?'native-chat':'chat',body);
     if (String(state?.root || historyRoot) !== rootAtStart || activeConversationId !== conversation.id) { activeChatJob = null; return; }
-    activeChatJob = {id:String(started.id),conversationId:conversation.id,root:rootAtStart,status:String(started.status || 'running'),startedAt:activeChatJob.startedAt,answer:'',references:[],candidates:[],exploration:normalizeExploration(started.exploration)};
+    activeChatJob = {id:String(started.id),conversationId:conversation.id,root:rootAtStart,status:String(started.status || 'running'),startedAt:activeChatJob.startedAt,answer:'',references:[],candidates:[],exploration:normalizeExploration(started.exploration),native:nativePiTools.normalize(started.native)};
     conversation.job = {id:activeChatJob.id,status:activeChatJob.status,startedAt:activeChatJob.startedAt};
     saveHistory(); renderChat();
     pollChat(activeChatJob.id,rootAtStart,conversation.id);
   } catch (error) {
+    if(conversation.engine==='native'&&activeChatJob?.id?.startsWith('native-')&&!error.status){
+      conversation.error='Pi 질문 접수 상태를 확인합니다. 자동 재전송하지 않습니다.';saveHistory();renderChat();pollChat(activeChatJob.id,rootAtStart,conversation.id);return;
+    }
     activeChatJob = null;
     conversation.job = null;
     conversation.error = error.message;
@@ -561,7 +628,7 @@ async function submitChat(message, {reuseLast=false} = {}) {
 }
 function preservePartialChat(conversation, message) {
   if (!conversation || !activeChatJob?.answer) return;
-  conversation.messages.push({role:'assistant',content:activeChatJob.answer,references:activeChatJob.references||[],candidates:activeChatJob.candidates||[],exploration:activeChatJob.exploration||null,partial:true,createdAt:Date.now()});
+  conversation.messages.push({role:'assistant',content:activeChatJob.answer,references:activeChatJob.references||[],candidates:activeChatJob.candidates||[],exploration:activeChatJob.exploration||null,...(activeChatJob.native?{native:activeChatJob.native}:{}),partial:true,createdAt:Date.now()});
   selectedAnswerIndex=conversation.messages.length-1;
   conversation.error=message;
 }
@@ -578,7 +645,7 @@ async function pollChat(id, rootAtStart, conversationId) {
   if (initialConversation && !initialConversation.job && activeChatJob?.id === id) initialConversation.job={id,status:activeChatJob.status||'running',startedAt:activeChatJob.startedAt||Date.now()};
   while (generation === chatPollGeneration && activeChatJob?.id === id) {
     try {
-      const result = await api('chat?id=' + encodeURIComponent(id),undefined,{timeoutMs:10000});
+      const result = await api((conversations.find(item=>item.id===conversationId)?.engine==='native'?'native-chat':'chat')+'?id='+encodeURIComponent(id),undefined,{timeoutMs:10000});
       if (generation !== chatPollGeneration || String(state?.root || historyRoot) !== rootAtStart) return;
       const conversation = conversations.find(item => item.id === conversationId);
       if (!conversation) return;
@@ -591,6 +658,7 @@ async function pollChat(id, rootAtStart, conversationId) {
         activeChatJob.references=normalizeReferences(result.references);
         activeChatJob.candidates=normalizeReferences(result.candidates);
         activeChatJob.exploration=normalizeExploration(result.exploration);
+        activeChatJob.native=nativePiTools.normalize(result.native);
         activeChatJob.progress=normalizeChatProgress(result.progress);
         activeChatJob.processRunning=result.processRunning===true;
         activeChatJob.pollFailures=0;
@@ -601,7 +669,7 @@ async function pollChat(id, rootAtStart, conversationId) {
       conversation.job = null;
       conversation.updatedAt = Date.now();
       if (status === 'finished') {
-        conversation.messages.push({role:'assistant',content:String(result.answer || ''),references:normalizeReferences(result.references),candidates:normalizeReferences(result.candidates),exploration:normalizeExploration(result.exploration),createdAt:Date.now()});
+        conversation.messages.push({role:'assistant',content:String(result.answer || ''),references:normalizeReferences(result.references),candidates:normalizeReferences(result.candidates),exploration:normalizeExploration(result.exploration),...(result.native?{native:nativePiTools.normalize(result.native)}:{}),createdAt:Date.now()});
         conversation.error = '';
         selectedAnswerIndex = conversation.messages.length - 1;
       } else if (status === 'stopped') conversation.error = '응답 생성을 중단했습니다. 질문은 대화에 남아 있습니다.';
@@ -639,7 +707,7 @@ function resumeChatIfNeeded() {
 async function stopChat() {
   if (!activeChatJob || activeChatJob.id === 'starting') return;
   const stoppedId=activeChatJob.id;
-  await api('chat-stop',{id:stoppedId});
+  await api(currentConversation()?.engine==='native'?'native-chat-stop':'chat-stop',{id:stoppedId,...(currentConversation()?.engine==='native'?{expectedRoot:currentRoot()}:{})});
   if (activeChatJob?.id !== stoppedId) return;
   $('#chat-status').textContent = '중단 요청 중';
   // Polling may have paused after repeated transport failures; reclaim terminal state.
@@ -685,6 +753,7 @@ async function refresh(force = false) {
     const signature = stateSignature(next);
     state = next;
     renderSnapshotStatus();
+    renderNativeControls();
     if (rootChanged) {
       resetDocumentReader();
       resetRetrievalStatus(next.root);
@@ -1055,6 +1124,7 @@ function renderSnapshotStatus(){
 
 function openDialog(id) { const element=$(id); if(id==='#connect-dialog'){invalidateFolderPicker();connectionPending(Boolean(connectionAttempt?.pending));if(connectionAttempt?.pending)pollConnection(connectionAttempt);} const error=$('.form-error',element); if(error)error.textContent=''; element.showModal(); }
 function openTask(mode='start') {
+  if(state?.nativeSession?.open){toast('Pi 기본 세션을 닫은 뒤 위키 작업을 시작하세요.');return;}
   if(!state)return; if(state.demo){openDialog('#connect-dialog');return;} if(isProject()){toast('프로젝트 문서는 읽기 전용입니다. 대화는 그대로 사용할 수 있습니다.');return;} if(mode==='start'&&isRunning()){toast('작업 중입니다. 추가 지시를 이용하세요.');return;} if(!state.piAvailable){toast('Pi 설정을 확인한 뒤 다시 시도하세요.');return;}
   taskMode=mode; $('#task-title').textContent=mode==='steer'?'추가 지시 보내기':'위키 만들기'; $('#task-source-field').hidden=mode==='steer'; $('#parallelism-field').hidden=!parallelPreparationAvailable(); $('#task-submit').textContent=mode==='steer'?'추가 지시 보내기':'선택한 자료로 시작'; $('#task-form textarea').value=mode==='steer'?'':'선택한 원문을 빠짐없이 반영해 위키를 만들고, 근거와 검증 결과를 남겨줘. 기존 작업이 있으면 상태를 확인하고 이어서 진행해줘.'; $('#task-sources').innerHTML=state.sources.map(source=>`<label class="task-source"><input type="checkbox" name="source" value="${escapeHTML(source.id)}" ${source.id===selected?'checked':''}><span>${escapeHTML(source.title)} <span class="muted">· ${phaseLabels[source.stage]}</span></span></label>`).join('')||'<p class="field-note">먼저 Markdown 자료를 추가해 주세요.</p>'; openDialog('#task-dialog');
 }
@@ -1158,6 +1228,7 @@ function handleClick(event) {
   Promise.resolve((async()=>{switch(target.dataset.action){
     case'connect-recheck':if(connectionAttempt?.pending)pollConnection(connectionAttempt);break;case'connect-cancel':await cancelConnection();break;case'connect-copy-log':await copyConnectionLog();break;
     case'settings':openSettings();break;case'settings-reset':await resetSettings();break;
+    case'new-native-chat':newConversation('native');break;case'native-close':await closeNativeSession();break;case'native-ui-cancel':await respondNativeInteraction({cancelled:true});break;case'native-ui-decline':await respondNativeInteraction({confirmed:false});break;
     case'pi-guide':openDialog('#pi-guide-dialog');break;
     case'chat-top':jumpChat('top');break; case'chat-bottom':jumpChat('bottom');break;
     case'new-chat':newConversation();break; case'clear-history':clearHistory();break; case'toggle-knowledge':toggleKnowledge();break;
@@ -1202,3 +1273,6 @@ $('#file-upload').addEventListener('change',async event=>{const file=event.targe
 async function start(){try{token=(await api('session')).token;}catch(error){toast(error.message);}await refresh(true);setInterval(()=>{if(!document.hidden)refresh();},2500);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh(true);});}
 globalThis.WikiStudioApp = globalThis.WikiStudioApp || {};
 globalThis.WikiStudioApp.start = start;
+
+$('#native-ui-form').addEventListener('submit',event=>{event.preventDefault();const request=activeChatJob?.native?.interaction;if(!request)return;respondNativeInteraction(request.method==='confirm'?{confirmed:true}:request.method==='select'?{optionIndex:Number($('#native-ui-select').value)}:{value:$('#native-ui-input').value});});
+$('#native-ui-dialog').addEventListener('cancel',event=>{event.preventDefault();respondNativeInteraction({cancelled:true});});

@@ -1435,3 +1435,47 @@ test('unknown and cancelled snapshot phases never claim a confirmed content chan
   c.run("state.snapshotStatus={phase:'checking',status:'cancelled',elapsedSeconds:300,error:'제한 시간'};renderSnapshotStatus();");
   assert.match(c.element('#snapshot-notice').textContent,/화면 갱신 중단.*제한 시간/);
 });
+
+test('native mode is explicit and posts conversation identity without text-history replay',async()=>{
+  const requests=[];
+  const c=context({fetchImpl:async(url,options)=>{requests.push([url,options?.body?JSON.parse(options.body):null]);return {ok:true,json:async()=>({id:'native-job',status:'finished',answer:'native answer',native:{tools:[],sessionId:'session-1'}})};}});
+  c.run("state.demo=false;state.nativePiAvailable=true;pollChat=async()=>{};newConversation('native');");
+  const conversationId=c.run('currentConversation().id');
+  await c.run("submitChat('hello')");
+  const [url,body]=requests.find(([url])=>url==='/api/native-chat');
+  assert.equal(url,'/api/native-chat');assert.equal(body.conversationId,conversationId);
+  assert.equal(body.expectedRoot,'/example');assert.ok(body.requestId.startsWith('native-'));
+  assert.equal(body.history,undefined);
+  assert.equal(c.run('currentConversation().engine'),'native');
+});
+test('native metadata survives browser history without inheriting verified citations',()=>{
+  const c=context();
+  c.run("state.demo=false;state.nativePiAvailable=true;newConversation('native');currentConversation().messages=[{role:'assistant',content:'native answer',native:{sessionId:'s1',tools:[{id:'t1',tool:'read',status:'ok',args:'path',output:'body'}],stats:{tokens:{input:10,output:2,cacheRead:0,cacheWrite:0}}}}];saveHistory();loadHistoryForRoot(state.root);renderChat();");
+  assert.equal(c.run('currentConversation().engine'),'native');
+  assert.equal(c.run('currentConversation().messages[0].native.sessionId'),'s1');
+  assert.match(c.element('#chat-messages').innerHTML,/실제 도구 호출/);
+  assert.match(c.element('#chat-messages').innerHTML,/세션 누적/);
+  assert.match(c.element('#chat-messages').innerHTML,/인용 자동 검증 없음/);
+  assert.match(c.run('chatSaveReason()'),/Pi 기본 세션/);
+});
+test('native tool rendering escapes data and retains unknown retrieval methods',()=>{
+  const c=context();
+  const html=c.run(`nativePiTools.render({tools:[{id:'x',tool:'<bad>',status:'ok',args:'<script>',output:'<img>'}],stats:{tokens:{input:'invalid',output:2}}})`);
+  assert.match(html,/&lt;bad&gt;/);assert.match(html,/&lt;script&gt;/);assert.match(html,/방식은 미측정/);
+  assert.match(html,/입력 미측정/);assert.doesNotMatch(html,/비율 0%/);
+});
+test('native stop and UI replies use the native scoped endpoints',async()=>{
+  const calls=[];
+  const c=context({fetchImpl:async(url,options)=>{calls.push([url,JSON.parse(options.body)]);return {ok:true,json:async()=>({ok:true})};}});
+  c.run("state.demo=false;state.nativePiAvailable=true;newConversation('native');activeChatJob={id:'native-turn',root:'/example',conversationId:currentConversation().id,native:{interaction:{id:'ui-1',method:'confirm',title:'Confirm',message:'',options:[],initialValue:''}}};reconnectChat=async()=>{};renderNativeInteraction();");
+  assert.equal(c.element('#native-ui-dialog').open,true);
+  await c.run('respondNativeInteraction({confirmed:false})');
+  assert.equal(calls[0][0],'/api/native-ui');assert.equal(calls[0][1].confirmed,false);
+  await c.run('stopChat()');assert.equal(calls[1][0],'/api/native-chat-stop');
+});
+test('native history remains readable but cannot run on an unenabled server',()=>{
+  const c=context();
+  c.run("state.demo=false;ensureConversation().engine='native';state.nativePiAvailable=false;renderChat();");
+  assert.equal(c.element('#chat-submit').disabled,true);
+  assert.match(c.element('#chat-status').textContent,/--native-pi/);
+});

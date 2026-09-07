@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: true
-last_updated: 2026-09-06
+last_updated: 2026-09-07
 superseded_by: N/A
 ---
 
@@ -25,7 +25,7 @@ receipt, seal, and certification gates. `runtime/wiki_loop_adapter.py` resolves
 the repository loop skill root and calls that existing runtime against a target
 vault. It does not reimplement gates or create another completion ledger.
 
-The Studio runtime serves the repository-owned UI on localhost. Its chat
+The Studio runtime serves the repository-owned UI on localhost. Its default chat
 extension remains limited to root- and inventory-bound `wiki_list`,
 `wiki_search`, `wiki_read`, and `wiki_links` reads; shell, write, external-web,
 and ambient extension tools remain disabled. The existing loopback handshake,
@@ -33,6 +33,8 @@ root/origin/token checks, expected-root checks, browser-local history, bounded
 read evidence, watcher opt-ins, conversation-preview limits, and writer
 serialization remain unchanged. Studio operational state is not canonical wiki
 state or completion authority.
+
+The opt-in `--native-pi` path uses `runtime/wiki_dashboard_native.py` to keep a native Pi RPC process and transcript across turns. It enables Pi's native tools and resources, including file writes. The existing writer lease lasts for the live session and any unresolved cleanup; the server owns request deduplication and a thin resume registry. Browser messages are display projections, never replayed native history. `dashboard/modules/native-pi.js` displays generic tool activity, reported statistics and supported interaction controls without inheriting the default adapter's verified-citation claims. Existing loop gates alone authorize wiki completion. [Native usage](../dashboard/README.md#pi-기본-세션-사용하기--실험) defines the experimental scope and storage behavior.
 
 Root `Wiki-Studio.command` and `Wiki-Studio.bat` are compatibility forwarders to
 `runtime/start_dashboard.command` and `runtime/start_dashboard.bat`.

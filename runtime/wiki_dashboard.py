@@ -49,6 +49,7 @@ documents_module = load_dashboard_module("wiki_dashboard_documents")
 folders_module = load_dashboard_module("wiki_dashboard_folders")
 progress_module = load_dashboard_module("wiki_dashboard_progress")
 index_module = load_dashboard_module("wiki_dashboard_index")
+native_module = load_dashboard_module("wiki_dashboard_native")
 http_module = load_dashboard_module("wiki_dashboard_http")
 
 # Compatibility facade: implementations and internal dependencies belong to the catalog.
@@ -104,7 +105,7 @@ class Dashboard:
     MAX_CHAT_JOBS = 24
     MAX_CHAT_ANSWER_CHARS = 32000
 
-    def __init__(self, root=None, pi_command=None, chat_model="", chat_agent_dir=None):
+    def __init__(self, root=None, pi_command=None, chat_model="", chat_agent_dir=None, native_pi=False):
         if not isinstance(chat_model, str) or len(chat_model) > 200:
             raise ValueError("기본 채팅 모델 이름이 너무 깁니다.")
         if chat_agent_dir is not None and not isinstance(chat_agent_dir, (str, os.PathLike)):
@@ -150,18 +151,24 @@ class Dashboard:
             "inside": inside, "workflow": workflow,
             "document_inventory": document_inventory, "document_payload": document_payload,
         })
+        self.native_enabled = bool(native_pi)
+        self.native = native_module.NativeSessions(self.pi_command, workflow=workflow, inside=inside,
+                                                  terminate=self._terminate, process_alive=process_alive,
+                                                  agent_dir=self.chat_agent_dir)
         if root:
             self.connect(str(root))
 
     def live_chat(self):
-        return any(job["status"] == "running" for job in self.chat_jobs.values())
+        return self.native.is_busy() or any(job["status"] == "running" for job in self.chat_jobs.values())
 
     def has_live_runner(self):
         """A surviving Pi process still excludes writes after its dashboard owner exits."""
-        if self.process and self.process.poll() is None:
+        if self.native.is_open() or (self.process and self.process.poll() is None):
             return True
         if not self.root or self.mode == "project":
             return False
+        if self.native.has_survivor(self.root):
+            return True
         for path in files(self.root, "state/dashboard_jobs/*.json"):
             try:
                 record = read_json(path)
@@ -184,6 +191,8 @@ class Dashboard:
         self._cache = value
 
     def _connect_allowed(self):
+        if self.native.is_open():
+            raise ValueError("Pi 기본 세션을 닫은 뒤 다른 위키를 연결하세요.")
         parallel_cleanup = self.preparation is not None and any(
             row.get("cleanupPending") or row.get("status") in ("reading", "drafting")
             for row in self.preparation.snapshot().get("workers", [])
@@ -395,6 +404,8 @@ class Dashboard:
                     public_job["parallel"] = parallel
             data.update({"piAvailable":bool(self.pi_command), "chatAvailable":bool(self.root and self.pi_command),
                 "parallelPreparationAvailable":bool(self.root and self.mode=="wiki" and self.pi_command),
+                "nativePiAvailable":self.native_enabled and self.mode == "wiki" and bool(self.root and self.pi_command),
+                "nativeSession":self.native.summary() if self.native_enabled else None,
                 "connectionProgressAvailable":True, "snapshotReady":bool(view) or self.root is None,
                 "snapshotFresh":(self.cache is not None and (not self._snapshot_work or self._snapshot_work.record["status"]=="ready")) or self.root is None,
                 "snapshotStatus":self._snapshot_work.snapshot() if self._snapshot_work and self._snapshot_work.record["root"]==str(self.root) else None,
@@ -1179,6 +1190,10 @@ class Dashboard:
         self._terminate(self.process)
 
     def stop_all(self):
+        try:
+            self.native.shutdown()
+        except (OSError, ValueError) as exc:
+            print(f"Native Pi cleanup needs attention: {native_module.display_text(str(exc), 500)}", file=sys.stderr)
         if self._connection_work:
             self._connection_work.cancel()
         if self._snapshot_work:
@@ -1229,7 +1244,42 @@ class Dashboard:
                                                "result": json.loads(json.dumps(result))}
             return result
 
+    def native_status(self, request_id):
+        with self.lock:
+            root = self.root
+            if not self.native_enabled or root is None:
+                raise ChatNotFoundError("Pi 기본 세션을 사용할 수 없습니다.")
+        try:
+            result = self.native.status(root, request_id)
+        except native_module.NativeError as exc:
+            raise ChatNotFoundError(str(exc)) from exc
+        with self.lock:
+            if self.root != root:
+                raise ChatNotFoundError("위키가 변경되었습니다.")
+        return result
+
+    def native_action(self, name, body):
+        with self.lock:
+            if not self.native_enabled or not self.root or self.mode != "wiki":
+                raise ValueError("Pi 기본 세션은 --native-pi로 실행한 로컬 위키에서만 사용할 수 있습니다.")
+            root = self.root
+            if body.get("expectedRoot") != str(root):
+                raise ValueError("워크스페이스가 바뀌었습니다. 현재 위키를 확인하세요.")
+            if name == "native-chat":
+                if not self.native.is_open() and (self.claim is not None or self.has_live_runner()):
+                    raise ValueError("위키 작업이 끝난 뒤 Pi 기본 세션을 시작하세요.")
+                return self.native.begin(root, body.get("conversationId"), body.get("requestId"), body.get("message"), body.get("model", "") or self.chat_model)
+        if name == "native-chat-stop":
+            return self.native.stop(root, body.get("id"))
+        if name == "native-ui":
+            return self.native.respond(root, body.get("id"), body)
+        if name == "native-close":
+            return self.native.close(root, body.get("conversationId"), body.get("generation"))
+        raise ValueError("지원하지 않는 Pi 기본 세션 요청입니다.")
+
     def action(self, name, body):
+        if name in {"native-chat", "native-chat-stop", "native-ui", "native-close"}:
+            return self.native_action(name, body)
         if name == "connect-start":
             return self.start_connection(body.get("root"), body.get("id"), body.get("enableSqlite", False))
         if name == "connect-cancel":
@@ -1371,6 +1421,7 @@ def main(argv=None):
     parser.add_argument("--repo-root", type=Path, help="Existing generated wiki; omit for clearly labelled example")
     parser.add_argument("--port", type=int, default=4317)
     parser.add_argument("--chat-model", default="", help="Default model for chat requests that omit model")
+    parser.add_argument("--native-pi", action="store_true", help="Expose experimental persistent native Pi conversations; native tools may modify files")
     parser.add_argument("--chat-agent-dir", type=Path, help="Pi agent directory override used only by chat subprocesses")
     parser.add_argument("--open-browser", action=argparse.BooleanOptionalAction, default=False,
                         help="Open the default browser after the local server binds")
@@ -1379,7 +1430,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if not 0 <= args.port <= 65535:
         parser.error("--port must be between 0 and 65535")
-    app = Dashboard(args.repo_root, chat_model=args.chat_model, chat_agent_dir=args.chat_agent_dir)
+    app = Dashboard(args.repo_root, chat_model=args.chat_model, chat_agent_dir=args.chat_agent_dir, native_pi=args.native_pi)
     server = dashboard_server(app, args.port, auto_port=args.auto_port)
     url = f"http://127.0.0.1:{server.server_port}/"
     if args.port and server.server_port != args.port:

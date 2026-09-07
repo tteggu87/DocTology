@@ -12,6 +12,7 @@
   <script src="/modules/markdown.js" defer></script>
   <script src="/modules/graph.js" defer></script>
   <script src="/modules/retrieval-status.js" defer></script>
+  <script src="/modules/native-pi.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/boot.js" defer></script>
 </head>
@@ -65,6 +66,7 @@
     <div id="snapshot-notice" class="snapshot-notice" role="status" hidden></div>
 
     <section id="chat-view" class="chat-view" aria-label="위키 대화">
+      <div id="native-pi-controls" class="native-pi-controls" hidden><button class="button compact" type="button" data-action="new-native-chat">Pi 기본 세션 새 대화 · 실험</button><button id="native-pi-close" class="button compact" type="button" data-action="native-close" hidden>Pi 세션 닫기</button><span id="native-pi-session-note" class="field-note"></span></div>
       <div id="chat-messages" class="chat-messages" aria-live="polite" aria-atomic="false"></div>
       <nav id="chat-scroll-controls" class="chat-scroll-controls" aria-label="대화 빠른 이동" hidden>
         <button id="chat-scroll-top" type="button" data-action="chat-top" aria-controls="chat-messages" title="대화 맨 위로 이동"><span data-icon="arrow-up"></span>맨 위</button>
@@ -147,6 +149,7 @@
 <p class="field-note">위키 연결과 파일, 대화·작업·대기열 기록, Pi 로그인과 기본 모델은 유지합니다. 진행 중인 작업과 이미 요청한 수동 실행은 취소하지 않습니다. 예시·프로젝트 문서 모드에서는 화면 설정만 초기화합니다.</p>
 <div id="settings-error" class="form-error" role="alert"></div>
 <button id="settings-reset" class="button primary wide" type="button" data-action="settings-reset">기본 설정으로 초기화</button></dialog>
+<dialog id="native-ui-dialog"><form id="native-ui-form"><div class="dialog-heading"><h2 id="native-ui-title">Pi 입력 요청</h2><button type="button" class="icon-button" data-action="native-ui-cancel" aria-label="입력 요청 취소">×</button></div><p id="native-ui-message"></p><label id="native-ui-input-field" class="field">응답<textarea id="native-ui-input" rows="4" maxlength="8000"></textarea></label><label id="native-ui-select-field" class="field">선택<select id="native-ui-select"></select></label><p id="native-ui-error" class="form-error" role="alert"></p><div class="dialog-actions"><button id="native-ui-decline" type="button" class="button secondary" data-action="native-ui-decline">거절</button><button id="native-ui-submit" type="submit" class="button primary">전달</button></div></form></dialog>
 <dialog id="task-dialog"><form id="task-form"><div class="dialog-heading"><div><span class="eyebrow">WIKI OPERATIONS</span><h2 id="task-title">위키 만들기</h2></div><button type="button" class="icon-button" data-close aria-label="닫기">×</button></div><label class="field">에이전트에게 맡길 작업<textarea name="message" required rows="4" maxlength="12000">선택한 원문을 빠짐없이 반영해 위키를 만들고, 근거와 검증 결과를 남겨줘. 기존 작업이 있으면 상태를 확인하고 이어서 진행해줘.</textarea></label><div id="task-source-field"><div class="field-title">처리할 원문</div><div id="task-sources" class="task-sources"></div><label id="parallelism-field" class="field parallelism-field" hidden>병렬 준비 수<select name="parallelism"><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option></select><small>여러 원문은 기존 전체 배치 루프로 준비하고, 마지막 통합과 검증은 그대로 거칩니다.</small></label><label class="field">모델 <span class="muted">선택 사항</span><input name="model" placeholder="비워두면 Pi 기본 설정 사용" maxlength="200"></label><p class="field-note">실행하면 로컬 Pi에 설정된 모델을 사용합니다.</p></div><div class="form-error" role="alert"></div><button class="button primary wide" type="submit" id="task-submit">선택한 자료로 시작</button></form></dialog>
 
 <dialog id="chat-save-dialog" class="chat-save-dialog"><form id="chat-save-form"><div class="dialog-heading"><div><span class="eyebrow">PRESERVE THEN ORGANIZE</span><h2>대화를 위키 원문으로 저장</h2></div><button type="button" class="icon-button" data-close aria-label="닫기">×</button></div><p class="chat-save-caution">대화는 검증된 사실이 아닙니다. 서버가 만든 Markdown을 원문 그대로 보존한 뒤, 기존 전체 범위 위키 루프와 검증 게이트에 보냅니다.</p><fieldset class="scope-choice"><legend>저장 범위</legend><label><input type="radio" name="scope" value="answer" checked>선택한 질문 + 답변</label><label><input type="radio" name="scope" value="conversation">현재 대화 전체</label></fieldset><label class="field">원문 제목<input id="chat-save-title" name="title" required maxlength="200" autocomplete="off"></label><div id="chat-save-meta" class="preview-meta"></div><pre id="chat-save-preview" class="markdown-preview" tabindex="0">미리보기를 준비하고 있습니다…</pre><div id="chat-save-warnings" class="preview-warnings"></div><div class="form-error" role="alert"></div><div class="dialog-actions"><button id="chat-preview-refresh" class="button secondary" type="button" data-action="chat-preview-refresh" hidden>미리보기 다시 만들기</button><button id="chat-save-submit" class="button primary" type="submit" disabled>위키로 정리 시작</button></div></form></dialog>

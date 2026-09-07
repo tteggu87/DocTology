@@ -31,3 +31,7 @@ Read [the documentation portal](docs/README.md), then [current state](docs/CURRE
 ## CodeGraph
 
 When `.codegraph/` exists, use `codegraph explore` before broad text search for code-structure questions.
+
+## Native Pi experiment
+
+`runtime/wiki_dashboard_native.py` owns opt-in `--native-pi` RPC sessions. Pi owns tools, history and compaction; Studio owns routing and display. One live native session holds the existing writer lease, including failed cleanup until process termination is confirmed. Turn completion must not end the process. Keep accepted-request deduplication and server-owned resume identity; never replay browser text as native history. Native tool output is not verified citation or wiki certification. The default read-only chat and three reusable skills remain separate. Actual Windows terminal/RPC parity is required before default cutover.

@@ -2,7 +2,7 @@
 
 (function(namespace) {
   namespace.createHistoryCodec = function createHistoryCodec(dependencies) {
-    const {limits, now = () => Date.now(), byteSize, normalizeRetrievalUsage} = dependencies;
+    const {limits, now = () => Date.now(), byteSize, normalizeRetrievalUsage, normalizeNative = () => null} = dependencies;
     const boundedText = (value, limit) => String(value ?? '').slice(0, limit);
     const boundedCount = value => Math.max(0, Math.min(1000000, Math.floor(Number(value) || 0)));
     const normalizeContentHash = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value) ? value : '';
@@ -60,9 +60,9 @@
     function normalizeConversation(value) {
       const conversation = value && typeof value === 'object' ? value : {};
       const messages = Array.isArray(conversation.messages)
-        ? conversation.messages.filter(message => ['user','assistant'].includes(message?.role)).slice(-limits.messages).map(message => ({role:message.role, content:boundedText(message.content, limits.messageText), truncated:Boolean(message.truncated) || String(message.content || '').length > limits.messageText, partial:Boolean(message.partial), references:normalizeReferences(message.references), candidates:normalizeReferences(message.candidates), exploration:normalizeExploration(message.exploration), createdAt:Number(message.createdAt) || now(), save:normalizeSaved(message.save)}))
+        ? conversation.messages.filter(message => ['user','assistant'].includes(message?.role)).slice(-limits.messages).map(message => ({role:message.role, content:boundedText(message.content, limits.messageText), truncated:Boolean(message.truncated) || String(message.content || '').length > limits.messageText, partial:Boolean(message.partial), references:normalizeReferences(message.references), candidates:normalizeReferences(message.candidates), exploration:normalizeExploration(message.exploration), createdAt:Number(message.createdAt) || now(), save:normalizeSaved(message.save), ...(message.native && typeof message.native==='object'?{native:normalizeNative(message.native)}:{})}))
         : [];
-      return {id:boundedText(conversation.id || `local-${now()}`, 200), title:boundedText(conversation.title || '새 대화', 200), createdAt:Number(conversation.createdAt) || now(), updatedAt:Number(conversation.updatedAt) || now(), messages, historyTruncated:Boolean(conversation.historyTruncated) || (Array.isArray(conversation.messages) && conversation.messages.length > limits.messages), saves:Array.isArray(conversation.saves) ? conversation.saves.map(normalizeSaved).filter(Boolean).slice(-12) : [], job:conversation.job && conversation.job.id ? {id:boundedText(conversation.job.id, 200), status:boundedText(conversation.job.status || 'running', 30), startedAt:Number(conversation.job.startedAt) || 0} : null, error:boundedText(conversation.error, 2000), ...(conversation.diagnostics?{diagnostics:normalizeExploration(conversation.diagnostics)}:{})};
+      return {...(conversation.engine==='native'?{engine:'native'}:{}),id:boundedText(conversation.id || `local-${now()}`, 200), title:boundedText(conversation.title || '새 대화', 200), createdAt:Number(conversation.createdAt) || now(), updatedAt:Number(conversation.updatedAt) || now(), messages, historyTruncated:Boolean(conversation.historyTruncated) || (Array.isArray(conversation.messages) && conversation.messages.length > limits.messages), saves:Array.isArray(conversation.saves) ? conversation.saves.map(normalizeSaved).filter(Boolean).slice(-12) : [], job:conversation.job && conversation.job.id ? {id:boundedText(conversation.job.id, 200), status:boundedText(conversation.job.status || 'running', 30), startedAt:Number(conversation.job.startedAt) || 0} : null, error:boundedText(conversation.error, 2000), ...(conversation.diagnostics?{diagnostics:normalizeExploration(conversation.diagnostics)}:{})};
     }
 
     function buildHistoryPayload(conversations, activeConversationId) {

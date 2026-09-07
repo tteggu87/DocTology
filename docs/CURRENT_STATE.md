@@ -11,6 +11,12 @@ DocTology is a local Wiki Studio application plus exactly three reusable skills:
 
 The canonical management entrypoint is `python3 scripts/manage_skills.py`. `check` validates the source inventory; `install` synchronizes only the three reusable skills to a target skill root. Studio application files are not installed with a skill.
 
+## Native Pi session experiment
+
+Studio exposes persistent Pi RPC conversations only with `--native-pi`; the existing read-only wiki chat remains default. The [native adapter](../runtime/wiki_dashboard_native.py) keeps one process per active conversation, uses Pi's own transcript and resumes only server-recorded sessions. The live session holds the existing writer lease; turn completion releases neither the process nor that lease. Native replies show generic tools and reported cache/context statistics without verified-citation claims. Supported extension dialogs are forwarded; unsupported TUI interactions are cancelled visibly. Native file writes still require the existing loop gates for wiki certification.
+
+See [operation and storage](../dashboard/README.md#pi-기본-세션-사용하기--실험). Local native and browser checks cover continuity, file writes, lifecycle, and interactions. Actual Windows terminal/RPC equivalence remains a separate unpassed default-cutover gate.
+
 ## Verified Studio ownership migration
 
 [ADR-0004](adr/ADR-0004-studio-runtime-separation.md) moves current Studio ownership to repository `runtime/` (backend, launchers, and loop adapter), `dashboard/` (UI), and `tests/dashboard/` (JavaScript evaluations). `llm-wiki-loop` retains reusable gates only, invoked by `runtime/wiki_loop_adapter.py`. Root `Wiki-Studio.command` and `Wiki-Studio.bat` forward to `runtime/start_dashboard.command` and `runtime/start_dashboard.bat`. This is implemented and verified: [migration evidence](evidence/2026-09-06-studio-runtime-separation.md). Earlier evidence retains its original paths, fingerprints, and observations; those records are historical, not verification of the new layout.
