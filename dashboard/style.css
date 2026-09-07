@@ -109,7 +109,7 @@ main { position: relative; height: calc(100vh - 64px); overflow: hidden; }
 .error-banner { color: var(--danger); background: #fff1ef; border: 1px solid #efd3cf; }
 .example-banner:not([hidden]) + .error-banner { top: 62px; }
 
-.chat-view { position: relative; height: 100%; display: grid; grid-template-rows: minmax(0,1fr) auto auto auto; background: linear-gradient(180deg,#fff 0%,#fff 82%,#fbfbf8 100%); }
+.chat-view { position: relative; height: 100%; display: grid; grid-template-rows: auto minmax(0,1fr) auto auto auto; background: linear-gradient(180deg,#fff 0%,#fff 82%,#fbfbf8 100%); }
 .chat-messages { min-height: 0; overflow-y: auto; scroll-behavior: smooth; overscroll-behavior: contain; }
 .chat-scroll-controls { display: flex; justify-content: flex-end; gap: 6px; padding: 6px 22px; }
 .chat-scroll-controls button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: white; color: var(--muted); font-size: var(--studio-text-meta, 10px); }
@@ -666,3 +666,39 @@ button.runner-card:hover { border-color: var(--cobalt); background: white; }
 .chat-mode-option { padding: 16px 0; border-top: 1px solid var(--line); }
 .chat-mode-option h3 { margin: 0 0 8px; }
 .chat-mode-option p { line-height: 1.6; }
+
+.chat-view > .native-pi-controls { grid-row: 1; }
+.chat-view > .chat-messages { grid-row: 2; }
+.chat-view > .chat-scroll-controls { grid-row: 3; }
+.chat-view > .composer { grid-row: 4; }
+.chat-view > .composer-note { grid-row: 5; }
+.readiness-badge.ready { border-color: #b9d5c7; background: #edf5ef; }
+.readiness-badge.ready:hover { border-color: #86b69c; background: #e5f0e9; }
+.readiness-badge.ready strong { color: #315e47; }
+.readiness-badge.ready span { color: #496c57; }
+.readiness-badge strong::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #a7b0aa; vertical-align: 1px; }
+.readiness-badge.ready strong::before { background: #4e8b67; box-shadow: 0 0 0 2px #dcece1; }
+.readiness-badge.stale strong::before, .readiness-badge.error strong::before, .readiness-badge.runtime_missing strong::before, .readiness-badge.artifacts_missing strong::before { background: #b68a4d; }
+.knowledge-node.read:not(.cited) circle { fill: #bbd2c5; stroke: #7eaa91; stroke-width: 2; }
+.knowledge-legend i.read { background: #bbd2c5; border: 1px solid #7eaa91; }
+.knowledge-legend { flex-wrap: wrap; }
+.knowledge-citation-labels { pointer-events: none; }
+.knowledge-citation-labels text { fill: #344d79; stroke: #fff; stroke-width: 5px; stroke-linejoin: round; paint-order: stroke; text-anchor: middle; font-size: var(--studio-text-caption, 8px); font-weight: 750; }
+.native-read-documents { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.native-read-documents summary { color: #55745f; cursor: pointer; }
+.native-read-documents p { color: var(--muted); font-size: var(--studio-text-meta, 11px); line-height: 1.5; }
+.native-read-documents button { display: block; margin: 8px 0; text-align: left; }
+.markdown-table-wrap { max-width: 100%; overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 8px; }
+.markdown-table-wrap table { border-collapse: collapse; width: 100%; font-size: .93em; line-height: 1.6; }
+.markdown-table-wrap th, .markdown-table-wrap td { padding: 9px 12px; min-width: 90px; vertical-align: top; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); }
+.markdown-table-wrap th { background: #f0f4ef; font-weight: 700; }
+.markdown-table-wrap tr:last-child td { border-bottom: 0; }
+.markdown-table-wrap th:last-child, .markdown-table-wrap td:last-child { border-right: 0; }
+.markdown-table-wrap tbody tr:nth-child(even) { background: #fafbf8; }
+@media (max-width: 880px) {
+  .workspace-readiness { grid-template-columns: minmax(0,1fr); margin: 0 0 14px; }
+  .readiness-badge { padding: 6px 3px; }
+  .readiness-badge strong { font-size: 8px; white-space: nowrap; }
+  .readiness-badge strong::before { width: 4px; height: 4px; margin-right: 3px; }
+  .readiness-badge span { display: none; }
+}

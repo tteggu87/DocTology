@@ -9,40 +9,30 @@ superseded_by: N/A
 
 ## Changed
 
-The chat mode settings now work on normal dashboard launches. Users select wiki reading or native Pi from the screen; no command-line flag is required. Selection creates a new conversation, persists through browser history, and closes an idle native session when returning to wiki reading. The legacy launch flag remains accepted for compatibility.
+Native answers now connect explicit local source links to successful read excerpts from the active Pi session branch. Incremental native entries restore previous-turn sources without replaying browser history or adding a model call. References open the matched source snapshot, and the graph distinguishes read documents from cited ones. This confirms surviving-excerpt provenance, not semantic truth or full-file version identity.
 
-The UI-selected native Pi path keeps Pi's native process, tools and transcript across turns inside the existing Studio UI. Runtime owns session/turn identity, durable request receipts, native interaction forwarding and the existing writer lease for the live session. The UI displays native tools and reported statistics without verified-citation claims. See [operation and storage](../dashboard/README.md#pi-기본-세션-사용하기--실험).
-
-Current architecture, maps and usage distinguish default read-only chat from native file-changing sessions. Lifecycle regressions preserve delayed-turn cleanup and canceled-start ownership failures found in review. The local cycle casebook records proof and next gates.
+The chat grid reserves a separate controls row and hides unsupported save actions in native mode. Markdown tables support alignment, escaped pipes, inline formatting and citation links within a horizontally scrollable table. Citation nodes and labels render above other graph layers. Prepared SQLite/ONNX states use a subtle green badge and status dot while preserving inference/usage caveats.
 
 ### Files
 
-- `.re0/iteration/v1.1.0-provisional-native-pi-rpc/DESIGN.local.md`
-- `.re0/iteration/v1.1.0-provisional-native-pi-rpc/EVIDENCE.local.md`
-- `.re0/iteration/v1.1.0-provisional-native-pi-rpc/REF-decisions.local.md`
-- `.re0/iteration/v1.1.0-provisional-native-pi-rpc/RETRO.local.md`
-- `.re0/iteration/v1.1.0-provisional-native-pi-rpc/WORKFLOW.local.md`
 - `AGENTS.md`
-- `README.md`
 - `dashboard/README.md`
 - `dashboard/app.js`
 - `dashboard/index.html`
+- `dashboard/modules/graph.js`
 - `dashboard/modules/history-codec.js`
+- `dashboard/modules/markdown.js`
 - `dashboard/modules/native-pi.js`
 - `dashboard/modules/retrieval-status.js`
 - `dashboard/style.css`
 - `docs/ARCHITECTURE.md`
 - `docs/CURRENT_STATE.md`
-- `docs/IMPACT_SUMMARY.md`
-- `docs/repo-map/DATA_FLOW.md`
-- `docs/repo-map/ENTRYPOINTS.md`
 - `docs/repo-map/MODULES.md`
 - `runtime/wiki_dashboard.py`
-- `runtime/wiki_dashboard_http.py`
 - `runtime/wiki_dashboard_native.py`
+- `runtime/wiki_dashboard_native_citations.py`
 - `tests/dashboard/dashboard_ui.test.cjs`
-- `tests/dashboard/frontend_modules.test.cjs`
-- `tests/test_wiki_dashboard_native.py`
+- `tests/test_wiki_dashboard_native_citations.py`
 - `wiki/_meta/log.md`
 
 ## Checked Not Changed
@@ -63,4 +53,4 @@ Actual Windows terminal/RPC parity and default cutover are unpassed. Generic too
 
 ## Validator Summary
 
-Python 456 tests and JavaScript 154 tests passed; three-skill check passed. Real local Pi/browser checks covered read/recall/write, native resume, supported dialogs, browser reload and abort. Separate architecture and acceptance reviews approved the bounded opt-in slice. Repo Docs validation reports zero errors and warnings with the changed-file list.
+Python 462 tests and JavaScript 158 tests passed; three-skill check passed. Real local Pi/browser checks cover a table with one cited and one read-only document, reference click-through, no-tool follow-up citation, and native resume. A separate code reviewer approved the excerpt-provenance contract and rendering changes. Synthetic rendering checks at 1152px and 760px verified unobstructed mode controls, separate message/composer rows and ready-state badge styles; these do not claim actual ONNX inference. Repo Docs validation reports zero errors and warnings with the changed-file list.

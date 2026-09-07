@@ -118,16 +118,18 @@
       }));
     }
 
-    function renderKnowledgeGraph({state, references, $, limit}) {
+    function renderKnowledgeGraph({state, references, readDocuments = [], $, limit}) {
       const allNodes = state?.graph?.nodes || [];
       const allEdges = state?.graph?.edges || [];
       const focus = citationFocus({nodes:allNodes, edges:allEdges, references});
+      const readIds = new Set(readDocuments.map(document=>document.id));
       const degree = new Map();
       allEdges.forEach(edge => [edge.source, edge.target].forEach(id => degree.set(id, (degree.get(id) || 0) + 1)));
       const stable = [...allNodes].sort((a, b) => String(a.id).localeCompare(String(b.id)));
       const priority = allNodes.length <= limit ? stable : stable.sort((a, b) =>
         Number(focus.cited.has(b.id)) - Number(focus.cited.has(a.id)) ||
         Number(focus.pathNodes.has(b.id)) - Number(focus.pathNodes.has(a.id)) ||
+        Number(readIds.has(b.id)) - Number(readIds.has(a.id)) ||
         (degree.get(b.id) || 0) - (degree.get(a.id) || 0) ||
         String(a.id).localeCompare(String(b.id))
       );
@@ -153,14 +155,13 @@
         const a = layout.get(edge.source), b = layout.get(edge.target);
         const highlighted = focus.pathEdges.has(edgeKey(edge.source, edge.target));
         return `<line class="knowledge-edge ${highlighted?'citation-path':''}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`;
-      }).join('')}${nodes.map(node => {
+      }).join('')}${[...nodes.filter(node=>!focus.cited.has(node.id)),...nodes.filter(node=>focus.cited.has(node.id))].map(node => {
         const point = layout.get(node.id), cited = focus.cited.has(node.id), onPath = focus.pathNodes.has(node.id);
         const radius = cited ? 7 : Math.min(5, 3 + (degree.get(node.id) || 0) * .22);
         const number = citationNumbers.get(node.id);
         const fullLabel = number ? `[${number}] ${node.title}` : node.title;
-        const label = fullLabel.length > 21 ? fullLabel.slice(0, 20) + '…' : fullLabel;
-        return `<g class="knowledge-node ${cited?'cited':''} ${onPath&&!cited?'on-path':''}" data-page="${escapeHTML(node.id)}" role="button" tabindex="0" aria-label="${escapeHTML(cited?`참고문헌 ${number}, ${node.title} 열기`:`${node.title} 열기`)}" transform="translate(${point.x} ${point.y})"><circle r="${radius}"/><title>${escapeHTML(fullLabel)}</title>${cited?`<text y="${radius+13}">${escapeHTML(label)}</text>`:''}</g>`;
-      }).join('')}</svg>`;
+        return `<g class="knowledge-node ${cited?'cited':''} ${readIds.has(node.id)&&!cited?'read':''} ${onPath&&!cited?'on-path':''}" data-page="${escapeHTML(node.id)}" role="button" tabindex="0" aria-label="${escapeHTML(cited?`참고문헌 ${number}, ${node.title} 열기`:`${node.title} 열기`)}" transform="translate(${point.x} ${point.y})"><circle r="${radius}"/><title>${escapeHTML(fullLabel)}</title></g>`;
+       }).join('')}<g class="knowledge-citation-labels" aria-hidden="true">${nodes.filter(node=>focus.cited.has(node.id)).map(node=>{const point=layout.get(node.id);const label=`[${citationNumbers.get(node.id)}] ${node.title}`;return `<text x="${Math.max(70,Math.min(width-70,point.x))}" y="${Math.min(height-8,point.y+20)}">${escapeHTML(label.length>21?label.slice(0,20)+'…':label)}</text>`;}).join('')}</g></svg>`;
     }
 
     return {edgeKey, citationFocus, positions, normalizePositions, renderKnowledgeGraph};

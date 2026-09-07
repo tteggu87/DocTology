@@ -20,7 +20,7 @@
         : [];
       const contentHash = normalizeContentHash(reference?.contentHash);
       const readRanges = normalizeReadRanges(reference?.readRanges);
-      return {id:boundedText(reference?.id, 1000), title:boundedText(reference?.title || reference?.id || `참고문헌 ${index + 1}`, 500), number:Number(reference?.number) || index + 1, excerpt:boundedText(reference?.excerpt, limits.excerpt), rawSources, ...(contentHash ? {contentHash} : {}), ...(readRanges.length ? {readRanges} : {})};
+      return {id:boundedText(reference?.id, 1000), title:boundedText(reference?.title || reference?.id || `참고문헌 ${index + 1}`, 500), number:Number(reference?.number) || index + 1, excerpt:boundedText(reference?.excerpt, limits.excerpt), rawSources, ...(reference?.provenance==='native-read-link'?{provenance:'native-read-link'}:{}), ...(contentHash ? {contentHash} : {}), ...(readRanges.length ? {readRanges} : {})};
     }
 
     const normalizeReferences = items => Array.isArray(items) ? items.slice(0, limits.evidence).map(normalizeReference) : [];

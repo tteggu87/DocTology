@@ -1455,7 +1455,7 @@ test('native metadata survives browser history without inheriting verified citat
   assert.equal(c.run('currentConversation().messages[0].native.sessionId'),'s1');
   assert.match(c.element('#chat-messages').innerHTML,/실제 도구 호출/);
   assert.match(c.element('#chat-messages').innerHTML,/세션 누적/);
-  assert.match(c.element('#chat-messages').innerHTML,/인용 자동 검증 없음/);
+  assert.match(c.element('#chat-messages').innerHTML,/연결된 출처 없음/);
   assert.match(c.run('chatSaveReason()'),/Pi 기본 세션/);
 });
 test('native tool rendering escapes data and retains unknown retrieval methods',()=>{
@@ -1501,4 +1501,43 @@ test('chat mode settings explain unavailable native mode and block switching dur
   assert.equal(c.element('[data-action="new-native-chat"]').disabled,true);
   c.run("activeChatJob={id:'running'};renderNativeControls();");
   assert.equal(c.element('#chat-mode-button').disabled,true);
+});
+
+test('native answers omit unavailable save chrome and retain read/citation history',()=>{
+  const c=context();
+  c.run("state.demo=false;state.nativePiAvailable=true;newConversation('native');currentConversation().messages=[{role:'assistant',content:'[A](wiki/a.md)',references:[{id:'wiki/a.md',title:'A',number:1,excerpt:'evidence',rawSources:[],provenance:'native-read-link'}],native:{readDocuments:[{id:'wiki/a.md',title:'A'},{id:'wiki/b.md',title:'B'}]}}];saveHistory();loadHistoryForRoot(state.root);renderChat();renderReferences();");
+  const html=c.element('#chat-messages').innerHTML;
+  assert.doesNotMatch(html,/conversation-save-bar|answer-save-button/);
+  assert.match(html,/data-reference-id="wiki\/a.md"/);
+  assert.match(c.element('#reference-context').textContent,/Pi가 읽은 발췌/);
+  assert.match(c.element('#answer-references').innerHTML,/세션에서 읽은 문서 1개/);
+  assert.equal(c.run('currentConversation().messages[0].references[0].provenance'),'native-read-link');
+  assert.equal(c.run('currentConversation().messages[0].native.readDocuments.length'),2);
+});
+test('markdown tables render alignment, escaped pipes, inline code, citations and safe content',()=>{
+  const c=context();
+  const table='| 항목 | 값 | 근거 |\n| :--- | ---: | :---: |\n| **A** | `x|y` | [문서](wiki/a.md) |\n| escaped\\|pipe | <script>alert(1)</script> | 끝 |';
+  const html=c.run(`renderAnswerMarkdown(${JSON.stringify(table)},[{id:'wiki/a.md',number:1}])`);
+  assert.match(html,/<table>/);assert.match(html,/<th scope="col" style="text-align:right">값<\/th>/);
+  assert.match(html,/<code>x\|y<\/code>/);assert.match(html,/escaped\|pipe/);
+  assert.match(html,/data-reference-id="wiki\/a.md"/);assert.doesNotMatch(html,/<script>/);
+  assert.equal((html.match(/<td /g)||[]).length,6);
+  assert.doesNotMatch(c.run(`renderAnswerMarkdown(${JSON.stringify('```md\n'+table+'\n```')})`),/<table>/);
+});
+test('graph paints citations above normal nodes and labels after all circles',()=>{
+  const c=context();
+  c.run("state.graph={nodes:[{id:'wiki/a.md',title:'Cited'},{id:'wiki/b.md',title:'Read'},{id:'wiki/c.md',title:'Other'}],edges:[{source:'wiki/a.md',target:'wiki/b.md'},{source:'wiki/b.md',target:'wiki/c.md'}]};graphTools.renderKnowledgeGraph({state,references:[{id:'wiki/a.md',number:1}],readDocuments:[{id:'wiki/b.md'}],$,limit:80});");
+  const html=c.element('#knowledge-graph').innerHTML;
+  assert.ok(html.indexOf('data-page="wiki/a.md"')>html.indexOf('data-page="wiki/c.md"'));
+  assert.ok(html.indexOf('knowledge-citation-labels')>html.lastIndexOf('<circle'));
+  assert.match(html,/knowledge-node [^"]*read[^"]*" data-page="wiki\/b.md"/);
+});
+test('configured retrieval badges have distinct readiness tone without claiming verified inference',()=>{
+  const c=context();const status=retrievalStatusFixture('/vault');
+  c.run(`state.demo=false;state.root='/vault';retrievalStatusRoot='/vault';retrievalStatus=normalizeRetrievalStatus(${JSON.stringify(status)},'/vault');renderRetrievalStatus();`);
+  const html=c.element('#retrieval-readiness').innerHTML;
+  assert.equal((html.match(/readiness-badge ready/g)||[]).length,2);
+  assert.match(html,/추론 미검증/);
+  c.run("retrievalStatus=null;renderRetrievalStatus();");
+  assert.doesNotMatch(c.element('#retrieval-readiness').innerHTML,/readiness-badge ready/);
 });

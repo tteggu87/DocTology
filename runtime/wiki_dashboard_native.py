@@ -15,6 +15,8 @@ import subprocess
 import threading
 import time
 
+from wiki_dashboard_native_citations import NativeCitations, CITATION_INSTRUCTION
+
 
 class NativeError(ValueError):
     pass
@@ -47,7 +49,7 @@ class PiRPC:
             if not node or not cli.is_file():
                 raise NativeError("Windows의 Pi Node 실행 파일을 찾지 못했습니다. npm 전역 Pi 설치를 확인하세요.")
             command = [node, str(cli), *command[1:]]
-        self.command = [*command, "--mode", "rpc"]
+        self.command = [*command, "--mode", "rpc", "--append-system-prompt", CITATION_INSTRUCTION]
         if session_file:
             self.command.extend(["--session", str(session_file)])
         if model:
@@ -192,6 +194,7 @@ class NativeSessions:
         self.jobs, self.active = {}, None
         self.dispatching = None
         self.rpc = None
+        self.citations = None
         self.root = None
         self.conversation = None
         self.generation = None
@@ -329,6 +332,7 @@ class NativeSessions:
                     row = registry["sessions"].get(conversation)
                     resume = self._resume_path(row, root) if row else None
                     self.root, self.conversation, self.model_request = root, conversation, model
+                    self.citations = NativeCitations(root)
                     self.generation = secrets.token_hex(12)
                     generation = self.generation
                     job["generation"] = generation
@@ -556,6 +560,7 @@ class NativeSessions:
             if not job or self.active != job_id or self.generation != generation or job["status"] != "running":
                 return
             rpc = self.rpc
+            citations = self.citations
         stats = None
         try:
             if rpc:
@@ -583,10 +588,23 @@ class NativeSessions:
                 return
         except Exception:
             pass
+        references, read_documents, citation_notice = [], [], ""
+        if rpc and citations and not job.get("stopRequested") and not job.get("errorSeen"):
+            try:
+                citations.update(rpc.request("get_entries", timeout=3, **citations.request_arguments()))
+                references, read_documents = citations.project(job["answer"])
+                for reference in references:
+                    reference["excerpt"] = display_text(reference["excerpt"], 1000)
+                    reference["title"] = display_text(reference["title"], 500)
+            except Exception:
+                citation_notice = "Pi 읽기 기록과 출처를 대조하지 못했습니다. 답변은 유지하며 인용 연결은 생략했습니다."
         with self.lock:
             job = self.jobs.get(job_id)
             if not job or self.generation != generation or job.get("generation") != generation or job["status"] != "running":
                 return
+            job["references"] = references
+            job["native"]["readDocuments"] = read_documents
+            job["native"]["citationNotice"] = citation_notice
             job["native"]["stats"] = stats
             self.info["stats"] = stats
             status = "stopped" if job["stopRequested"] else "failed" if job["errorSeen"] or not job["answer"].strip() else "finished"

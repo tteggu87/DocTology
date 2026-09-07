@@ -49,6 +49,7 @@ documents_module = load_dashboard_module("wiki_dashboard_documents")
 folders_module = load_dashboard_module("wiki_dashboard_folders")
 progress_module = load_dashboard_module("wiki_dashboard_progress")
 index_module = load_dashboard_module("wiki_dashboard_index")
+native_citations_module = load_dashboard_module("wiki_dashboard_native_citations")
 native_module = load_dashboard_module("wiki_dashboard_native")
 http_module = load_dashboard_module("wiki_dashboard_http")
 

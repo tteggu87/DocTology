@@ -543,9 +543,10 @@ function renderChat() {
   else {
     const wholeReason=chatSaveReason(latestAssistantIndex(conversation),'conversation');
     const conversationSaves=(conversation.saves||[]).map(savedSummary).join('');
-    container.innerHTML = `<div class="message-stack"><div class="conversation-save-bar"><div><strong>현재 대화를 원문으로 보존</strong><span>검증된 사실이 아니며 저장 뒤 기존 게이트를 통과해야 합니다.</span></div><button data-action="save-conversation" ${wholeReason?'disabled':''} title="${escapeHTML(wholeReason||'현재 대화 전체를 미리보고 저장')}">대화 전체 저장</button></div>${conversationSaves}${conversation.messages.map((message,index) => message.role === 'user'
+    const nativeConversation=conversation.engine==='native';
+    container.innerHTML = `<div class="message-stack">${nativeConversation?'':`<div class="conversation-save-bar"><div><strong>현재 대화를 원문으로 보존</strong><span>검증된 사실이 아니며 저장 뒤 기존 게이트를 통과해야 합니다.</span></div><button data-action="save-conversation" ${wholeReason?'disabled':''} title="${escapeHTML(wholeReason||'현재 대화 전체를 미리보고 저장')}">대화 전체 저장</button></div>`}${conversationSaves}${conversation.messages.map((message,index) => message.role === 'user'
       ? `<article class="message user-message"><div class="message-label">나</div><div class="user-bubble">${escapeHTML(message.content)}</div></article>`
-      : (()=>{const saveReason=chatSaveReason(index,'answer');return `<article class="message assistant-message ${selectedAnswerIndex===index?'focused':''}" data-answer-index="${index}" tabindex="0"><div class="assistant-avatar">D</div><div class="assistant-content"><div class="message-label">DocTology</div><div class="answer-body">${renderAnswerMarkdown(message.content,message.references)}</div>${message.native?nativePiTools.render(message.native):renderRetrievalUsage(message.exploration?.retrievalUsage)}${message.truncated?'<div class="provisional-note">로컬 저장 한도 때문에 이 메시지의 뒷부분은 저장되지 않았습니다. 불완전한 원문으로 내보내지 않습니다.</div>':''}${message.partial?'<div class="provisional-note">응답 연결이 종료되어 마지막으로 받은 초안입니다. 완료된 답변이 아닙니다.</div>':''}${renderExploration(message.exploration)}${renderCandidates(message.candidates,message.exploration)}<div class="answer-actions">${message.references?.length ? `<button class="answer-reference-summary" data-answer-index="${index}">참고문헌 ${message.references.length}개 보기</button>` : message.native?'<span class="no-citations">Pi 기본 응답 · 인용 자동 검증 없음</span>':'<span class="no-citations">이 답변에는 명시된 인용이 없습니다.</span>'}<button class="answer-save-button" data-save-answer="${index}" ${saveReason?'disabled':''} title="${escapeHTML(saveReason||'이 질문과 답변을 원문으로 미리보기')}">위키에 저장</button></div><p class="unverified-chat-note">대화 저장은 사실 검증이나 위키 완료를 뜻하지 않습니다.</p>${savedSummary(message.save)}</div></article>`;})()).join('')}${renderPendingAnswer()}${conversation.error ? `<div class="chat-error" role="alert"><span>${escapeHTML(conversation.error)}</span><button data-action="${activeChatJob?'reconnect-chat':'retry-chat'}">${activeChatJob?'연결 다시 확인':'다시 시도'}</button></div>${renderExploration(conversation.diagnostics)}` : ''}</div>`;
+      : (()=>{const saveReason=chatSaveReason(index,'answer');return `<article class="message assistant-message ${selectedAnswerIndex===index?'focused':''}" data-answer-index="${index}" tabindex="0"><div class="assistant-avatar">D</div><div class="assistant-content"><div class="message-label">DocTology</div><div class="answer-body">${renderAnswerMarkdown(message.content,message.references)}</div>${message.native?nativePiTools.render(message.native):renderRetrievalUsage(message.exploration?.retrievalUsage)}${message.truncated?'<div class="provisional-note">로컬 저장 한도 때문에 이 메시지의 뒷부분은 저장되지 않았습니다. 불완전한 원문으로 내보내지 않습니다.</div>':''}${message.partial?'<div class="provisional-note">응답 연결이 종료되어 마지막으로 받은 초안입니다. 완료된 답변이 아닙니다.</div>':''}${renderExploration(message.exploration)}${renderCandidates(message.candidates,message.exploration)}<div class="answer-actions">${message.references?.length ? `<button class="answer-reference-summary" data-answer-index="${index}">참고문헌 ${message.references.length}개 보기</button>` : message.native?'<span class="no-citations">Pi 기본 응답 · 연결된 출처 없음</span>':'<span class="no-citations">이 답변에는 명시된 인용이 없습니다.</span>'}${message.native?'':`<button class="answer-save-button" data-save-answer="${index}" ${saveReason?'disabled':''} title="${escapeHTML(saveReason||'이 질문과 답변을 원문으로 미리보기')}">위키에 저장</button>`}</div>${message.native?'':'<p class="unverified-chat-note">대화 저장은 사실 검증이나 위키 완료를 뜻하지 않습니다.</p>'}${savedSummary(message.save)}</div></article>`;})()).join('')}${renderPendingAnswer()}${conversation.error ? `<div class="chat-error" role="alert"><span>${escapeHTML(conversation.error)}</span><button data-action="${activeChatJob?'reconnect-chat':'retry-chat'}">${activeChatJob?'연결 다시 확인':'다시 시도'}</button></div>${renderExploration(conversation.diagnostics)}` : ''}</div>`;
   }
   for (const detail of container.querySelectorAll('details')) {
     if (openDisclosures.has(chatDisclosureKey(detail))) detail.open=true;
@@ -578,15 +579,21 @@ function renderReferences() {
   const answer = activeAnswer();
   const references = answer?.references || [];
   $('#reference-count').textContent = String(references.length);
-  $('#reference-context').textContent = answer ? (references.length ? '선택한 답변이 명시한 참고문헌입니다.' : '선택한 답변에는 명시된 참고문헌이 없습니다.') : '답변의 번호 인용을 선택하면 원문을 확인할 수 있습니다.';
+  $('#reference-context').textContent = answer ? (references.length ? answer.native?'출처 링크와 Pi가 읽은 발췌를 현재 문서와 대조했습니다. 답변의 사실성은 별도 확인이 필요합니다.':'선택한 답변이 명시한 참고문헌입니다.' : '선택한 답변에는 명시된 참고문헌이 없습니다.') : '답변의 번호 인용을 선택하면 원문을 확인할 수 있습니다.';
   $('#answer-references').innerHTML = references.length ? references.map(reference => `<article class="reference-card"><button class="reference-main" data-reference-id="${escapeHTML(reference.id)}"><span class="reference-number">${reference.number}</span><span><strong>${escapeHTML(reference.title)}</strong>${reference.excerpt ? `<small>${escapeHTML(reference.excerpt)}</small>` : ''}</span></button>${reference.rawSources.length ? `<div class="raw-source-list"><span>연결된 원문</span>${reference.rawSources.map(raw => `<button data-page="${escapeHTML(raw.id)}">${escapeHTML(raw.title)}</button>`).join('')}</div>` : ''}</article>`).join('') : '<div class="reference-empty"><span>인용은 답변 후 여기에 표시됩니다.</span><small>검색 후보는 참고문헌으로 간주하지 않습니다.</small></div>';
+  if(answer?.native?.readDocuments?.length){
+    const cited=new Set(references.map(reference=>reference.id));
+    const read=answer.native.readDocuments.filter(document=>!cited.has(document.id));
+    if(read.length)$('#answer-references').innerHTML+=`<details class="native-read-documents"><summary>세션에서 읽은 문서 ${read.length}개 · 인용과 구분</summary><p>이 답변까지의 읽기 기록입니다. 모두 답변의 근거로 사용됐다는 뜻은 아닙니다.</p>${read.map(document=>`<button class="wiki-inline-link" data-page="${escapeHTML(document.id)}">${escapeHTML(document.title||document.id)}</button>`).join('')}</details>`;
+  }
+
 }
 function referencesForActiveAnswer() { return activeAnswer()?.references || []; }
 const edgeKey = graphTools.edgeKey;
 function citationGraphFocus() { return graphTools.citationFocus({nodes:state?.graph?.nodes||[],edges:state?.graph?.edges||[],references:referencesForActiveAnswer()}); }
 const positions = graphTools.positions;
 const normalizeGraphPositions = graphTools.normalizePositions;
-function renderKnowledgeGraph() { return graphTools.renderKnowledgeGraph({state,references:referencesForActiveAnswer(),$,limit:GRAPH_LIMIT}); }
+function renderKnowledgeGraph() { const answer=activeAnswer();$('#knowledge-read-legend').hidden=!answer?.native;return graphTools.renderKnowledgeGraph({state,references:referencesForActiveAnswer(),readDocuments:answer?.native?.readDocuments||[],$,limit:GRAPH_LIMIT}); }
 
 const chatHistoryPayload = historyCodec.chatHistoryPayload;
 async function submitChat(message, {reuseLast=false} = {}) {
@@ -1145,7 +1152,7 @@ function resetDocumentReader() {
   $('#document-title').textContent='문서'; $('#document-path').textContent=''; $('#document-kind').textContent='WIKI DOCUMENT';
   $('#document-relations').innerHTML=''; $('#document-body').textContent='';
 }
-async function openPage(path, {expectedContentHash='',citation=false} = {}) {
+async function openPage(path, {expectedContentHash='',citation=false,nativeCitation=false} = {}) {
   $('#document-scroll').scrollTop=0;
   const request=++documentRequest,rootAtStart=String(state?.root||''),expectedHash=normalizeContentHash(expectedContentHash);
   const fallbackTitle=graphNodeTitle(path); $('#document-title').textContent=fallbackTitle; $('#document-path').textContent=path; $('#document-kind').textContent=path.startsWith('raw/')?'RAW SOURCE':'WIKI DOCUMENT'; $('#document-relations').innerHTML=''; $('#document-body').textContent='문서를 읽고 있어요…'; if(!$('#document-dialog').open)openDialog('#document-dialog');
@@ -1157,7 +1164,7 @@ async function openPage(path, {expectedContentHash='',citation=false} = {}) {
     const currentHash=normalizeContentHash(data.contentHash);
     if (expectedHash && currentHash!==expectedHash) {
       $('#document-kind').textContent='CITATION SNAPSHOT MISMATCH';
-      $('#document-body').textContent='인용 당시 읽은 문서와 현재 문서의 내용 해시가 다르거나 현재 해시를 확인할 수 없습니다. 현재 문서를 오래된 인용의 근거로 표시하지 않았습니다.';
+      $('#document-body').textContent=nativeCitation?'출처 연결 시점과 현재 문서의 내용이 다릅니다. 당시 읽은 발췌는 참고문헌 카드에서 확인하세요.':'인용 당시 읽은 문서와 현재 문서의 내용 해시가 다르거나 현재 해시를 확인할 수 없습니다. 현재 문서를 오래된 인용의 근거로 표시하지 않았습니다.';
       return;
     }
     const text=String(data.text ?? data.content ?? '');
@@ -1165,13 +1172,13 @@ async function openPage(path, {expectedContentHash='',citation=false} = {}) {
     const links=Array.isArray(data.links)?data.links.filter(item=>item?.id):[];
     documentLinks=new Set([...rawSources,...links].map(item=>String(item.id)));
     $('#document-title').textContent=String(data.title||fallbackTitle);
-    $('#document-relations').innerHTML=`${citation&&!expectedHash?'<section><span>이전 대화 인용에는 당시 문서 해시가 없어 현재 문서와 비교할 수 없습니다.</span></section>':''}${rawSources.length?`<section><span>연결된 원문</span>${rawSources.map(raw=>`<button data-page="${escapeHTML(raw.id)}">${escapeHTML(raw.title||raw.id)}</button>`).join('')}</section>`:''}${links.length?`<section><span>문서 연결</span>${links.map(link=>`<button data-page="${escapeHTML(link.id)}">${escapeHTML(link.title||link.id)}${link.kind?` <small>${escapeHTML(link.kind)}</small>`:''}</button>`).join('')}</section>`:''}`;
+    $('#document-relations').innerHTML=`${nativeCitation?'<section><span>Pi가 읽은 발췌와 출처 연결 시점의 문서를 대조했습니다. 전체 문서가 읽기 당시와 같은 버전이라는 뜻은 아닙니다.</span></section>':''}${citation&&!expectedHash?'<section><span>이전 대화 인용에는 당시 문서 해시가 없어 현재 문서와 비교할 수 없습니다.</span></section>':''}${rawSources.length?`<section><span>연결된 원문</span>${rawSources.map(raw=>`<button data-page="${escapeHTML(raw.id)}">${escapeHTML(raw.title||raw.id)}</button>`).join('')}</section>`:''}${links.length?`<section><span>문서 연결</span>${links.map(link=>`<button data-page="${escapeHTML(link.id)}">${escapeHTML(link.title||link.id)}${link.kind?` <small>${escapeHTML(link.kind)}</small>`:''}</button>`).join('')}</section>`:''}`;
     $('#document-body').innerHTML=renderMarkdown(text,path,normalizeReferences(rawSources));
   } catch(error) { if(request===documentRequest&&String(state?.root||'')===rootAtStart)$('#document-body').textContent=error.message; }
 }
 function openReferenceById(id, references = null) {
   const pool=references||referencesForActiveAnswer();
-  const reference=pool.find(item=>item.id===id); if(!reference)return false; openPage(reference.id,{expectedContentHash:reference.contentHash,citation:true}); return true;
+  const reference=pool.find(item=>item.id===id); if(!reference)return false; openPage(reference.id,{expectedContentHash:reference.contentHash,citation:true,nativeCitation:reference.provenance==='native-read-link'}); return true;
 }
 function openCitationReference(id, answerIndex = null, provisional = false) {
   if (Number.isInteger(answerIndex)) focusAnswer(answerIndex);

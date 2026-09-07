@@ -20,7 +20,10 @@
         const id = resolveInternalLink(href, documentPath, references);
         if (!id) return label;
         const token = `@@DT${tokens.length}@@`;
-        tokens.push(`<button class="wiki-inline-link" data-page="${escapeHTML(id)}">${label}</button>`);
+        const reference = includeCitations && references.find(item=>item.id===id);
+        tokens.push(reference
+          ? `<button class="wiki-inline-link citation-link" data-reference-id="${escapeHTML(id)}">${label} [${reference.number}]</button>`
+          : `<button class="wiki-inline-link" data-page="${escapeHTML(id)}">${label}</button>`);
         return token;
       });
       if (includeCitations) {
@@ -42,8 +45,9 @@
           id.replace(/\.md$/, ''),
           id.split('/').at(-1).replace(/\.md$/, '')
         ].includes(key));
+        const reference = includeCitations && matches.length===1 && references.find(item=>item.id===matches[0]);
         return matches.length === 1
-          ? `<button class="wiki-inline-link" data-page="${escapeHTML(matches[0])}">${escapeHTML(label || target)}</button>`
+          ? reference ? `<button class="wiki-inline-link citation-link" data-reference-id="${escapeHTML(matches[0])}">${escapeHTML(label || target)} [${reference.number}]</button>` : `<button class="wiki-inline-link" data-page="${escapeHTML(matches[0])}">${escapeHTML(label || target)}</button>`
           : escapeHTML(value);
       });
       tokens.forEach((html, index) => { safe = safe.replace(`@@DT${index}@@`, html); });
@@ -61,7 +65,25 @@
         result.push(`<ul>${list.join('')}</ul>`);
         list = [];
       };
-      for (const line of clean.split('\n')) {
+      const tableCells = line => {
+        let value=line.trim(), cell='', cells=[], codeRun=0;
+        if(value.startsWith('|'))value=value.slice(1);
+        for(let index=0;index<value.length;index++){
+          const ch=value[index];
+          if(ch==='\\'&&value[index+1]==='|'){cell+='|';index++;continue;}
+          if(ch==='`'){
+            let count=1;while(value[index+count]==='`')count++;
+            if(!codeRun)codeRun=count;else if(codeRun===count)codeRun=0;
+            cell+='`'.repeat(count);index+=count-1;continue;
+          }
+          if(ch==='|'&&!codeRun){cells.push(cell.trim());cell='';}else cell+=ch;
+        }
+        if(cell.trim()||!value.endsWith('|'))cells.push(cell.trim());
+        return cells;
+      };
+      const lines=clean.replace(/\r\n/g,'\n').split('\n');
+      for (let index=0;index<lines.length;index++) {
+        const line=lines[index];
         if (line.startsWith('```')) {
           flushList();
           if (inCode) {
@@ -72,6 +94,20 @@
           continue;
         }
         if (inCode) { code.push(line); continue; }
+        if(line.includes('|') && index+1<lines.length){
+          const headers=tableCells(line), dividers=tableCells(lines[index+1]);
+          if(headers.length && dividers.length===headers.length && dividers.every(cell=>/^:?-{3,}:?$/.test(cell))){
+            flushList();
+            const align=dividers.map(cell=>cell.startsWith(':')&&cell.endsWith(':')?'center':cell.endsWith(':')?'right':'left');
+            const rows=[];index++;
+            while(index+1<lines.length && lines[index+1].trim() && lines[index+1].includes('|') && !lines[index+1].trim().startsWith('```')){
+              rows.push(tableCells(lines[++index]));
+            }
+            const cellHtml=(cells,tag)=>headers.map((_,column)=>`<${tag}${tag==='th'?' scope="col"':''} style="text-align:${align[column]}">${renderInline(cells[column]||'',documentPath,references,includeCitations)}</${tag}>`).join('');
+            result.push(`<div class="markdown-table-wrap" role="region" aria-label="표" tabindex="0"><table><thead><tr>${cellHtml(headers,'th')}</tr></thead><tbody>${rows.map(cells=>`<tr>${cellHtml(cells,'td')}</tr>`).join('')}</tbody></table></div>`);
+            continue;
+          }
+        }
         const heading = line.match(/^(#{1,3})\s+(.+)/);
         if (heading) {
           flushList();

@@ -33,8 +33,8 @@
       const status = mode === 'current' ? retrievalStatus : null;
       let sqliteDetail = '확인 불가', onnxDetail = '확인 불가', sqliteTone = 'unknown', onnxTone = 'unknown';
       if (mode === 'demo' || mode === 'unsupported') { sqliteDetail = '지원 안함'; onnxDetail = '지원 안함'; }
-      else if (status) { sqliteDetail = retrievalStateLabels[status.sqlite.state]; onnxDetail = onnxStateLabels[status.onnx.state]; sqliteTone = status.sqlite.state === 'current' ? 'neutral' : status.sqlite.state; onnxTone = status.onnx.state === 'configured' ? 'neutral' : status.onnx.state; }
-      if(status?.studio){sqliteDetail=status.studio.state==='current'?(state?.nativeConversation?'인덱스 준비됨':'채팅 사용 중'):'채팅 검색 준비 필요';sqliteTone=status.studio.state==='current'?'neutral':'unknown';}
+      else if (status) { sqliteDetail = retrievalStateLabels[status.sqlite.state]; onnxDetail = onnxStateLabels[status.onnx.state]; sqliteTone = status.sqlite.state === 'current' ? 'ready' : status.sqlite.state; onnxTone = status.onnx.state === 'configured' ? 'ready' : status.onnx.state; }
+      if(status?.studio){sqliteDetail=status.studio.state==='current'?(state?.nativeConversation?'인덱스 준비됨':'채팅 사용 중'):'채팅 검색 준비 필요';sqliteTone=status.studio.state==='current'?'ready':'unknown';}
       const badge = (label, detail, tone) => `<button type="button" class="readiness-badge ${tone}" data-action="retrieval-status-details" aria-label="${escapeHTML(label)} ${escapeHTML(detail)} · 검색 준비 상태 상세 보기"><strong>${escapeHTML(label)}</strong><span>${escapeHTML(detail)}</span></button>`;
       $('#retrieval-readiness').innerHTML = badge('SQLite', sqliteDetail, sqliteTone) + badge('ONNX', onnxDetail, onnxTone);
       const body = $('#retrieval-status-body'), updated = $('#retrieval-status-updated');
