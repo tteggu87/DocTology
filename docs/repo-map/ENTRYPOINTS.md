@@ -8,7 +8,7 @@ superseded_by: N/A
 # Entrypoints
 
 - Canonical repository command: `python3 scripts/manage_skills.py check|install`; it validates and installs exactly the three reusable skills.
-- Studio backend: `runtime/wiki_dashboard.py [--repo-root <vault>] [--port <available-port>]` serves the repository-owned UI and default isolated read-only Pi RPC adapter. `--native-pi` exposes the experimental persistent native adapter; see [usage](../../dashboard/README.md#pi-기본-세션-사용하기--실험).
+- Studio backend: `runtime/wiki_dashboard.py [--repo-root <vault>] [--port <available-port>]` serves the repository-owned UI and default isolated read-only Pi RPC adapter. The dashboard chat mode settings expose the experimental persistent native adapter without a launch flag; see [usage](../../dashboard/README.md#pi-기본-세션-사용하기--실험).
 - Studio gate binding: `runtime/wiki_loop_adapter.py` resolves the repository loop skill root and delegates to its unchanged `wiki_loop.py` gates.
 - Studio launchers: `runtime/start_dashboard.command` and `runtime/start_dashboard.bat`; root `Wiki-Studio.command` and `Wiki-Studio.bat` are thin compatibility forwarders.
 - Skill entrypoints: each retained `.agents/skills/*/SKILL.md` and its documented sibling scripts.

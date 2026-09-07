@@ -95,11 +95,15 @@ const nativeUiAnswered=new Set();
 function renderNativeControls(){
   const native=currentConversation()?.engine==='native';
   const session=state?.nativeSession;
-  $('#native-pi-controls').hidden=!(state?.nativePiAvailable||native||session?.open);
-  $('[data-action="new-native-chat"]').disabled=!state?.nativePiAvailable||Boolean(activeChatJob);
+  $('#native-pi-controls').hidden=false;
+  $('#chat-mode-button').textContent='대화 방식 설정 · '+(native?'Pi 기본 대화':'위키 읽기');
+  $('#chat-mode-button').disabled=Boolean(activeChatJob)||session?.busy===true;
+  $('[data-action="new-wiki-chat"]').disabled=Boolean(activeChatJob)||session?.busy===true;
+  $('#chat-mode-unavailable').textContent=state?.nativePiAvailable?'':state?.mode==='project'?'프로젝트 문서는 위키 읽기만 지원합니다.':!state?.root||state?.demo?'먼저 작업용 위키를 연결하세요.':'Pi 설치와 인증을 확인하세요.';
+  $('[data-action="new-native-chat"]').disabled=!state?.nativePiAvailable||Boolean(activeChatJob)||session?.busy===true;
   $('#native-pi-close').hidden=!session?.open;
   $('#native-pi-close').disabled=Boolean(activeChatJob)||session?.busy===true;
-  $('#native-pi-session-note').textContent=session?.error?session.error:native?'파일 변경 가능 · Pi 세션에 대화 보관 · Windows 동등성 검증 전':session?.open?'Pi 세션이 위키 작성 작업을 예약 중입니다.':'기본 대화는 기존 읽기 전용 모드를 유지합니다.';
+  $('#native-pi-session-note').textContent=session?.error?session.error:native?'파일 변경 가능 · Pi 세션에 대화 보관':session?.open?'Pi 세션이 위키 작성 작업을 예약 중입니다.':'문서를 읽고 근거를 확인하는 대화입니다.';
   $('.local-note').textContent=native?'Pi 기본 대화는 Pi 세션에도 저장됩니다.':'대화는 이 브라우저에만 저장됩니다.';
 }
 function renderNativeInteraction(){
@@ -133,6 +137,11 @@ async function respondNativeInteraction(choice={}){
     if(nativeUiOwner===owner){$('#native-ui-dialog').close();nativeUiOwner=null;}
   }catch(error){$('#native-ui-error').textContent=error.message;}
   finally{nativeUiSubmitting=false;$('#native-ui-submit').disabled=false;}
+}
+async function selectChatMode(engine){
+  if(!guardChatNavigation()||state?.nativeSession?.busy)return;
+  if(engine==='wiki'&&state?.nativeSession?.open)await closeNativeSession();
+  if(newConversation(engine))$('#chat-mode-dialog').close();
 }
 async function closeNativeSession(){
   const session=state?.nativeSession;if(!session?.open)return;
@@ -252,7 +261,7 @@ function newConversation(engine=currentConversation()?.engine==='native'?'native
   if (!guardChatNavigation()) return false;
   const conversation = makeConversation();
   if(engine==='native'){
-    if(!state?.nativePiAvailable){toast('--native-pi로 실행한 로컬 위키에서 사용할 수 있습니다.');return false;}
+    if(!state?.nativePiAvailable){toast('작업용 위키를 연결하고 Pi 설치·인증을 확인하세요.');return false;}
     conversation.engine='native';
   }
   conversations.unshift(conversation);
@@ -544,7 +553,7 @@ function renderChat() {
   $('#chat-work-notice').hidden = Boolean(state?.demo) || !(isRunning() || state?.job?.status === 'external');
   $('#chat-submit').disabled = Boolean(activeChatJob) || chatUnavailable;
   $('#chat-stop').hidden = !activeChatJob;
-  $('#chat-status').textContent = activeChatJob ? `${elapsedChatSeconds(activeChatJob)}초 · 응답 생성 중` : nativeUnavailable?'Pi 기본 세션 기록입니다. --native-pi로 서버를 실행하면 이어갈 수 있습니다.':chatUnavailable ? chatSetupReason() : historyStorageNotice;
+  $('#chat-status').textContent = activeChatJob ? `${elapsedChatSeconds(activeChatJob)}초 · 응답 생성 중` : nativeUnavailable?'Pi 기본 대화 기록입니다. 작업용 위키 연결과 Pi 설치·인증을 확인하세요.':chatUnavailable ? chatSetupReason() : historyStorageNotice;
   $('#chat-setup-actions').hidden=!chatUnavailable||Boolean(activeChatJob);
   $('#chat-connect-help').hidden=Boolean(state?.root)&&!state?.demo;
   $('#chat-pi-help').hidden=Boolean(state?.piAvailable);
@@ -586,7 +595,7 @@ async function submitChat(message, {reuseLast=false} = {}) {
   if (state?.chatAvailable === false) { toast(chatSetupReason()); return; }
   if (text.length > 8000) { toast('질문은 8,000자 이하로 입력해 주세요.'); return; }
   const conversation = ensureConversation();
-  if(conversation.engine==='native'&&!state?.nativePiAvailable){toast('--native-pi로 실행한 서버에서 이어갈 수 있습니다.');return;}
+  if(conversation.engine==='native'&&!state?.nativePiAvailable){toast('작업용 위키 연결과 Pi 설치·인증을 확인하세요.');return;}
   conversation.error = '';
   conversation.diagnostics=null;
   let historyMessages = conversation.messages;
@@ -1228,7 +1237,7 @@ function handleClick(event) {
   Promise.resolve((async()=>{switch(target.dataset.action){
     case'connect-recheck':if(connectionAttempt?.pending)pollConnection(connectionAttempt);break;case'connect-cancel':await cancelConnection();break;case'connect-copy-log':await copyConnectionLog();break;
     case'settings':openSettings();break;case'settings-reset':await resetSettings();break;
-    case'new-native-chat':newConversation('native');break;case'native-close':await closeNativeSession();break;case'native-ui-cancel':await respondNativeInteraction({cancelled:true});break;case'native-ui-decline':await respondNativeInteraction({confirmed:false});break;
+    case'chat-mode':renderNativeControls();openDialog('#chat-mode-dialog');break;case'new-wiki-chat':await selectChatMode('wiki');break;case'new-native-chat':await selectChatMode('native');break;case'native-close':await closeNativeSession();break;case'native-ui-cancel':await respondNativeInteraction({cancelled:true});break;case'native-ui-decline':await respondNativeInteraction({confirmed:false});break;
     case'pi-guide':openDialog('#pi-guide-dialog');break;
     case'chat-top':jumpChat('top');break; case'chat-bottom':jumpChat('bottom');break;
     case'new-chat':newConversation();break; case'clear-history':clearHistory();break; case'toggle-knowledge':toggleKnowledge();break;

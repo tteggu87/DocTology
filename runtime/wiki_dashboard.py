@@ -151,7 +151,6 @@ class Dashboard:
             "inside": inside, "workflow": workflow,
             "document_inventory": document_inventory, "document_payload": document_payload,
         })
-        self.native_enabled = bool(native_pi)
         self.native = native_module.NativeSessions(self.pi_command, workflow=workflow, inside=inside,
                                                   terminate=self._terminate, process_alive=process_alive,
                                                   agent_dir=self.chat_agent_dir)
@@ -404,8 +403,8 @@ class Dashboard:
                     public_job["parallel"] = parallel
             data.update({"piAvailable":bool(self.pi_command), "chatAvailable":bool(self.root and self.pi_command),
                 "parallelPreparationAvailable":bool(self.root and self.mode=="wiki" and self.pi_command),
-                "nativePiAvailable":self.native_enabled and self.mode == "wiki" and bool(self.root and self.pi_command),
-                "nativeSession":self.native.summary() if self.native_enabled else None,
+                "nativePiAvailable":self.mode == "wiki" and bool(self.root and self.pi_command),
+                "nativeSession":self.native.summary(),
                 "connectionProgressAvailable":True, "snapshotReady":bool(view) or self.root is None,
                 "snapshotFresh":(self.cache is not None and (not self._snapshot_work or self._snapshot_work.record["status"]=="ready")) or self.root is None,
                 "snapshotStatus":self._snapshot_work.snapshot() if self._snapshot_work and self._snapshot_work.record["root"]==str(self.root) else None,
@@ -1247,7 +1246,7 @@ class Dashboard:
     def native_status(self, request_id):
         with self.lock:
             root = self.root
-            if not self.native_enabled or root is None:
+            if root is None:
                 raise ChatNotFoundError("Pi 기본 세션을 사용할 수 없습니다.")
         try:
             result = self.native.status(root, request_id)
@@ -1260,8 +1259,8 @@ class Dashboard:
 
     def native_action(self, name, body):
         with self.lock:
-            if not self.native_enabled or not self.root or self.mode != "wiki":
-                raise ValueError("Pi 기본 세션은 --native-pi로 실행한 로컬 위키에서만 사용할 수 있습니다.")
+            if not self.root or self.mode != "wiki":
+                raise ValueError("Pi 기본 대화는 작업용 위키를 연결한 뒤 사용할 수 있습니다.")
             root = self.root
             if body.get("expectedRoot") != str(root):
                 raise ValueError("워크스페이스가 바뀌었습니다. 현재 위키를 확인하세요.")
@@ -1421,7 +1420,7 @@ def main(argv=None):
     parser.add_argument("--repo-root", type=Path, help="Existing generated wiki; omit for clearly labelled example")
     parser.add_argument("--port", type=int, default=4317)
     parser.add_argument("--chat-model", default="", help="Default model for chat requests that omit model")
-    parser.add_argument("--native-pi", action="store_true", help="Expose experimental persistent native Pi conversations; native tools may modify files")
+    parser.add_argument("--native-pi", action="store_true", help="Compatibility option; native Pi can now be selected in the dashboard")
     parser.add_argument("--chat-agent-dir", type=Path, help="Pi agent directory override used only by chat subprocesses")
     parser.add_argument("--open-browser", action=argparse.BooleanOptionalAction, default=False,
                         help="Open the default browser after the local server binds")

@@ -83,7 +83,7 @@ class NativeSessionTests(unittest.TestCase):
         FakeRPC.fail_prompt = FakeRPC.wrong_resume = FakeRPC.command_only = FakeRPC.switched = False
         self.app = self.make_app()
     def make_app(self):
-        app = dashboard.Dashboard(self.root, pi_command=["fake-pi"], native_pi=True)
+        app = dashboard.Dashboard(self.root, pi_command=["fake-pi"])
         app.native.rpc_factory = FakeRPC
         self.addCleanup(app.stop_all)
         return app
@@ -326,12 +326,15 @@ class NativeSessionTests(unittest.TestCase):
             self.wait(lambda:self.app.native_status("turn-1")["status"]!="running" and not self.app.native.is_open())
         self.assertEqual(FakeRPC.instances,[])
 
-    def test_default_mode_and_cross_root_requests_are_denied(self):
-        app=dashboard.Dashboard(self.root,pi_command=["fake-pi"])
-        self.addCleanup(app.stop_all)
-        with self.assertRaises(ValueError):self.begin(app=app)
+    def test_normal_launch_allows_native_but_cross_root_and_project_requests_are_denied(self):
+        self.begin()
+        self.ready()
+        self.finish()
         with self.assertRaises(ValueError):
             self.app.native_action("native-chat",{"expectedRoot":"wrong","conversationId":"c1","requestId":"x","message":"hello"})
+        self.app.mode = "project"
+        with self.assertRaises(ValueError):
+            self.begin("project-turn")
 
     def test_rpc_uses_lf_framing_and_keeps_unicode_separators_inside_messages(self):
         script = "import sys,json\nfor line in sys.stdin.buffer:\n q=json.loads(line);print(json.dumps({'type':'response','id':q['id'],'success':True,'data':{'text':'line\\u2028separator'}},ensure_ascii=False),flush=True)\n"

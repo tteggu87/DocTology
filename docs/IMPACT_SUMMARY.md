@@ -9,7 +9,9 @@ superseded_by: N/A
 
 ## Changed
 
-The opt-in `--native-pi` path keeps Pi's native process, tools and transcript across turns inside the existing Studio UI. Runtime owns session/turn identity, durable request receipts, native interaction forwarding and the existing writer lease for the live session. The UI displays native tools and reported statistics without verified-citation claims. See [operation and storage](../dashboard/README.md#pi-기본-세션-사용하기--실험).
+The chat mode settings now work on normal dashboard launches. Users select wiki reading or native Pi from the screen; no command-line flag is required. Selection creates a new conversation, persists through browser history, and closes an idle native session when returning to wiki reading. The legacy launch flag remains accepted for compatibility.
+
+The UI-selected native Pi path keeps Pi's native process, tools and transcript across turns inside the existing Studio UI. Runtime owns session/turn identity, durable request receipts, native interaction forwarding and the existing writer lease for the live session. The UI displays native tools and reported statistics without verified-citation claims. See [operation and storage](../dashboard/README.md#pi-기본-세션-사용하기--실험).
 
 Current architecture, maps and usage distinguish default read-only chat from native file-changing sessions. Lifecycle regressions preserve delayed-turn cleanup and canceled-start ownership failures found in review. The local cycle casebook records proof and next gates.
 
@@ -61,4 +63,4 @@ Actual Windows terminal/RPC parity and default cutover are unpassed. Generic too
 
 ## Validator Summary
 
-Python 456 tests and JavaScript 152 tests passed; three-skill check passed. Real local Pi/browser checks covered read/recall/write, native resume, supported dialogs, browser reload and abort. Separate architecture and acceptance reviews approved the bounded opt-in slice. Repo Docs validation reports zero errors and warnings with the changed-file list.
+Python 456 tests and JavaScript 154 tests passed; three-skill check passed. Real local Pi/browser checks covered read/recall/write, native resume, supported dialogs, browser reload and abort. Separate architecture and acceptance reviews approved the bounded opt-in slice. Repo Docs validation reports zero errors and warnings with the changed-file list.

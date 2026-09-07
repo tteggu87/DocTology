@@ -1477,5 +1477,28 @@ test('native history remains readable but cannot run on an unenabled server',()=
   const c=context();
   c.run("state.demo=false;ensureConversation().engine='native';state.nativePiAvailable=false;renderChat();");
   assert.equal(c.element('#chat-submit').disabled,true);
-  assert.match(c.element('#chat-status').textContent,/--native-pi/);
+  assert.match(c.element('#chat-status').textContent,/Pi 설치·인증/);
+});
+
+test('chat mode is visible without launch flags and selection survives reload without a model request',async()=>{
+  const calls=[];
+  const c=context({fetchImpl:async(url)=>{calls.push(url);return {ok:true,json:async()=>({})};}});
+  c.run("state.demo=false;state.nativePiAvailable=true;renderNativeControls();");
+  assert.equal(c.element('#native-pi-controls').hidden,false);
+  assert.match(c.element('#chat-mode-button').textContent,/위키 읽기/);
+  await c.run("selectChatMode('native')");
+  assert.equal(c.run('currentConversation().engine'),'native');
+  c.run('saveHistory();loadHistoryForRoot(state.root);newConversation();');
+  assert.equal(c.run('currentConversation().engine'),'native');
+  assert.equal(calls.length,0);
+  await c.run("selectChatMode('wiki')");
+  assert.notEqual(c.run('currentConversation().engine'),'native');
+});
+test('chat mode settings explain unavailable native mode and block switching during a turn',async()=>{
+  const c=context();
+  c.run("state.demo=false;state.mode='project';state.nativePiAvailable=false;renderNativeControls();");
+  assert.match(c.element('#chat-mode-unavailable').textContent,/프로젝트 문서/);
+  assert.equal(c.element('[data-action="new-native-chat"]').disabled,true);
+  c.run("activeChatJob={id:'running'};renderNativeControls();");
+  assert.equal(c.element('#chat-mode-button').disabled,true);
 });

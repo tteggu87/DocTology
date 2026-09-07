@@ -661,3 +661,8 @@ button.runner-card:hover { border-color: var(--cobalt); background: white; }
 .native-tool-box ol { padding-left:18px; }
 .native-tool-box li { margin:10px 0; }
 .native-tool-box pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:160px; overflow:auto; }
+
+#chat-mode-dialog { width: 580px; max-width: calc(100vw - 28px); max-height: 90vh; overflow: auto; }
+.chat-mode-option { padding: 16px 0; border-top: 1px solid var(--line); }
+.chat-mode-option h3 { margin: 0 0 8px; }
+.chat-mode-option p { line-height: 1.6; }
