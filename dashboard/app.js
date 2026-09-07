@@ -546,7 +546,7 @@ function renderChat() {
     const nativeConversation=conversation.engine==='native';
     container.innerHTML = `<div class="message-stack">${nativeConversation?'':`<div class="conversation-save-bar"><div><strong>현재 대화를 원문으로 보존</strong><span>검증된 사실이 아니며 저장 뒤 기존 게이트를 통과해야 합니다.</span></div><button data-action="save-conversation" ${wholeReason?'disabled':''} title="${escapeHTML(wholeReason||'현재 대화 전체를 미리보고 저장')}">대화 전체 저장</button></div>`}${conversationSaves}${conversation.messages.map((message,index) => message.role === 'user'
       ? `<article class="message user-message"><div class="message-label">나</div><div class="user-bubble">${escapeHTML(message.content)}</div></article>`
-      : (()=>{const saveReason=chatSaveReason(index,'answer');return `<article class="message assistant-message ${selectedAnswerIndex===index?'focused':''}" data-answer-index="${index}" tabindex="0"><div class="assistant-avatar">D</div><div class="assistant-content"><div class="message-label">DocTology</div><div class="answer-body">${renderAnswerMarkdown(message.content,message.references)}</div>${message.native?nativePiTools.render(message.native):renderRetrievalUsage(message.exploration?.retrievalUsage)}${message.truncated?'<div class="provisional-note">로컬 저장 한도 때문에 이 메시지의 뒷부분은 저장되지 않았습니다. 불완전한 원문으로 내보내지 않습니다.</div>':''}${message.partial?'<div class="provisional-note">응답 연결이 종료되어 마지막으로 받은 초안입니다. 완료된 답변이 아닙니다.</div>':''}${renderExploration(message.exploration)}${renderCandidates(message.candidates,message.exploration)}<div class="answer-actions">${message.references?.length ? `<button class="answer-reference-summary" data-answer-index="${index}">참고문헌 ${message.references.length}개 보기</button>` : message.native?'<span class="no-citations">Pi 기본 응답 · 연결된 출처 없음</span>':'<span class="no-citations">이 답변에는 명시된 인용이 없습니다.</span>'}${message.native?'':`<button class="answer-save-button" data-save-answer="${index}" ${saveReason?'disabled':''} title="${escapeHTML(saveReason||'이 질문과 답변을 원문으로 미리보기')}">위키에 저장</button>`}</div>${message.native?'':'<p class="unverified-chat-note">대화 저장은 사실 검증이나 위키 완료를 뜻하지 않습니다.</p>'}${savedSummary(message.save)}</div></article>`;})()).join('')}${renderPendingAnswer()}${conversation.error ? `<div class="chat-error" role="alert"><span>${escapeHTML(conversation.error)}</span><button data-action="${activeChatJob?'reconnect-chat':'retry-chat'}">${activeChatJob?'연결 다시 확인':'다시 시도'}</button></div>${renderExploration(conversation.diagnostics)}` : ''}</div>`;
+      : (()=>{const saveReason=chatSaveReason(index,'answer');return `<article class="message assistant-message ${selectedAnswerIndex===index?'focused':''}" data-answer-index="${index}" tabindex="0"><div class="assistant-avatar">D</div><div class="assistant-content"><div class="answer-heading"><div class="message-label">DocTology</div><button class="answer-copy-button" type="button" data-copy-answer="${index}" aria-label="이 답변 복사" title="표와 출처를 포함한 마크다운 복사" ${String(message.content||'').trim()?'':'disabled'}>복사</button></div><div class="answer-body">${renderAnswerMarkdown(message.content,message.references)}</div>${message.native?nativePiTools.render(message.native):renderRetrievalUsage(message.exploration?.retrievalUsage)}${message.truncated?'<div class="provisional-note">로컬 저장 한도 때문에 이 메시지의 뒷부분은 저장되지 않았습니다. 불완전한 원문으로 내보내지 않습니다.</div>':''}${message.partial?'<div class="provisional-note">응답 연결이 종료되어 마지막으로 받은 초안입니다. 완료된 답변이 아닙니다.</div>':''}${renderExploration(message.exploration)}${renderCandidates(message.candidates,message.exploration)}<div class="answer-actions">${message.references?.length ? `<button class="answer-reference-summary" data-answer-index="${index}">참고문헌 ${message.references.length}개 보기</button>` : message.native?'<span class="no-citations">Pi 기본 응답 · 연결된 출처 없음</span>':'<span class="no-citations">이 답변에는 명시된 인용이 없습니다.</span>'}${message.native?'':`<button class="answer-save-button" data-save-answer="${index}" ${saveReason?'disabled':''} title="${escapeHTML(saveReason||'이 질문과 답변을 원문으로 미리보기')}">위키에 저장</button>`}</div>${message.native?'':'<p class="unverified-chat-note">대화 저장은 사실 검증이나 위키 완료를 뜻하지 않습니다.</p>'}${savedSummary(message.save)}</div></article>`;})()).join('')}${renderPendingAnswer()}${conversation.error ? `<div class="chat-error" role="alert"><span>${escapeHTML(conversation.error)}</span><button data-action="${activeChatJob?'reconnect-chat':'retry-chat'}">${activeChatJob?'연결 다시 확인':'다시 시도'}</button></div>${renderExploration(conversation.diagnostics)}` : ''}</div>`;
   }
   for (const detail of container.querySelectorAll('details')) {
     if (openDisclosures.has(chatDisclosureKey(detail))) detail.open=true;
@@ -566,6 +566,25 @@ function renderChat() {
 function renderHistory() {
   const list = $('#chat-history');
   list.innerHTML = conversations.length ? conversations.slice().sort((a,b)=>b.updatedAt-a.updatedAt).map(conversation => `<button class="history-item ${conversation.id===activeConversationId?'active':''}" data-conversation="${escapeHTML(conversation.id)}" ${activeChatJob?'disabled aria-disabled="true" title="응답 생성 중에는 대화를 변경할 수 없습니다"':''}><span>${escapeHTML(conversation.title)}</span><small>${new Date(conversation.updatedAt).toLocaleDateString('ko-KR',{month:'short',day:'numeric'})}</small></button>`).join('') : '<p class="history-empty">아직 저장된 대화가 없습니다.</p>';
+}
+function answerCopyText(message){
+  const content=String(message?.content||'');
+  const missing=(message?.references||[]).filter(reference=>reference.id&&!content.includes(reference.id)&&!content.includes(encodeURI(reference.id)));
+  if(!missing.length)return content;
+  return content+'\n\n참고문헌\n'+missing.map(reference=>`[${reference.number}] [${String(reference.title||reference.id).replace(/[\r\n\[\]]/g,' ')}](<${encodeURI(reference.id)}>)`).join('\n');
+}
+async function copyAnswer(index){
+  const message=currentConversation()?.messages[index];
+  if(message?.role!=='assistant'||!String(message.content||'').trim())return;
+  const text=answerCopyText(message);
+  try{
+    if(!globalThis.navigator?.clipboard?.writeText)throw new Error('clipboard unavailable');
+    await navigator.clipboard.writeText(text);
+    toast(message.partial||message.truncated?'저장된 답변 부분을 복사했습니다.':'답변을 복사했습니다.');
+  }catch{
+    const field=$('#answer-copy-text');field.value=text;
+    openDialog('#answer-copy-dialog');field.focus();field.select?.();
+  }
 }
 function focusAnswer(index) {
   const conversation = currentConversation();
@@ -1230,6 +1249,7 @@ function handleClick(event) {
   if(target.dataset.view){view=target.dataset.view;applyView();return;}
   if(target.dataset.conversation){selectConversation(target.dataset.conversation);return;}
   if(target.dataset.suggestion){$('#chat-input').value=target.dataset.suggestion;$('#chat-input').focus?.();return;}
+  if(target.dataset.copyAnswer!==undefined){copyAnswer(Number(target.dataset.copyAnswer));return;}
   if(target.dataset.saveAnswer!==undefined){openChatSave(Number(target.dataset.saveAnswer),'answer');return;}
   if(target.dataset.workerStop!==undefined){Promise.resolve(controlParallelWorker(target.dataset.workerStop,'stop')).catch(error=>toast(error.message));return;}
   if(target.dataset.workerRetry!==undefined){Promise.resolve(controlParallelWorker(target.dataset.workerRetry,'retry')).catch(error=>toast(error.message));return;}

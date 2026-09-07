@@ -1541,3 +1541,23 @@ test('configured retrieval badges have distinct readiness tone without claiming 
   c.run("retrievalStatus=null;renderRetrievalStatus();");
   assert.doesNotMatch(c.element('#retrieval-readiness').innerHTML,/readiness-badge ready/);
 });
+
+test('answer copy preserves Markdown without tool cards or UI text',async()=>{
+  const c=context(),copied=[];
+  c.sandbox.navigator={clipboard:{writeText:async text=>copied.push(text)}};
+  const text='| 항목 | 값 |\n| --- | --- |\n| **A** | 1 |\n\n[출처](wiki/a.md)';
+  c.run(`ensureConversation().messages=[{role:'assistant',content:${JSON.stringify(text)},references:[{id:'wiki/a.md',title:'A',number:1}],native:{tools:[{tool:'read',output:'not copied'}]}}];renderChat();`);
+  assert.match(c.element('#chat-messages').innerHTML,/data-copy-answer="0"/);
+  await c.run('copyAnswer(0)');assert.deepEqual(copied,[text]);
+});
+test('answer copy adds missing numbered sources and ignores non-answer messages',async()=>{
+  const c=context(),copied=[];c.sandbox.navigator={clipboard:{writeText:async text=>copied.push(text)}};
+  c.run("ensureConversation().messages=[{role:'user',content:'question'},{role:'assistant',content:'답변 [1]',references:[{id:'wiki/a.md',title:'출처 A',number:1}]},{role:'assistant',content:''}];");
+  await c.run('copyAnswer(0)');await c.run('copyAnswer(2)');assert.equal(copied.length,0);
+  await c.run('copyAnswer(1)');assert.match(copied[0],/^답변 \[1\]/);assert.match(copied[0],/참고문헌[\s\S]*wiki\/a.md/);
+});
+test('clipboard denial opens selected-text fallback without claiming success',async()=>{
+  const c=context();c.sandbox.navigator={clipboard:{writeText:async()=>{throw new Error('denied');}}};
+  c.run("ensureConversation().messages=[{role:'assistant',content:'복사할 원문'}];");
+  await c.run('copyAnswer(0)');assert.equal(c.element('#answer-copy-dialog').open,true);assert.equal(c.element('#answer-copy-text').value,'복사할 원문');
+});

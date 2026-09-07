@@ -702,3 +702,9 @@ button.runner-card:hover { border-color: var(--cobalt); background: white; }
   .readiness-badge strong::before { width: 4px; height: 4px; margin-right: 3px; }
   .readiness-badge span { display: none; }
 }
+
+.answer-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.answer-copy-button { flex-shrink: 0; padding: 4px 9px; border: 1px solid var(--line); border-radius: 6px; background: #fafbf8; color: #617168; font-size: var(--studio-text-meta, 11px); }
+.answer-copy-button:hover:not(:disabled) { background: #edf5ef; border-color: #b9d5c7; color: #315e47; }
+#answer-copy-dialog { max-height: 90vh; overflow: auto; }
+#answer-copy-text { max-height: 55vh; font-family: ui-monospace, monospace; }

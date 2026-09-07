@@ -149,6 +149,7 @@
 <p class="field-note">위키 연결과 파일, 대화·작업·대기열 기록, Pi 로그인과 기본 모델은 유지합니다. 진행 중인 작업과 이미 요청한 수동 실행은 취소하지 않습니다. 예시·프로젝트 문서 모드에서는 화면 설정만 초기화합니다.</p>
 <div id="settings-error" class="form-error" role="alert"></div>
 <button id="settings-reset" class="button primary wide" type="button" data-action="settings-reset">기본 설정으로 초기화</button></dialog>
+<dialog id="answer-copy-dialog" aria-labelledby="answer-copy-title"><div class="dialog-heading"><h2 id="answer-copy-title">답변 복사</h2><button type="button" class="icon-button" data-close aria-label="복사 창 닫기">×</button></div><p>브라우저가 자동 복사를 허용하지 않았습니다. 아래 답변이 선택되어 있습니다. Ctrl+C 또는 ⌘C로 복사하세요.</p><label class="field">답변 원문<textarea id="answer-copy-text" rows="12" readonly></textarea></label></dialog>
 <dialog id="chat-mode-dialog" aria-labelledby="chat-mode-title"><div class="dialog-heading"><h2 id="chat-mode-title">대화 방식 설정</h2><button type="button" class="icon-button" data-close aria-label="닫기">×</button></div>
 <p>원하는 방식을 선택하면 새 대화를 시작합니다. 이전 대화는 기록에 남고, 다음 새 대화도 선택한 방식을 이어갑니다.</p>
 <div class="chat-mode-option"><h3>위키 읽기</h3><p>문서를 읽고 근거를 확인합니다. 파일을 변경하지 않습니다.</p><button class="button secondary" type="button" data-action="new-wiki-chat">위키 읽기로 새 대화</button></div>
