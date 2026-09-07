@@ -958,7 +958,7 @@ async function chooseFolder() {
     if (request===folderPickerGeneration) setFolderPickerPending(false);
   }
 }
-const connectionStageLabels={sqlite:'SQLite 검색 인덱스 준비',queued:'연결 요청 접수',resolve:'폴더 경로 확인',contract:'위키 구조 확인',folders:'폴더 접근 확인',inventory:'파일 목록 확인',history:'이전 실행 기록 확인',records:'원문별 실행 기록 읽기',reports:'반영 리포트 색인',hashes:'파일 해시 확인',fingerprints:'검증 지문 계산',runs:'절차 검증',coverage:'원문 반영량 확인',graph:'위키 페이지 읽기',links:'문서 링크 연결',freshness:'읽는 동안 변경 여부 확인',queue:'작업 기록 복구',publish:'위키 전환',unchanged:'파일 변경 없음'};
+const connectionStageLabels={graph_cache:'문서 그래프 재사용',sqlite:'SQLite 검색 인덱스 준비',queued:'연결 요청 접수',resolve:'폴더 경로 확인',contract:'위키 구조 확인',folders:'폴더 접근 확인',inventory:'파일 목록 확인',history:'이전 실행 기록 확인',records:'원문별 실행 기록 읽기',reports:'반영 리포트 색인',hashes:'파일 해시 확인',fingerprints:'검증 지문 계산',runs:'절차 검증',coverage:'원문 반영량 확인',graph:'위키 페이지 읽기',links:'문서 링크 연결',freshness:'읽는 동안 변경 여부 확인',queue:'작업 기록 복구',publish:'위키 전환',unchanged:'파일 변경 없음'};
 let connectionAttempt=null;
 function connectionPending(value){
   $('#connect-form').classList.toggle('is-connecting',Boolean(value));

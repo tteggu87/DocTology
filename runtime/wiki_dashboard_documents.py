@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import hashlib
+import copy
+from collections import OrderedDict
+import threading
+import stat as stat_types
 import json
 from pathlib import Path
 import re
@@ -50,6 +54,56 @@ class DocumentCatalog:
         self.workflow = workflow
         self.batch = batch
         self._receipt_cache = {}
+        self._snapshot_memo = OrderedDict()
+        self._memo_lock = threading.RLock()
+        self._graph_memo = None
+
+    @staticmethod
+    def _file_stamp(path):
+        value, link = path.stat(), path.lstat()
+        link_stamp = (link.st_dev, link.st_ino, link.st_size, link.st_mtime_ns, link.st_ctime_ns) if stat_types.S_ISLNK(link.st_mode) else None
+        return (value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns, str(path.resolve()), link_stamp)
+
+    def _memo_get(self, key):
+        with self._memo_lock:
+            if key not in self._snapshot_memo:
+                return None
+            self._snapshot_memo.move_to_end(key)
+            return copy.deepcopy(self._snapshot_memo[key])
+
+    def _memo_put(self, key, value):
+        with self._memo_lock:
+            self._snapshot_memo[key] = copy.deepcopy(value)
+            self._snapshot_memo.move_to_end(key)
+            while len(self._snapshot_memo) > 2048:
+                self._snapshot_memo.popitem(last=False)
+
+    def _run_record(self, path):
+        stamp = self._file_stamp(path)
+        key = ("run_file", str(path), stamp)
+        payload = self._memo_get(key)
+        if payload is None:
+            payload = read_json(path)
+            if self._file_stamp(path) != stamp:
+                raise ValueError("실행 기록을 읽는 동안 파일이 변경되었습니다.")
+            self._memo_put(key, payload)
+        return payload, stamp
+
+    def _snapshot_graph(self, root, pages, mode, signature, progress):
+        page_ids = {p.relative_to(root).as_posix() for p in pages}
+        relevant = tuple(row for row in signature if row[0] in page_ids)
+        key = (str(root), mode, relevant)
+        with self._memo_lock:
+            cached = self._graph_memo
+            graph = copy.deepcopy(cached[1]) if cached and cached[0] == key else None
+        if graph is not None:
+            if progress:
+                progress("graph_cache", current=len(pages), total=len(pages))
+            return graph
+        graph = self.graph(root, pages, include_meta=mode == "project", progress=progress)
+        with self._memo_lock:
+            self._graph_memo = (key, copy.deepcopy(graph))
+        return graph
 
     def coverage(self, root: Path, source: str, reports: list[Path], prepared=None):
         matches = []
@@ -133,12 +187,11 @@ class DocumentCatalog:
             files(root, "wiki/**/*.md", progress) + files(root, "raw/**/*.md", progress)
         )
         for pattern in ("AGENTS.md", "wiki/_meta/representative_questions.json",
-                        "state/wiki_runs/*.json", "state/wiki_batches/*/*.json"):
+                        "state/wiki_runs/*.json", "state/wiki_batches/*/*.json", "warehouse/jsonl/*.jsonl"):
             pages.update(files(root, pattern, progress))
         result = []
         for path in sorted(pages):
-            stat = path.stat()
-            result.append((path.relative_to(root).as_posix(), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_ino))
+            result.append((path.relative_to(root).as_posix(), *self._file_stamp(path)))
         return tuple(result)
 
     def document_inventory(self, root: Path, mode: str) -> dict[str, Path]:
@@ -385,20 +438,22 @@ class DocumentCatalog:
 
     def snapshot(self, root: Path, mode="wiki", progress=None):
         root = root.resolve()
+        signature = self.signature(root, mode)
         if mode == "project":
             return {"demo": False, "mode": "project", "readOnly": True, "root": str(root), "name": root.name,
-                    "sources": [], "graph": self.graph(root, self.project_pages(root, progress), include_meta=True, progress=progress),
+                    "sources": [], "graph": self._snapshot_graph(root, self.project_pages(root, progress), mode, signature, progress),
                     "batches": [], "warnings": [], "checkedAt": time.time()}
-        warnings, runs = [], {}
+        warnings, runs, run_keys = [], {}, {}
         for path in files(root, "state/wiki_runs/*.json", progress):
             if progress:
                 progress("records", path=path.relative_to(root).as_posix())
             try:
-                run = read_json(path)
+                run, stamp = self._run_record(path)
                 source = run["source"]
                 inside(root, source, ("raw/",))
                 if source not in runs or str(run.get("updated_at", "")) > str(runs[source].get("updated_at", "")):
                     runs[source] = run
+                    run_keys[source] = (str(path), stamp)
             except (OSError, ValueError, KeyError, TypeError):
                 warnings.append(f"읽을 수 없는 작업 기록: {path.name}")
         batches = []
@@ -429,7 +484,33 @@ class DocumentCatalog:
         if progress:
             progress("reports", current=len(reports), total=len(reports))
         status_many = getattr(self.workflow, "project_status_many", None)
-        observed_runs = status_many(root, list(runs.values()), progress) if status_many else {}
+        observed_runs, misses, memo_keys = {}, [], {}
+        if status_many:
+            # Project status depends on common corpus files and this run's source,
+            # not just the run JSON. Never cache a gate result by run stat alone.
+            common = [row for row in signature if row[0] == "AGENTS.md" or row[0].startswith(("wiki/", "warehouse/"))]
+            dependency = hashlib.sha256(json.dumps(common, ensure_ascii=False).encode()).hexdigest()
+            stamps = {row[0]: row[1:] for row in signature}
+            contract = self.workflow.procedure_contract_digest()
+            for source, run in runs.items():
+                key = ("run_status", str(root), run_keys[source], stamps.get(source), dependency, contract)
+                memo_keys[source] = key
+                cached = self._memo_get(key)
+                if cached is None:
+                    misses.append(run)
+                else:
+                    observed_runs[source] = cached
+            if misses:
+                calculated = status_many(root, misses, progress)
+                observed_runs.update(calculated)
+                for source, result in calculated.items():
+                    if "error" not in result:
+                        self._memo_put(memo_keys[source], result)
+        memberships_by_run = {}
+        for item in batches:
+            for row in item["sources"]:
+                if isinstance(row, dict) and isinstance(row.get("path"), str) and isinstance(row.get("run_id"), str) and row.get("disposition") != "deferred_with_reason":
+                    memberships_by_run.setdefault((row.get("path"), row.get("run_id")), []).append(item)
         sources = []
         raw_paths = files(root, "raw/**/*.md", progress)
         for index, path in enumerate(raw_paths):
@@ -458,9 +539,7 @@ class DocumentCatalog:
                 except (OSError, ValueError, KeyError, TypeError, self.workflow.WorkflowError) as exc:
                     stage = "blocked"
                     status = {"blockers": [str(exc)], "completed_stages": [], "missing_stages": list(self.workflow.PROCEDURE_ORDER)}
-            memberships = [b for b in batches if run and any(
-                isinstance(r, dict) and r.get("path") == relative and r.get("run_id") == run["run_id"]
-                and r.get("disposition") != "deferred_with_reason" for r in b["sources"])]
+            memberships = memberships_by_run.get((relative, run["run_id"]), []) if run else []
             if stage == "done" and any(b["status"] != "certified" or (b.get("certification") or {}).get("status") != "pass" for b in memberships):
                 stage = "review"
             if cov and cov["valid"]:
@@ -473,5 +552,5 @@ class DocumentCatalog:
         if progress:
             progress("coverage", current=len(raw_paths), total=len(raw_paths))
         return {"demo": False, "mode": "wiki", "readOnly": False, "root": str(root), "name": root.name, "sources": sources,
-                "graph": self.graph(root, files(root, "wiki/**/*.md", progress), progress=progress), "batches": batches,
+                "graph": self._snapshot_graph(root, files(root, "wiki/**/*.md", progress), mode, signature, progress), "batches": batches,
                 "warnings": warnings, "checkedAt": time.time()}

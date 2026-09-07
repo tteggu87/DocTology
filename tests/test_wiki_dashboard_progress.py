@@ -33,6 +33,75 @@ class ProgressTests(unittest.TestCase):
             time.sleep(.01)
         self.fail("Background work did not settle")
 
+    def test_run_memo_rechecks_only_changed_run_and_reuses_graph(self):
+        catalog = dashboard.documents_module.DocumentCatalog(dashboard.workflow, dashboard.batch)
+        with mock.patch.object(dashboard.workflow, "project_status_many", wraps=dashboard.workflow.project_status_many) as status, mock.patch.object(catalog, "graph", wraps=catalog.graph) as graph:
+            first = catalog.snapshot(self.root)
+            second = catalog.snapshot(self.root)
+            self.assertEqual(first["sources"], second["sources"])
+            self.assertEqual(status.call_count, 1)
+            path = self.root / "state/wiki_runs/fixture-0000.json"
+            payload = json.loads(path.read_text())
+            payload["updated_at"] = "2026-09-08T00:00:00Z"
+            path.write_text(json.dumps(payload))
+            current = catalog.snapshot(self.root)
+            self.assertEqual(len(status.call_args.args[1]), 1)
+            self.assertEqual(status.call_count, 2)
+            self.assertEqual(graph.call_count, 1)
+        fresh = dashboard.documents_module.DocumentCatalog(dashboard.workflow, dashboard.batch).snapshot(self.root)
+        self.assertEqual(current["sources"], fresh["sources"])
+        # Consumers must not be able to corrupt memoized values.
+        current["graph"]["nodes"].clear()
+        current["sources"][0]["run"]["blockers"].clear()
+        self.assertEqual(catalog.snapshot(self.root)["graph"], fresh["graph"])
+        self.assertEqual(catalog.snapshot(self.root)["sources"], fresh["sources"])
+
+    def test_run_memo_invalidates_source_corpus_contract_and_warehouse(self):
+        catalog = dashboard.documents_module.DocumentCatalog(dashboard.workflow, dashboard.batch)
+        with mock.patch.object(dashboard.workflow, "project_status_many", wraps=dashboard.workflow.project_status_many) as status:
+            catalog.snapshot(self.root)
+            source = self.root / "raw/inbox/source-0000.md"
+            source.write_text(source.read_text() + "\nChanged raw")
+            catalog.snapshot(self.root)
+            self.assertEqual([run["source"] for run in status.call_args.args[1]], ["raw/inbox/source-0000.md"])
+            page = self.root / "wiki/concepts/topic-0000.md"
+            page.write_text(page.read_text() + "\nChanged wiki")
+            catalog.snapshot(self.root)
+            self.assertEqual(len(status.call_args.args[1]), 3)
+            before = catalog.signature(self.root)
+            warehouse = self.root / "warehouse/jsonl"
+            warehouse.mkdir(parents=True)
+            (warehouse / "test.jsonl").write_text('{}\n')
+            self.assertNotEqual(before, catalog.signature(self.root))
+            calls = status.call_count
+            catalog.snapshot(self.root)
+            self.assertEqual(status.call_count, calls + 1)
+            self.assertEqual(len(status.call_args.args[1]), 3)
+            calls = status.call_count
+            with mock.patch.object(dashboard.workflow, "procedure_contract_digest", return_value="changed-contract"):
+                catalog.snapshot(self.root)
+            self.assertEqual(status.call_count, calls + 1)
+            self.assertEqual(len(status.call_args.args[1]), 3)
+
+    def test_run_memo_tracks_internal_symlink_target_even_for_same_inode(self):
+        for relative in ("AGENTS.md", "raw/inbox/source-0000.md"):
+            with self.subTest(relative=relative):
+                path = self.root / relative
+                one, two = path.with_name(path.name+".target-a"), path.with_name(path.name+".target-b")
+                path.rename(one)
+                two.hardlink_to(one)
+                path.symlink_to(one.name)
+                catalog = dashboard.documents_module.DocumentCatalog(dashboard.workflow, dashboard.batch)
+                with mock.patch.object(dashboard.workflow, "project_status_many", wraps=dashboard.workflow.project_status_many) as status:
+                    catalog.snapshot(self.root)
+                    before = catalog.signature(self.root)
+                    path.unlink();path.symlink_to(two.name)
+                    self.assertNotEqual(before, catalog.signature(self.root))
+                    result = catalog.snapshot(self.root)
+                    self.assertEqual(status.call_count, 2)
+                    selected = next(row for row in result["sources"] if row["id"]=="raw/inbox/source-0000.md")
+                    self.assertEqual(selected["run"]["current_fingerprint"], dashboard.workflow.state_fingerprint(self.root, selected["id"]))
+
     def test_bulk_status_matches_scalar_and_hashes_each_path_once(self):
         w = dashboard.workflow
         payloads = [json.loads(p.read_text()) for p in (self.root/"state/wiki_runs").glob("*.json")]

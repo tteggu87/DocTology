@@ -48,3 +48,9 @@ outside the app lock; the loop skill's index and gates retain their ownership.
 current target admission and citation rollback; the JS extension waits beyond
 the server deadline. The document catalog caches parsed receipts and limits
 raw hash checks to relevant targets.
+
+The document catalog owns bounded run JSON/status projection memoization and one
+cached graph. Keys cover actual dependency file identities, resolved symlink
+targets and the procedure contract; consumer copies isolate cached values.
+The dashboard still computes outside its main lock and atomically publishes
+only a current root/revision. Exact gate code remains in the loop skill.

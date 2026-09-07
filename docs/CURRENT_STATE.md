@@ -265,3 +265,18 @@ that a stored legacy index or vectors are used by chat. See [usage](../dashboard
 
 The [read-bridge verification](evidence/2026-09-07-studio-read-bridge.md) records
 real Pi/browser observations, regression coverage and platform limits.
+
+## Dependency-aware snapshot memoization
+
+Studio caches parsed run records by file identity/stat and resolved symlink
+identity. Project-status projections additionally depend on the selected source,
+all wiki/AGENTS/optional warehouse files and the procedure-contract digest.
+Only cache misses enter the existing bulk exact status calculation; the bounded
+2048-entry runtime memo is never installed as a loop gate or canonical state.
+Full coverage validation and batch certification status remain outside this memo.
+The last graph is reused when its page signatures match, and batch membership
+is indexed by source/run rather than rescanned for every raw row. Snapshot
+freshness includes optional warehouse JSONL and internal symlink retargets.
+
+See the [snapshot memoization audit](evidence/2026-09-07-snapshot-memoization.md)
+for the four requested checks, measured incremental benefit and limitations.
