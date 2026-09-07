@@ -958,7 +958,7 @@ async function chooseFolder() {
     if (request===folderPickerGeneration) setFolderPickerPending(false);
   }
 }
-const connectionStageLabels={graph_cache:'문서 그래프 재사용',sqlite:'SQLite 검색 인덱스 준비',queued:'연결 요청 접수',resolve:'폴더 경로 확인',contract:'위키 구조 확인',folders:'폴더 접근 확인',inventory:'파일 목록 확인',history:'이전 실행 기록 확인',records:'원문별 실행 기록 읽기',reports:'반영 리포트 색인',hashes:'파일 해시 확인',fingerprints:'검증 지문 계산',runs:'절차 검증',coverage:'원문 반영량 확인',graph:'위키 페이지 읽기',links:'문서 링크 연결',freshness:'읽는 동안 변경 여부 확인',queue:'작업 기록 복구',publish:'위키 전환',unchanged:'파일 변경 없음'};
+const connectionStageLabels={stat:'파일 변경 여부 확인',refresh:'화면 다시 계산',graph_cache:'문서 그래프 재사용',sqlite:'SQLite 검색 인덱스 준비',queued:'연결 요청 접수',resolve:'폴더 경로 확인',contract:'위키 구조 확인',folders:'폴더 접근 확인',inventory:'파일 목록 확인',history:'이전 실행 기록 확인',records:'원문별 실행 기록 읽기',reports:'반영 리포트 색인',hashes:'파일 해시 확인',fingerprints:'검증 지문 계산',runs:'절차 검증',coverage:'원문 반영량 확인',graph:'위키 페이지 읽기',links:'문서 링크 연결',freshness:'읽는 동안 변경 여부 확인',queue:'작업 기록 복구',publish:'위키 전환',unchanged:'파일 변경 없음'};
 let connectionAttempt=null;
 function connectionPending(value){
   $('#connect-form').classList.toggle('is-connecting',Boolean(value));
@@ -1037,10 +1037,20 @@ async function copyConnectionLog(){
 }
 function renderSnapshotStatus(){
   const value=state?.snapshotStatus;
-  const show=state&&!state.demo&&(state.snapshotReady===false||(state.snapshotFresh===false&&(!value||value.status==='failed'||value.elapsedSeconds>=1)));
+  const checking=value?.phase==='checking'&&value.status==='running'&&state?.snapshotReady!==false;
+  const show=state&&!state.demo&&(state.snapshotReady===false||(state.snapshotFresh===false&&(!checking||value.stalled)&&(!value||value.status==='failed'||value.elapsedSeconds>=1)));
   document.body.classList.toggle('snapshot-loading',Boolean(show));
   $('#snapshot-notice').hidden=!show;
-  if(show)$('#snapshot-notice').textContent=`${state.snapshotReady===false?'위키 화면 준비 중':'이전 확인 결과 표시 중'} · ${connectionStageLabels[value?.stage]||'갱신 대기'}${Number.isFinite(value?.current)?' · '+value.current+(Number.isFinite(value.total)?'/'+value.total:''):''}${value?.path?' · '+value.path:''}${value?.error?' · '+value.error:''}`;
+  if(checking){
+    $('#connection').textContent='파일 변경 확인 중';
+    $('#connection').setAttribute('title',value.path||'이전 검증 화면을 유지하며 변경 여부를 확인합니다.');
+  }else{
+    $('#connection').removeAttribute('title');
+  }
+  if(show){
+    const label=value?.status==='failed'?'갱신 확인 실패 · 이전 결과 유지':['cancelled','cancelling'].includes(value?.status)?'화면 갱신 중단':checking?'파일 변경 확인 지연':state.snapshotReady===false?'위키 화면 준비 중':value?.phase==='rebuilding'?'변경된 내용 반영 중 · 이전 결과 유지':'화면 상태 확인 중 · 이전 결과 유지';
+    $('#snapshot-notice').textContent=`${label} · ${connectionStageLabels[value?.stage]||'갱신 대기'}${Number.isFinite(value?.current)?' · '+value.current+(Number.isFinite(value.total)?'/'+value.total:''):''}${value?.path?' · '+value.path:''}${value?.error?' · '+value.error:''}`;
+  }
 }
 
 function openDialog(id) { const element=$(id); if(id==='#connect-dialog'){invalidateFolderPicker();connectionPending(Boolean(connectionAttempt?.pending));if(connectionAttempt?.pending)pollConnection(connectionAttempt);} const error=$('.form-error',element); if(error)error.textContent=''; element.showModal(); }

@@ -35,8 +35,7 @@ layout observations.
 Studio read progress lives in `runtime/wiki_dashboard_progress.py`: bounded
 in-memory events, cooperative cancellation and serialized result publication.
 `wiki_dashboard.py` owns connection IDs, root generations and one background
-snapshot; `wiki_dashboard_documents.py` owns report indexing and stat inventory
-freshness. The loop's `project_status_many` and `batch_status_many` reuse exact
+snapshot, including separate checking/rebuilding phases; `wiki_dashboard_documents.py` owns report indexing and per-file stat progress. The UI keeps routine checks in the header and reserves the layout-changing notice for rebuilds, failures, interruptions and stalls. The loop's `project_status_many` and `batch_status_many` reuse exact
 hash observations within a single call, without persisting them as gate truth.
 The automation adapter shares one verification view per reconciliation tick.
 Chat tools report active scans/reads; Pi lifecycle signals join them in the UI.

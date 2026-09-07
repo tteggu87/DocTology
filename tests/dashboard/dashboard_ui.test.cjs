@@ -1408,3 +1408,30 @@ test('Studio SQLite badge and legacy wiki index report separate readiness',()=>{
   assert.match(c.element('#retrieval-status-body').innerHTML,/문서 1963개/);
   assert.match(c.element('#retrieval-status-body').innerHTML,/이 별도 인덱스를 사용하지 않음/);
 });
+
+test('routine freshness checks do not flash an old-result banner or shift chat layout',()=>{
+  const c=context();
+  c.run("state.demo=false;state.snapshotReady=true;state.snapshotFresh=false;state.snapshotStatus={phase:'checking',status:'running',stage:'stat',path:'AGENTS.md',elapsedSeconds:2,stalled:false};renderSnapshotStatus();");
+  assert.equal(c.element('#snapshot-notice').hidden,true);
+  assert.equal(c.element('body').classList.contains('snapshot-loading'),false);
+  assert.equal(c.element('#connection').textContent,'파일 변경 확인 중');
+});
+test('actual rebuild, stalled checks and failures remain visible',()=>{
+  const c=context();
+  c.run("state.demo=false;state.snapshotReady=true;state.snapshotFresh=false;state.snapshotStatus={phase:'rebuilding',status:'running',stage:'graph',elapsedSeconds:2};renderSnapshotStatus();");
+  assert.equal(c.element('#snapshot-notice').hidden,false);
+  assert.match(c.element('#snapshot-notice').textContent,/변경된 내용 반영 중/);
+  c.run("state.snapshotStatus={phase:'checking',status:'running',stage:'stat',path:'wiki/a.md',elapsedSeconds:20,stalled:true};renderSnapshotStatus();");
+  assert.match(c.element('#snapshot-notice').textContent,/파일 변경 확인 지연/);
+  c.run("state.snapshotStatus={phase:'checking',status:'failed',stage:'stat',path:'wiki/a.md',error:'읽기 실패'};renderSnapshotStatus();");
+  assert.match(c.element('#snapshot-notice').textContent,/갱신 확인 실패.*읽기 실패/);
+});
+
+test('unknown and cancelled snapshot phases never claim a confirmed content change',()=>{
+  const c=context();
+  c.run("state.demo=false;state.snapshotReady=true;state.snapshotFresh=false;state.snapshotStatus={status:'running',stage:'inventory',elapsedSeconds:3};renderSnapshotStatus();");
+  assert.match(c.element('#snapshot-notice').textContent,/화면 상태 확인 중/);
+  assert.doesNotMatch(c.element('#snapshot-notice').textContent,/변경된 내용/);
+  c.run("state.snapshotStatus={phase:'checking',status:'cancelled',elapsedSeconds:300,error:'제한 시간'};renderSnapshotStatus();");
+  assert.match(c.element('#snapshot-notice').textContent,/화면 갱신 중단.*제한 시간/);
+});

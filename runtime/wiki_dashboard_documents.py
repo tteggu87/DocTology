@@ -188,10 +188,16 @@ class DocumentCatalog:
         )
         for pattern in ("AGENTS.md", "wiki/_meta/representative_questions.json",
                         "state/wiki_runs/*.json", "state/wiki_batches/*/*.json", "warehouse/jsonl/*.jsonl"):
+            if pattern.startswith("warehouse/") and not (root / "warehouse/jsonl").is_dir():
+                continue
             pages.update(files(root, pattern, progress))
         result = []
-        for path in sorted(pages):
+        for index, path in enumerate(sorted(pages)):
+            if progress:
+                progress("stat", path=path.relative_to(root).as_posix(), current=index, total=len(pages))
             result.append((path.relative_to(root).as_posix(), *self._file_stamp(path)))
+        if progress:
+            progress("stat", current=len(pages), total=len(pages))
         return tuple(result)
 
     def document_inventory(self, root: Path, mode: str) -> dict[str, Path]:
@@ -438,7 +444,7 @@ class DocumentCatalog:
 
     def snapshot(self, root: Path, mode="wiki", progress=None):
         root = root.resolve()
-        signature = self.signature(root, mode)
+        signature = self.signature(root, mode, progress)
         if mode == "project":
             return {"demo": False, "mode": "project", "readOnly": True, "root": str(root), "name": root.name,
                     "sources": [], "graph": self._snapshot_graph(root, self.project_pages(root, progress), mode, signature, progress),

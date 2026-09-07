@@ -280,3 +280,5 @@ freshness includes optional warehouse JSONL and internal symlink retargets.
 
 See the [snapshot memoization audit](evidence/2026-09-07-snapshot-memoization.md)
 for the four requested checks, measured incremental benefit and limitations.
+
+Snapshot progress distinguishes routine freshness checks from confirmed rebuilding. Routine checks keep the current layout and update only the header; stalled checks, failures and interruptions remain visible. Stat progress identifies the current file, and absent optional warehouse directories no longer leave a misleading inventory label.

@@ -328,6 +328,7 @@ class Dashboard:
         if not self._snapshot_guard.acquire(blocking=wait):
             return
         progress = progress_module.ReadProgress(root)
+        progress.update("freshness", phase="checking" if cached is not None else "rebuilding")
         self._snapshot_work = progress
         def calculate(item):
             try:
@@ -336,6 +337,7 @@ class Dashboard:
                     observed, after = cached, before
                     item.update("unchanged", path=str(root))
                 else:
+                    item.update("refresh", phase="rebuilding")
                     observed = snapshot(root, mode, progress=item.update)
                     item.update("freshness", path=str(root))
                     after = document_catalog.signature(root, mode)

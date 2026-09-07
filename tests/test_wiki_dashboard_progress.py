@@ -102,6 +102,46 @@ class ProgressTests(unittest.TestCase):
                     selected = next(row for row in result["sources"] if row["id"]=="raw/inbox/source-0000.md")
                     self.assertEqual(selected["run"]["current_fingerprint"], dashboard.workflow.state_fingerprint(self.root, selected["id"]))
 
+    def test_freshness_check_reports_actual_stat_path_without_rebuild(self):
+        app = dashboard.Dashboard(self.root)
+        initial = app.state()
+        app.cached_at = 0
+        entered, release = threading.Event(), threading.Event()
+        original = dashboard.document_catalog._file_stamp
+        def slow(path):
+            if not entered.is_set():
+                entered.set();release.wait(3)
+            return original(path)
+        with mock.patch.object(dashboard.document_catalog, "_file_stamp", side_effect=slow), mock.patch.object(dashboard, "snapshot", wraps=dashboard.snapshot) as build:
+            app.state(wait=False)
+            self.assertTrue(entered.wait(1))
+            try:
+                status = app.state(wait=False)["snapshotStatus"]
+                self.assertEqual(status["phase"], "checking")
+                self.assertEqual(status["stage"], "stat")
+                self.assertEqual(status["path"], "AGENTS.md")
+                self.assertFalse((self.root / "warehouse").exists())
+                self.assertEqual(build.call_count, 0)
+            finally:
+                release.set()
+            self.wait_for(lambda: not app._snapshot_guard.locked())
+            result = app.state(wait=False)
+            self.assertTrue(result["snapshotFresh"])
+            self.assertTrue(result["snapshotStatus"]["result"]["reused"])
+            self.assertEqual(result["checkedAt"], initial["checkedAt"])
+
+    def test_signature_skips_absent_warehouse_but_tracks_existing_files(self):
+        catalog = dashboard.documents_module.DocumentCatalog(dashboard.workflow, dashboard.batch)
+        events = []
+        catalog.signature(self.root, progress=lambda stage, **data: events.append((stage, data)))
+        self.assertFalse(any(event[1].get("path", "").startswith("warehouse/") for event in events))
+        warehouse = self.root / "warehouse/jsonl"
+        warehouse.mkdir(parents=True)
+        (warehouse / "record.jsonl").write_text('{}\n')
+        events.clear()
+        catalog.signature(self.root, progress=lambda stage, **data: events.append((stage, data)))
+        self.assertTrue(any(stage == "stat" and data.get("path") == "warehouse/jsonl/record.jsonl" for stage,data in events))
+
     def test_bulk_status_matches_scalar_and_hashes_each_path_once(self):
         w = dashboard.workflow
         payloads = [json.loads(p.read_text()) for p in (self.root/"state/wiki_runs").glob("*.json")]

@@ -29,7 +29,7 @@ class ReadProgress:
         if self.cancelled.is_set():
             raise ReadCancelled("연결을 취소했습니다. 이전 위키는 유지됩니다.")
 
-    def update(self, stage, *, path="", current=None, total=None):
+    def update(self, stage, *, path="", current=None, total=None, phase=None):
         with self.lock:
             self.check()
             now = time.time()
@@ -37,6 +37,8 @@ class ReadProgress:
             append = (stage != previous["stage"] or not previous["events"] or now-previous["events"][-1]["time"] >= 1
                       or (total is not None and current == total and previous.get("current") != current))
             previous.update(stage=stage, path=str(path)[:4096], current=current, total=total, lastActivityAt=now)
+            if phase is not None:
+                previous["phase"] = phase
             if append:
                 previous["events"] = (previous["events"] + [{"time":now, "stage":stage, "path":str(path)[:4096],
                                                             "current":current, "total":total}])[-60:]
