@@ -148,7 +148,7 @@ class SourceDraftTools(WikiChatTools):
 
     # ----- source-owned read boundary and evidence -----
 
-    def _inventory(self):
+    def _inventory(self, relatives=None):
         """Expose Wiki context, the exact contract, and only this worker's raw source."""
         inventory = super()._inventory()
         assigned = getattr(self, "source", None)
@@ -156,6 +156,16 @@ class SourceDraftTools(WikiChatTools):
             relative: path for relative, path in inventory.items()
             if relative.startswith("wiki/") or relative == "AGENTS.md" or relative == assigned
         }
+
+    def _rollback_read(self, receipt):
+        super()._rollback_read(receipt)
+        if receipt and "sourceEvidence" in receipt:
+            with self._state_lock:
+                if self._read_evidence.get(receipt["path"]) is receipt["sourceEvidence"]:
+                    if receipt["sourcePrevious"] is None:
+                        self._read_evidence.pop(receipt["path"], None)
+                    else:
+                        self._read_evidence[receipt["path"]] = receipt["sourcePrevious"]
 
     def _wiki_read(self, arguments):
         result, count, truncated, next_offset = super()._wiki_read(arguments)
@@ -170,12 +180,17 @@ class SourceDraftTools(WikiChatTools):
             ranges = [] if previous is None or previous["contentHash"] != content_hash \
                 else previous["readRanges"]
             ranges = self._merge_ranges(ranges + [{"offset": offset, "end": end}])
+            receipt = getattr(self._request_context, "receipt", None)
+            if receipt:
+                receipt["sourcePrevious"] = self._read_evidence.get(relative)
             self._read_evidence[relative] = {
                 "path": relative,
                 "contentHash": content_hash,
                 "totalCharacters": total,
                 "readRanges": ranges,
             }
+        if receipt:
+            receipt["sourceEvidence"] = self._read_evidence[relative]
         return result, count, truncated, next_offset
 
     def _validated_read_evidence(self):

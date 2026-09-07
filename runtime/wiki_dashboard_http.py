@@ -68,14 +68,17 @@ def make_handler(*, asset_root, document_payload, chat_not_found_error,
         def reply(self, data, code=200, mime='application/json; charset=utf-8'):
             if not isinstance(data, bytes):
                 data = json.dumps(data, ensure_ascii=False).encode('utf-8')
-            self.send_response(code)
-            self.send_header('Content-Type', mime)
-            self.send_header('Content-Length', str(len(data)))
-            self.send_header('Cache-Control', 'no-store')
-            self.send_header('X-Content-Type-Options', 'nosniff')
-            self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
-            self.end_headers()
-            self.wfile.write(data)
+            try:
+                self.send_response(code)
+                self.send_header('Content-Type', mime)
+                self.send_header('Content-Length', str(len(data)))
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('X-Content-Type-Options', 'nosniff')
+                self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+                self.end_headers()
+                self.wfile.write(data)
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError):
+                self.close_connection = True
 
         def trusted(self):
             return self.headers.get('Host', '') in {
@@ -109,7 +112,11 @@ def make_handler(*, asset_root, document_payload, chat_not_found_error,
                         current_root = str(app.root.resolve())
                         if 'expectedRoot' in params and params['expectedRoot'][0] != current_root:
                             raise ValueError('연결된 작업 공간이 변경되었습니다. 문서 목록을 새로고침하세요.')
-                        payload = document_payload(app.root, app.mode, relative)
+                        root, mode = app.root, app.mode
+                    payload = document_payload(root, mode, relative)
+                    with app.lock:
+                        if app.root != root or app.mode != mode:
+                            raise ValueError('문서를 읽는 동안 작업 공간이 변경되었습니다. 다시 열어 주세요.')
                     return self.reply(payload)
                 if url.path not in assets:
                     return self.reply({'error': '찾을 수 없습니다.'}, 404)

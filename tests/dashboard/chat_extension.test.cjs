@@ -92,7 +92,7 @@ test('wrapped HTTP 429 preserves a trusted tool error and disables tools on exha
 
 test('network failures and malformed envelopes remain redacted', async () => {
   const pi = mockPi(); global.fetch = async () => { throw new Error('network secret test-secret-token at 10.0.0.8'); }; (await loadFactory())(pi);
-  await assert.rejects(pi.tools.get('wiki_search').execute('call-2', { query: 'x' }, undefined), error => error.message === 'Wiki bridge request failed.' && !error.message.includes('secret'));
+  await assert.rejects(pi.tools.get('wiki_search').execute('call-2', { query: 'x' }, undefined), error => error.message.startsWith('Wiki bridge connection failed.') && !error.message.includes('secret'));
   global.fetch = async () => response({ ok: true, result: null });
   await assert.rejects(pi.tools.get('wiki_search').execute('call-3', { query: 'x' }, undefined), /invalid response/);
   const controller = new AbortController(); controller.abort();

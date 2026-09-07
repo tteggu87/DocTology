@@ -49,6 +49,7 @@ class DocumentCatalog:
     def __init__(self, workflow, batch):
         self.workflow = workflow
         self.batch = batch
+        self._receipt_cache = {}
 
     def coverage(self, root: Path, source: str, reports: list[Path], prepared=None):
         matches = []
@@ -154,6 +155,33 @@ class DocumentCatalog:
                 inventory[path.relative_to(root).as_posix()] = path
         return dict(sorted(inventory.items()))
 
+    def document_inventory_subset(self, root: Path, mode: str, relatives) -> dict[str, Path]:
+        """Recheck named documents against the same static surfaces without a vault walk."""
+        root = root.resolve()
+        result = {}
+        for relative in relatives:
+            if not isinstance(relative, str) or "\\" in relative:
+                continue
+            parts = Path(relative).parts
+            if not parts or Path(relative).is_absolute() or any(p in {".", ".."} for p in parts):
+                continue
+            allowed = relative.endswith(".md") and parts[0] in ({"wiki", "raw"} if mode == "wiki" else {"wiki", "docs"})
+            if mode == "project":
+                allowed = allowed or relative in {"README.md", "AGENTS.md", "dashboard/README.md", "runtime/README.md"}
+                allowed = allowed or (len(parts) >= 4 and parts[:2] == (".agents", "skills") and
+                                      (len(parts) == 4 and parts[3] == "SKILL.md" or len(parts) >= 5 and parts[3] == "references" and relative.endswith(".md")))
+            path = root / relative
+            try:
+                # Recursive glob does not descend symlinked directories either.
+                if not allowed or any(parent.is_symlink() for parent in path.parents if parent != root and parent.is_relative_to(root)):
+                    continue
+                resolved = path.resolve(strict=True)
+                if resolved.is_relative_to(root) and resolved.is_file() and resolved.suffix.lower() == ".md":
+                    result[relative] = path
+            except (OSError, ValueError, RuntimeError):
+                continue
+        return result
+
     def preparation_document_inventory(self, root: Path, mode: str) -> dict[str, Path]:
         """The preparation role additionally reads the exact vault contract, not arbitrary root files."""
         inventory = self.document_inventory(root, mode)
@@ -240,34 +268,47 @@ class DocumentCatalog:
         return [{"id": item, "title": title(inventory[item].read_text(encoding="utf-8"), inventory[item].stem),
                  "kind": self.document_kind(item)} for item in sorted(targets)]
 
-    def receipt_source_map(self, root: Path, inventory: dict[str, Path]) -> dict[str, set[str]]:
-        """Map explicit coverage receipt targets to their real raw source, without title guessing."""
-        mapping: dict[str, set[str]] = {}
-        raw_ids = {item for item in inventory if item.startswith("raw/")}
-        wiki_ids = {item for item in inventory if item.startswith("wiki/")}
+    def receipt_source_map(self, root: Path, inventory: dict[str, Path], target=None) -> dict[str, set[str]]:
+        """Cache receipt parsing, but hash only the raw sources relevant to this read."""
+        mapping = {}
+        live = set()
         for report in files(root, "wiki/_meta/ingest_reports/ingest-*.md"):
             try:
-                values = self.workflow.frontmatter_values(report)
+                stat = report.stat()
+                key = (str(report), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_ino)
+                live.add(key)
+                parsed = self._receipt_cache.get(key)
+                if parsed is None:
+                    body = report.read_text(encoding="utf-8")
+                    parser = getattr(self.workflow, "frontmatter_from_text", None)
+                    values = parser(body) if parser else self.workflow.frontmatter_values(report)
+                    targets = set(re.findall(r"wiki/[^\s`\]\)>#]+\.md", self._without_fenced_code(body)))
+                    parsed = (values, targets)
+                    self._receipt_cache[key] = parsed
+                values, targets = parsed
+                if target is not None and target not in targets:
+                    continue
                 source = values.get("raw_path")
-                if source not in raw_ids or values.get("status") != "applied":
+                if not isinstance(source, str) or not source.startswith("raw/") or source not in inventory or values.get("status") != "applied":
                     continue
-                if values.get("source_sha256") and values.get("source_sha256") != self.workflow.file_digest(inventory[source]):
+                if values.get("source_sha256") and values["source_sha256"] != self.workflow.file_digest(inventory[source]):
                     continue
-                body = self._without_fenced_code(report.read_text(encoding="utf-8"))
-                for target in set(re.findall(r"wiki/[^\s`\]\)>#]+\.md", body)) & wiki_ids:
-                    mapping.setdefault(target, set()).add(source)
+                for page in targets:
+                    if page in inventory and page.startswith("wiki/"):
+                        mapping.setdefault(page, set()).add(source)
             except (OSError, ValueError, KeyError, self.workflow.WorkflowError):
                 continue
+        self._receipt_cache = {key: value for key, value in self._receipt_cache.items() if key in live}
         return mapping
 
     def raw_sources_for(self, root: Path, relative: str, text: str, inventory: dict[str, Path],
-                        source_map: dict[str, set[str]] | None = None) -> list[dict]:
+                        source_map: dict[str, set[str]] | None = None, links=None) -> list[dict]:
         sources = {relative} if relative.startswith("raw/") else set()
-        for link in self.document_links(root, relative, text, inventory):
+        for link in (links if links is not None else self.document_links(root, relative, text, inventory)):
             if link["id"].startswith("raw/"):
                 sources.add(link["id"])
         if source_map is None:
-            source_map = self.receipt_source_map(root, inventory)
+            source_map = self.receipt_source_map(root, inventory, target=relative)
         sources.update(source_map.get(relative, set()))
         return [{"id": item, "title": title(inventory[item].read_text(encoding="utf-8"), inventory[item].stem)}
                 for item in sorted(sources) if item in inventory]
@@ -283,10 +324,11 @@ class DocumentCatalog:
         if len(document_bytes) > 2_000_000:
             raise ValueError("표시 가능한 Markdown 파일이 아닙니다.")
         text = document_bytes.decode("utf-8")
+        links = self.document_links(root, relative, text, inventory)
         return {"root": str(root.resolve()), "path": relative, "text": text, "content": text,
                 "contentHash": hashlib.sha256(document_bytes).hexdigest(),
-                "title": title(text, path.stem), "rawSources": self.raw_sources_for(root, relative, text, inventory),
-                "links": self.document_links(root, relative, text, inventory)}
+                "title": title(text, path.stem), "rawSources": self.raw_sources_for(root, relative, text, inventory, links=links),
+                "links": links}
 
     def _search_terms(self, query: str) -> list[str]:
         normalized = unicodedata.normalize("NFKC", query).casefold()

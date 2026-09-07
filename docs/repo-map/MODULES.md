@@ -40,3 +40,11 @@ freshness. The loop's `project_status_many` and `batch_status_many` reuse exact
 hash observations within a single call, without persisting them as gate truth.
 The automation adapter shares one verification view per reconciliation tick.
 Chat tools report active scans/reads; Pi lifecycle signals join them in the UI.
+
+`runtime/wiki_dashboard_index.py` owns the disposable Studio FTS index covering
+the admitted chat inventory. Connection preparation and search updates run
+outside the app lock; the loop skill's index and gates retain their ownership.
+`wiki_dashboard_chat_tools.py` owns request deadlines, cooperative cancellation,
+current target admission and citation rollback; the JS extension waits beyond
+the server deadline. The document catalog caches parsed receipts and limits
+raw hash checks to relevant targets.

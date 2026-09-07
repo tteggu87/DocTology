@@ -958,11 +958,11 @@ async function chooseFolder() {
     if (request===folderPickerGeneration) setFolderPickerPending(false);
   }
 }
-const connectionStageLabels={queued:'연결 요청 접수',resolve:'폴더 경로 확인',contract:'위키 구조 확인',folders:'폴더 접근 확인',inventory:'파일 목록 확인',history:'이전 실행 기록 확인',records:'원문별 실행 기록 읽기',reports:'반영 리포트 색인',hashes:'파일 해시 확인',fingerprints:'검증 지문 계산',runs:'절차 검증',coverage:'원문 반영량 확인',graph:'위키 페이지 읽기',links:'문서 링크 연결',freshness:'읽는 동안 변경 여부 확인',queue:'작업 기록 복구',publish:'위키 전환',unchanged:'파일 변경 없음'};
+const connectionStageLabels={sqlite:'SQLite 검색 인덱스 준비',queued:'연결 요청 접수',resolve:'폴더 경로 확인',contract:'위키 구조 확인',folders:'폴더 접근 확인',inventory:'파일 목록 확인',history:'이전 실행 기록 확인',records:'원문별 실행 기록 읽기',reports:'반영 리포트 색인',hashes:'파일 해시 확인',fingerprints:'검증 지문 계산',runs:'절차 검증',coverage:'원문 반영량 확인',graph:'위키 페이지 읽기',links:'문서 링크 연결',freshness:'읽는 동안 변경 여부 확인',queue:'작업 기록 복구',publish:'위키 전환',unchanged:'파일 변경 없음'};
 let connectionAttempt=null;
 function connectionPending(value){
   $('#connect-form').classList.toggle('is-connecting',Boolean(value));
-  $('#connect-submit').disabled=value;$('#connect-root').disabled=value;$('#choose-folder').disabled=value||folderPickerPending;$('#browse-folders').disabled=value;
+  $('#connect-sqlite').disabled=value;$('#connect-submit').disabled=value;$('#connect-root').disabled=value;$('#choose-folder').disabled=value||folderPickerPending;$('#browse-folders').disabled=value;
   $('#connect-submit').textContent=value?'위키 준비 중…':'위키 연결하기';
   $('#connect-cancel').hidden=!value;
 }
@@ -983,11 +983,11 @@ async function beginConnection(){
   $('.form-error',form).textContent='';
   if(!root){$('.form-error',form).textContent='위키 폴더를 선택하세요.';return;}
   if(!state?.connectionProgressAvailable){$('.form-error',form).textContent='진행 표시를 지원하는 서버로 Studio를 재시작해 주세요.';return;}
-  const attempt={id:`connect-${Date.now()}-${Math.random().toString(36).slice(2)}`,root,pending:true,cancelWanted:false,startedAt:Date.now(),latest:null};
+  const attempt={id:`connect-${Date.now()}-${Math.random().toString(36).slice(2)}`,root,enableSqlite:$('#connect-sqlite').checked===true,pending:true,cancelWanted:false,startedAt:Date.now(),latest:null};
   connectionAttempt=attempt;connectionPending(true);
   showConnectionProgress({stage:'queued',root,elapsedSeconds:0,events:[]});
   try {
-    const accepted=await api('connect-start',{root,id:attempt.id},{timeoutMs:10000});
+    const accepted=await api('connect-start',{root,id:attempt.id,enableSqlite:attempt.enableSqlite},{timeoutMs:10000});
     if(accepted.status==='cancelled'){attempt.pending=false;connectionPending(false);showConnectionProgress(accepted);return;}
   }catch(error){
     if(error.status){attempt.pending=false;connectionPending(false);$('.form-error',form).textContent=error.message;return;}
@@ -1014,7 +1014,7 @@ async function pollConnection(attempt){
     }catch(error){
       failures+=1;
       if(error.status===404&&failures<3){
-        try{const recovered=await api(attempt.cancelWanted?'connect-cancel':'connect-start',attempt.cancelWanted?{id:attempt.id}:{id:attempt.id,root:attempt.root},{timeoutMs:10000});if(recovered.status==='cancelled'){attempt.pending=false;connectionPending(false);showConnectionProgress(recovered);return;}}catch{}
+        try{const recovered=await api(attempt.cancelWanted?'connect-cancel':'connect-start',attempt.cancelWanted?{id:attempt.id}:{id:attempt.id,root:attempt.root,enableSqlite:attempt.enableSqlite},{timeoutMs:10000});if(recovered.status==='cancelled'){attempt.pending=false;connectionPending(false);showConnectionProgress(recovered);return;}}catch{}
       }
       $('#connect-progress-note').textContent=`진행 기록 응답을 다시 확인합니다 (${failures}). ${error.message}`;
       if(failures>=3){$('.form-error',$('#connect-form')).textContent='진행 기록 연결이 끊겼습니다. 서버 작업은 계속 실행 중일 수 있습니다. 다시 확인하거나 취소 요청을 보내세요.';return;}

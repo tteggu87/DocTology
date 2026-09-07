@@ -48,6 +48,7 @@ retrieval_status_module = load_dashboard_module("wiki_dashboard_retrieval_status
 documents_module = load_dashboard_module("wiki_dashboard_documents")
 folders_module = load_dashboard_module("wiki_dashboard_folders")
 progress_module = load_dashboard_module("wiki_dashboard_progress")
+index_module = load_dashboard_module("wiki_dashboard_index")
 http_module = load_dashboard_module("wiki_dashboard_http")
 
 # Compatibility facade: implementations and internal dependencies belong to the catalog.
@@ -118,6 +119,7 @@ class Dashboard:
         self.folder_picker_lock = threading.Lock()
         self.retrieval_status_lock = threading.Lock()
         self.retrieval_status_cache = None
+        self.search_index = None
         self.process = None
         self.job = None
         self.claim = None
@@ -213,7 +215,7 @@ class Dashboard:
             raise ValueError("읽는 동안 위키 파일이 변경되었습니다. 이전 화면은 유지되며 다시 확인해야 합니다.")
         return observed, after
 
-    def connect(self, raw, *, progress=None, warm=False):
+    def connect(self, raw, *, progress=None, warm=False, enable_sqlite=False):
         if not isinstance(raw, str) or not raw.strip() or len(raw) > 4096 or "\x00" in raw:
             raise ValueError("연결할 위키 폴더 경로를 입력하세요.")
         progress = progress or progress_module.ReadProgress(raw)
@@ -239,6 +241,12 @@ class Dashboard:
         automation = self.automation.prepare_load(root, mode, snapshot_state=observed, job=job, progress=progress.update)
         if warm and document_catalog.signature(root, mode) != signature:
             raise ValueError("연결 준비 중 위키가 변경되었습니다. 다시 연결해 주세요.")
+        search_index = None
+        if mode == "wiki" and (enable_sqlite or (root / "state/studio_search.sqlite").is_file()):
+            search_index = index_module.StudioIndex(root)
+            if enable_sqlite:
+                progress.update("sqlite", path="state/studio_search.sqlite")
+                search_index.ensure(document_inventory(root, mode), progress.check, progress.update)
         progress.update("publish", path=str(root))
         with self.lock:
             self._connect_allowed()
@@ -249,6 +257,8 @@ class Dashboard:
                     self._snapshot_work.cancel()
                 self._snapshot_work = None
                 self.root, self.mode, self.job = root, mode, job
+                self.search_index = search_index
+                self.retrieval_status_cache = None
                 self.cache = observed
                 self._last_view = observed
                 self._view_signature = signature
@@ -260,7 +270,9 @@ class Dashboard:
                 return {"name":root.name, "root":str(root), "mode":mode}
             return progress.commit(publish)
 
-    def start_connection(self, raw, request_id=None):
+    def start_connection(self, raw, request_id=None, enable_sqlite=False):
+        if not isinstance(enable_sqlite, bool):
+            raise ValueError("SQLite 활성화 값은 true 또는 false여야 합니다.")
         if not isinstance(raw, str) or not raw.strip() or len(raw) > 4096 or "\x00" in raw:
             raise ValueError("연결할 위키 폴더 경로를 입력하세요.")
         with self._connection_guard:
@@ -277,7 +289,7 @@ class Dashboard:
                 raise ValueError("이전 연결의 파일 읽기가 아직 끝나지 않았습니다. 진행 기록을 확인하세요.")
             progress = progress_module.ReadProgress(raw, job_id=request_id)
             self._connection_work = progress
-            progress.run(lambda item: self.connect(raw, progress=item, warm=True))
+            progress.run(lambda item: self.connect(raw, progress=item, warm=True, enable_sqlite=enable_sqlite))
             return {"id":progress.record["id"], "status":"running"}
 
     def connection_status(self, job_id):
@@ -491,8 +503,11 @@ class Dashboard:
             self._trim_chat_jobs()
             root = self.root.resolve()
             candidates = []
+            reader = documents_module.DocumentCatalog(workflow, batch)
             bridge = chat_tools_module.WikiChatTools(root, self.mode, {
-                "document_inventory": document_inventory, "document_payload": document_payload,
+                "document_inventory": document_inventory, "document_payload": reader.document_payload,
+                "document_inventory_subset": reader.document_inventory_subset,
+                "search_index": self.search_index,
             })
             job_id = "chat-" + secrets.token_hex(8)
             job = {"id": job_id, "root": str(root), "status": "running", "answer": "",
@@ -1200,6 +1215,10 @@ class Dashboard:
                     and time.monotonic() - cached["time"] < 10):
                 return json.loads(json.dumps(cached["result"]))
             result = retrieval_status_module.inspect_status(root, mode)
+            if self.search_index is not None:
+                result["studio"] = dict(self.search_index.last_status)
+                result["studio"]["path"] = "state/studio_search.sqlite"
+                result["chatMethods"]["fts"] = self.search_index.last_status.get("fts") is True
             with self.lock:
                 if self.root != root or self.mode != mode:
                     raise ValueError("연결된 작업 공간이 변경되었습니다. 다시 확인하세요.")
@@ -1210,7 +1229,7 @@ class Dashboard:
 
     def action(self, name, body):
         if name == "connect-start":
-            return self.start_connection(body.get("root"), body.get("id"))
+            return self.start_connection(body.get("root"), body.get("id"), body.get("enableSqlite", False))
         if name == "connect-cancel":
             return self.cancel_connection(body.get("id"))
         if name == "retrieval-status":

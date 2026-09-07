@@ -9,6 +9,9 @@ every operation that can touch document bytes.
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
+import select
+import socket
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -44,6 +47,7 @@ class WikiChatTools:
 
     MAX_BODY_BYTES = 64 * 1024
     HTTP_READ_TIMEOUT_SECONDS = 5
+    TOOL_TIMEOUT_SECONDS = 30
     MAX_FILE_BYTES = 2_000_000
     MAX_TOOL_CALLS = 64
     MAX_READ_DOCUMENTS = 24
@@ -78,9 +82,13 @@ class WikiChatTools:
             raise ValueError("Document inventory and payload helpers are required.")
         self.document_inventory = inventory
         self.document_payload = payload
+        self.inventory_subset = helpers.get("document_inventory_subset") if isinstance(helpers, dict) else getattr(helpers, "document_inventory_subset", None)
+        self.search_index = helpers.get("search_index") if isinstance(helpers, dict) else None
 
         self._state_lock = threading.RLock()
         self._operation_lock = threading.Lock()
+        self._http_operation_lock = threading.Lock()
+        self._request_context = threading.local()
         self._cancelled = threading.Event()
         self._token = secrets.token_urlsafe(32)
         self._server = None
@@ -106,6 +114,9 @@ class WikiChatTools:
             "readCalls": 0,
             "unsupported": ["fts", "vector"],
         }
+        if self.search_index is not None:
+            self._retrieval_usage["unsupported"] = ["vector"]
+        self._search_method = "grep"
         self._candidates: dict[str, dict] = {}
         self._candidate_fragments: dict[str, list[str]] = {}
         self._numbers: dict[str, int] = {}
@@ -205,7 +216,7 @@ class WikiChatTools:
         if not expected:
             return
         try:
-            inventory = self._inventory()
+            inventory = self._inventory([relative for relative, _ in expected])
         except WikiChatToolError:
             inventory = {}
         stale = []
@@ -232,10 +243,56 @@ class WikiChatTools:
                     self._invalidate_locked(relative)
 
     def _check_cancelled(self):
+        request = getattr(self._request_context, "value", None)
+        if request and (request[0].is_set() or time.monotonic() >= request[1]):
+            raise WikiChatToolError("Wiki tool reached its time limit or the client disconnected. Narrow the request and retry after the active read ends.", status=504)
         if self._cancelled.is_set():
             raise WikiChatToolError("This chat tool bridge is not active.", status=410)
 
-    def call(self, tool, arguments=None) -> dict:
+    @contextmanager
+    def _operation(self):
+        while not self._operation_lock.acquire(timeout=.05):
+            self._check_cancelled()
+        try:
+            yield
+        except WikiChatToolError as exc:
+            if exc.status in {410, 504}:
+                self._rollback_read(getattr(self._request_context, "receipt", None))
+            raise
+        finally:
+            self._operation_lock.release()
+
+    def call(self, tool, arguments=None, *, cancelled=None, deadline=None) -> dict:
+        previous = getattr(self._request_context, "value", None)
+        self._request_context.value = previous or (cancelled or threading.Event(), deadline if deadline is not None else time.monotonic() + self.TOOL_TIMEOUT_SECONDS)
+        self._request_context.receipt = None
+        try:
+            return self._call(tool, arguments)
+        except WikiChatToolError as exc:
+            if exc.status in {410, 504}:
+                self._rollback_read(getattr(self._request_context, "receipt", None))
+            raise
+        finally:
+            self._request_context.value = previous
+
+    def _rollback_read(self, receipt):
+        if not receipt:
+            return
+        with self._state_lock:
+            relative = receipt["path"]
+            if self._candidates.get(relative) is not receipt["candidate"]:
+                return  # A later successful read owns this document now.
+            if receipt["previous"] is None:
+                self._candidates.pop(relative, None)
+            else:
+                self._candidates[relative] = receipt["previous"]
+            self._candidate_fragments[relative] = receipt["fragments"]
+            if not receipt["wasRead"]:
+                self._read_documents.discard(relative)
+            self._returned_characters -= receipt["characters"]
+            self._exhausted = receipt["exhausted"]
+
+    def _call(self, tool, arguments=None) -> dict:
         """Invoke one model tool directly under the same lifecycle and budgets."""
         if not isinstance(tool, str) or tool not in self._TOOLS:
             raise WikiChatToolError("Unknown wiki tool.")
@@ -264,7 +321,7 @@ class WikiChatTools:
 
         active = None
         try:
-            with self._operation_lock:
+            with self._operation():
                 self._check_cancelled()
                 with self._state_lock:
                     self._active = {"tool":tool, "stage":"inventory", "startedAt":time.time(),
@@ -276,7 +333,12 @@ class WikiChatTools:
                     self._last_activity_at = time.time()
                 method = getattr(self, f"_{tool}")
                 result, count, truncated, next_offset = method(arguments)
+                response = self._result(result, truncated=truncated, next_offset=next_offset)
                 self._check_cancelled()
+                with self._state_lock:
+                    self._check_cancelled()
+                    self._event(tool, arguments, count, "ok")
+                return response
         except WikiChatToolError as exc:
             with self._state_lock:
                 if exc.exhausted:
@@ -292,9 +354,6 @@ class WikiChatTools:
                 if self._active is active:
                     self._active = None
                 self._last_activity_at = time.time()
-        with self._state_lock:
-            self._event(tool, arguments, count, "ok")
-        return self._result(result, truncated=truncated, next_offset=next_offset)
 
     # ----- tools -----
 
@@ -355,16 +414,29 @@ class WikiChatTools:
         terms = self._terms(query)
         inventory = self._inventory()
         matches = []
-        eligible = 0
+        eligible = sum(1 for relative in inventory if self._in_scope(relative, scope))
         scanned = 0
         skipped = 0
         scoped = sorted(relative for relative in inventory if self._in_scope(relative, scope))
+        self._search_method = "grep"
+        candidate_limited = False
+        if self.search_index is not None:
+            try:
+                discovered = self.search_index.search(terms, inventory, self._check_cancelled, scope)
+                candidate_limited = discovered["limited"]
+                indexed = set(discovered["paths"])
+                scoped = [relative for relative in scoped if relative in indexed]
+                self._search_method = "fts"
+            except Exception:
+                self._check_cancelled()
+                # A missing, stale or unsupported index must not disable reads.
+                self._search_method = "grep"
+                self.search_index.last_status = {"state":"error", "pages":0, "fts":False}
         for index, relative in enumerate(scoped):
             self._activity("scan", path=relative, current=index, total=len(scoped))
             self._check_cancelled()
             if not self._in_scope(relative, scope):
                 continue
-            eligible += 1
             try:
                 text = self._text_for(relative, inventory)
             except WikiChatToolError:
@@ -388,10 +460,10 @@ class WikiChatTools:
         rows = [{"id": relative, "path": relative, "title": heading,
                  "scope": self._document_scope(relative)}
                 for _, relative, heading in matches[:limit]]
-        truncated = len(matches) > limit
+        truncated = len(matches) > limit or candidate_limited
         return ({"results": rows, "count": len(rows), "total": len(matches),
                  "query": query, "scope": scope, "inventoryCount": eligible,
-                 "scannedCount": scanned, "skippedCount": skipped},
+                 "scannedCount": scanned, "skippedCount": skipped, "method": self._search_method, "candidateLimited": candidate_limited, "totalIsExact": not candidate_limited},
                 len(rows), truncated, None)
 
     def _wiki_read(self, arguments):
@@ -400,7 +472,7 @@ class WikiChatTools:
         offset = self._integer(arguments.get("offset", 0), "offset", minimum=0)
         limit = self._integer(arguments.get("limit", self.MAX_READ_LIMIT), "limit",
                               minimum=1, maximum=self.MAX_READ_LIMIT)
-        inventory = self._inventory()
+        inventory = self._inventory([relative])
         self._check_cancelled()
         if relative not in inventory:
             raise WikiChatToolError("Document is not in the current inventory.")
@@ -421,7 +493,7 @@ class WikiChatTools:
         self._activity("sources", path=relative)
         payload = self._payload(relative)
         self._check_cancelled()
-        current = self._inventory()
+        current = self._inventory([relative] + [row.get("id") for row in payload.get("rawSources", []) if isinstance(row, dict)])
         self._check_cancelled()
         if relative not in current:
             with self._state_lock:
@@ -465,6 +537,7 @@ class WikiChatTools:
             }
             return result, 0, False, None
 
+        self._check_cancelled()
         with self._state_lock:
             if self._stopped or self._cancelled.is_set():
                 raise WikiChatToolError("This chat tool bridge is not active.", status=410)
@@ -485,19 +558,20 @@ class WikiChatTools:
         truncated = end < len(text)
         next_offset = end if truncated else None
 
+        self._check_cancelled()
         with self._state_lock:
             if self._stopped or self._cancelled.is_set():
                 raise WikiChatToolError("This chat tool bridge is not active.", status=410)
-            self._returned_characters += len(content)
-            self._read_documents.add(relative)
-            if self._returned_characters >= self.MAX_RETURNED_CHARACTERS:
-                self._exhausted = True
-            number = self._numbers.setdefault(relative, len(self._numbers) + 1)
+            receipt = {"path": relative, "previous": self._candidates.get(relative),
+                       "fragments": list(self._candidate_fragments.get(relative, [])),
+                       "wasRead": relative in self._read_documents,
+                       "characters": len(content), "exhausted": self._exhausted}
+            number = self._numbers.get(relative, len(self._numbers) + 1)
             previous = self._candidates.get(relative)
             prior_ranges = (previous["readRanges"] if previous is not None
                             and previous["contentHash"] == content_hash else [])
             ranges = self._merge_ranges(prior_ranges + [{"offset": offset, "end": end}])
-            fragments = self._candidate_fragments.setdefault(relative, [])
+            fragments = list(self._candidate_fragments.get(relative, []))
             if previous is None or previous["contentHash"] != content_hash:
                 fragments.clear()
             if content not in fragments:
@@ -512,7 +586,17 @@ class WikiChatTools:
                 "contentHash": content_hash,
                 "readRanges": ranges,
             }
+            self._check_cancelled()
+            self._returned_characters += len(content)
+            self._read_documents.add(relative)
+            if self._returned_characters >= self.MAX_RETURNED_CHARACTERS:
+                self._exhausted = True
+            self._numbers[relative] = number
+            self._candidate_fragments[relative] = fragments
             self._candidates[relative] = candidate
+            receipt["candidate"] = candidate
+            self._request_context.receipt = receipt
+            self._check_cancelled()
 
         result = {
             "number": number,
@@ -572,10 +656,10 @@ class WikiChatTools:
 
     # ----- helper boundary and validation -----
 
-    def _inventory(self) -> dict[str, Path]:
+    def _inventory(self, relatives=None) -> dict[str, Path]:
         self._activity("inventory")
         try:
-            supplied = self.document_inventory(self.root, self.mode)
+            supplied = self.inventory_subset(self.root, self.mode, relatives) if relatives is not None and callable(self.inventory_subset) else self.document_inventory(self.root, self.mode)
         except Exception:
             raise WikiChatToolError("Current document inventory is unavailable.") from None
         if not isinstance(supplied, dict):
@@ -808,8 +892,8 @@ class WikiChatTools:
         if status != "ok":
             return
         if tool == "wiki_search":
-            self._retrieval_usage["counts"]["grep"] += 1
-            self._retrieval_usage["results"]["grep"] += int(count)
+            self._retrieval_usage["counts"][self._search_method] += 1
+            self._retrieval_usage["results"][self._search_method] += int(count)
         elif tool == "wiki_links":
             self._retrieval_usage["counts"]["wikilinks"] += 1
             self._retrieval_usage["results"]["wikilinks"] += int(count)
@@ -932,7 +1016,7 @@ class _ToolHandler(BaseHTTPRequestHandler):
                              "exhausted": False})
             return
         try:
-            result = bridge.call(body.get("tool"), body["arguments"])
+            result = self._bounded_call(body.get("tool"), body["arguments"])
         except WikiChatToolError as exc:
             self._send(exc.status, {"ok": False, "error": str(exc),
                                     "exhausted": exc.exhausted or bridge.snapshot()["exploration"]["exhausted"],
@@ -944,13 +1028,47 @@ class _ToolHandler(BaseHTTPRequestHandler):
             return
         self._send(200, {"ok": True, "result": result})
 
+    def _bounded_call(self, tool, arguments):
+        bridge = self.server.bridge
+        if not bridge._http_operation_lock.acquire(blocking=False):
+            raise WikiChatToolError("A previous wiki read is still ending. Do not queue repeated retries; wait for its activity to finish.", status=409)
+        cancelled, done = threading.Event(), threading.Event()
+        deadline = time.monotonic() + bridge.TOOL_TIMEOUT_SECONDS
+        outcome = {}
+        def run():
+            try:
+                bridge._request_context.value = (cancelled, deadline)
+                outcome["result"] = bridge.call(tool, arguments)
+            except Exception as exc:
+                outcome["error"] = exc
+            finally:
+                bridge._http_operation_lock.release()
+                done.set()
+        threading.Thread(target=run, name="wiki-tool-request", daemon=True).start()
+        while not done.wait(.05):
+            disconnected = False
+            try:
+                readable, _, _ = select.select([self.connection], [], [], 0)
+                disconnected = bool(readable) and self.connection.recv(1, socket.MSG_PEEK) == b""
+            except OSError:
+                disconnected = True
+            if disconnected or time.monotonic() >= deadline:
+                cancelled.set()
+                raise WikiChatToolError("Wiki tool exceeded the server time limit or its client disconnected. The pending read is cancelling; retry only after it ends.", status=504)
+        if "error" in outcome:
+            raise outcome["error"]
+        return outcome["result"]
+
     def _send(self, status, payload):
         data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Connection", "close")
-        self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, TimeoutError):
+            self.close_connection = True

@@ -1274,7 +1274,7 @@ test('retrieval readiness distinguishes configured artifacts from execution or c
   c.run(`state.demo=false;state.root='/vault';retrievalStatusRoot='/vault';retrievalStatus=normalizeRetrievalStatus(${JSON.stringify(status)},'/vault');renderRetrievalStatus();`);
   const compact=c.element('#retrieval-readiness').innerHTML,detail=c.element('#retrieval-status-body').innerHTML;
   assert.match(compact,/ONNX[\s\S]*설정됨 · 추론 미검증/);
-  assert.match(detail,/FTS 사용 가능 · 채팅 미연결/);
+  assert.match(detail,/FTS 사용 가능 · Studio 채팅에는 이 별도 인덱스를 사용하지 않음/);
   assert.match(detail,/현재 채팅은 문자열\+위키링크; FTS\/벡터 채팅 미연결|추론 미검증/);
   assert.match(detail,/저장 행 수는 품질 또는 준비 완료를 뜻하지 않습니다/);
   assert.doesNotMatch(compact,/활성|준비 완료/);
@@ -1283,7 +1283,7 @@ test('retrieval readiness distinguishes configured artifacts from execution or c
 test('retrieval readiness markup stays passive and uses sibling badges beneath the workspace button',()=>{
   const html=fs.readFileSync(path.join(assets,'index.html'),'utf8');
   assert.match(html,/<button class="workspace"[\s\S]*?<\/button>\s*<div id="retrieval-readiness"/);
-  assert.match(html,/현재 채팅은 문자열\+위키링크; FTS\/벡터 채팅 미연결/);
+  assert.match(html,/SQLite를 준비하면 채팅 검색에 사용합니다/);
   assert.match(html,/data-action="refresh-retrieval-status"/);
   assert.doesNotMatch(html,/rebuild|download|enable/i);
 });
@@ -1388,4 +1388,23 @@ test('settings reset rejects a stale target and keeps preferences on server fail
   assert.equal(calls,1);assert.equal(c.run('zoom'),2);
   assert.equal(c.element('#settings-error').textContent,'reset failed');
   assert.equal(c.element('#settings-reset').disabled,false);
+});
+
+test('connection explicitly requests SQLite preparation and renders its progress',async()=>{
+  const calls=[];
+  const c=context({fetchImpl:async(url,options)=>{calls.push([url,JSON.parse(options.body)]);return {ok:true,json:async()=>({status:'running'})};}});
+  c.run("state.connectionProgressAvailable=true;pollConnection=async()=>{};");
+  c.element('#connect-root').value='/sqlite-vault';c.element('#connect-sqlite').checked=true;
+  await c.run('beginConnection()');
+  assert.equal(calls[0][1].enableSqlite,true);
+  c.run("showConnectionProgress({stage:'sqlite',current:3,total:10,events:[]})");
+  assert.equal(c.element('#connect-progress-title').textContent,'SQLite 검색 인덱스 준비');
+});
+test('Studio SQLite badge and legacy wiki index report separate readiness',()=>{
+  const c=context(),status=retrievalStatusFixture('/vault');
+  status.studio={state:'current',pages:1963,fts:true};status.chatMethods.fts=true;
+  c.run(`state.demo=false;state.root='/vault';retrievalStatusRoot='/vault';retrievalStatus=normalizeRetrievalStatus(${JSON.stringify(status)},'/vault');renderRetrievalStatus();`);
+  assert.match(c.element('#retrieval-readiness').innerHTML,/채팅 사용 중/);
+  assert.match(c.element('#retrieval-status-body').innerHTML,/문서 1963개/);
+  assert.match(c.element('#retrieval-status-body').innerHTML,/이 별도 인덱스를 사용하지 않음/);
 });

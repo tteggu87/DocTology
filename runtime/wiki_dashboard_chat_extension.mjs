@@ -1,6 +1,7 @@
 const TOOL_NAMES = ["wiki_list", "wiki_search", "wiki_read", "wiki_links"];
 const TOOL_SET = new Set(TOOL_NAMES);
-const REQUEST_TIMEOUT_MS = 15_000;
+// Server tool budget is 30s; allow time for its structured timeout response.
+const REQUEST_TIMEOUT_MS = 35_000;
 const MAX_RESULT_CHARS = 64 * 1024;
 const DISCOVERY_ARRAY_KEYS = ["items", "results", "documents", "pages"];
 const READ_DOCUMENT_CORE_KEYS = new Set(["path", "content", "text", "number", "candidateNumber", "hash", "ranges"]);
@@ -95,7 +96,7 @@ function safeErrorText(value) {
 
 export const READ_TOOL_DEFINITIONS = Object.freeze([
   Object.freeze({ name: "wiki_list", description: "List or index the approved wiki inventory for an overview. Discovered documents are not read evidence; use wiki_read before citing.", parameters: objectSchema({ offset: { type: "integer", minimum: 0, default: 0 }, limit: { type: "integer", minimum: 1, maximum: 40, default: 40 }, scope: { type: "string", enum: ["wiki", "raw", "all"], default: "wiki" }, filter: { type: "string" } }, []) }),
-  Object.freeze({ name: "wiki_search", description: "Search the approved inventory. Reformulate searches when needed, then follow links or read pages. Search discoveries are not citations.", parameters: objectSchema({ query: { type: "string", minLength: 1 }, limit: { type: "integer", minimum: 1, maximum: 12, default: 12 }, scope: { type: "string", enum: ["wiki", "raw", "all"], default: "all" } }, ["query"]) }),
+  Object.freeze({ name: "wiki_search", description: "Search the approved inventory. Reformulate searches when needed, then follow links or read pages. Search discoveries are not citations. If candidateLimited is true, refine the query to inspect more specific results.", parameters: objectSchema({ query: { type: "string", minLength: 1 }, limit: { type: "integer", minimum: 1, maximum: 12, default: 12 }, scope: { type: "string", enum: ["wiki", "raw", "all"], default: "all" } }, ["query"]) }),
   Object.freeze({ name: "wiki_read", description: "Read an approved page. Only wiki_read numbered passages are stable per-document citation evidence; cite only those numbers.", parameters: objectSchema({ path: { type: "string", minLength: 1 }, offset: { type: "integer", minimum: 0, default: 0 }, limit: { type: "integer", minimum: 1, maximum: 10000, default: 10000 } }, ["path"]) }),
   Object.freeze({ name: "wiki_links", description: "Follow links from an approved page to find relevant documents. Linked or discovered documents must be wiki_read before citation.", parameters: objectSchema({ path: { type: "string", minLength: 1 } }, ["path"]) }),
 ]);
@@ -118,7 +119,11 @@ export default function wikiDashboardChatExtension(pi) {
         body: JSON.stringify({ tool, arguments: arguments_ }),
       });
       envelope = await response.json();
-    } catch { throw new Error("Wiki bridge request failed."); }
+    } catch (error) {
+      if(signal?.aborted)throw new Error("Wiki bridge request cancelled.");
+      if(error?.name === "TimeoutError" || error?.name === "AbortError")throw new Error("Wiki bridge response timed out after 35 seconds. Check the active file and wait for cancellation before retrying.");
+      throw new Error("Wiki bridge connection failed. Check whether Studio is still running and inspect the last tool activity.");
+    }
     if (!isRecord(envelope) || typeof envelope.ok !== "boolean") {
       throw new Error("Wiki bridge returned an invalid response.");
     }

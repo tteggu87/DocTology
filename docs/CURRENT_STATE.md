@@ -205,7 +205,7 @@ Wiki Studio connection supports native macOS/Windows folder selection and a boun
 
 Workspace badges expose passive SQLite configuration/stat freshness and server-environment ONNX package/artifact presence. The runtime adapter never executes target-vault code, loads a model, rebuilds an index, or writes SQLite sidecars. Unknown schemas, journals, changing databases, and bounded-check failures remain unknown. Stored vector rows are not semantic readiness.
 
-Per-answer retrieval usage is aggregated independently of the visible event tail and saved with browser-local messages. Percentages describe successful search/link calls, not answer contribution, quality, coverage, or citations. Current chat uses Python literal search and wiki-link discovery; FTS/vector remain unconnected to chat even when separately configured. Older answers retain unknown usage. Existing model defaults, writer gates, and watcher opt-ins are unchanged. See the [retrieval observability verification](evidence/2026-09-06-wiki-retrieval-observability.md) for the real-index fixture, measured tool calls, current local state, and limits.
+Per-answer retrieval usage is aggregated independently of the visible event tail and saved with browser-local messages. Percentages describe successful search/link calls, not answer contribution, quality, coverage, or citations. Chat uses Studio SQLite discovery when prepared, with Python literal fallback and wiki-link discovery. The generated wiki index and vectors remain separate from chat. Older answers retain unknown usage. Existing model defaults, writer gates, and watcher opt-ins are unchanged. See the [retrieval observability verification](evidence/2026-09-06-wiki-retrieval-observability.md) for the real-index fixture, measured tool calls, current local state, and limits.
 
 Windows workspace selection now starts the native folder dialog at This PC
 and enumerates all assigned drive letters for the in-app fallback, rather than
@@ -244,3 +244,24 @@ through the existing persisted configuration boundary, preserving queue records.
 Browser model overrides, parallelism and view filters reset only after success.
 Root identity and request authentication guard the action; wiki files, connection,
 conversation history, Pi credentials and existing work are retained.
+
+## Bounded read bridge and active Studio SQLite
+
+The chat bridge enforces a 30-second server request deadline ahead of the
+35-second extension timeout, detects disconnected clients, and rejects retry
+queue buildup while an old OS read is still returning. Named-path admission
+rechecks current read targets; receipt parsing is cached while relevant raw
+hashes remain exact. Cancelled reads restore request-local candidate/budget
+state, retaining earlier successful evidence. Document HTTP I/O runs outside
+the app lock with root identity rechecked afterward.
+
+Connection optionally prepares `state/studio_search.sqlite` (enabled in the
+connection UI). This Studio-owned full-inventory trigram FTS index refreshes
+changed files on search, uses stable rowid updates, and never executes target
+vault scripts. It does not replace `wiki_index.sqlite` or completion gates.
+FTS candidates are reopened as current Markdown; index errors use literal
+fallback with explicit status. Separate Studio/legacy readiness avoids claiming
+that a stored legacy index or vectors are used by chat. See [usage](../dashboard/README.md#sqlite-채팅-검색과-읽기-오류).
+
+The [read-bridge verification](evidence/2026-09-07-studio-read-bridge.md) records
+real Pi/browser observations, regression coverage and platform limits.
