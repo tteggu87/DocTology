@@ -2,10 +2,21 @@
 title: DocTology maintenance log
 type: meta
 status: active
-updated: 2026-09-06
+updated: 2026-09-07
 ---
 
 # Maintenance log
+
+- 2026-09-07: Simplified Pi onboarding after user feedback: Pi is assumed to
+  be manually installed, authenticated, and callable. Removed the unpublished
+  setup adapter, model discovery/configuration APIs, preference persistence, and
+  native login launcher. Kept static preparation help and precise missing-wiki
+  versus missing-Pi messages. Full-HD typography remains in place.
+
+- 2026-09-07: Increased Studio typography for Full HD desktop viewports
+  (1440px+): 14–16px controls, 18px prose, 12–13px metadata. Added a shared
+  desktop text scale and coordinated sidebar/reading widths while preserving
+  narrow-layout fallback sizes. No runtime or gate behavior changed.
 
 - 2026-09-07: Fixed Windows cross-drive folder selection. The OS dialog starts
   at This PC; in-app navigation exposes all assigned drive roots without probing

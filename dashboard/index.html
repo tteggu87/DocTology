@@ -43,7 +43,7 @@
   <div id="chat-history" class="chat-history" aria-label="최근 대화"></div>
 
   <div class="sidebar-bottom">
-    <div class="runner-card"><span class="runner-symbol">π</span><div><strong>Pi</strong><small id="pi-status">연결 확인 중</small></div><i id="pi-dot" class="status-dot"></i></div>
+    <button class="runner-card" type="button" data-action="pi-guide" aria-label="Pi 사용 준비 안내"><span class="runner-symbol">π</span><span><strong>Pi 안내</strong><small id="pi-status">설치 상태 확인</small></span><i id="pi-dot" class="status-dot"></i></button>
     <p class="local-note"><span data-icon="lock"></span>대화는 이 브라우저에만 저장됩니다.</p>
   </div>
 </aside>
@@ -52,6 +52,7 @@
   <header class="topbar">
     <div class="topbar-title"><span id="breadcrumb">대화</span><small id="connection">연결 중</small></div>
     <div class="topbar-actions">
+      <button class="button compact" type="button" data-action="pi-guide">Pi 안내</button>
       <button class="icon-button mobile-knowledge-button" data-action="toggle-knowledge" aria-label="지식 패널 열기" aria-expanded="false"><span data-icon="network"></span></button>
       <button class="icon-button" data-action="refresh" aria-label="새로고침"><span data-icon="refresh"></span></button>
     </div>
@@ -75,6 +76,7 @@
           <div class="composer-status"><span id="chat-status" role="status"></span><button id="chat-stop" class="text-action" type="button" data-action="chat-stop" hidden>응답 중단</button></div>
           <button id="chat-submit" class="send-button" type="submit" aria-label="질문 보내기"><span data-icon="arrow-up"></span></button>
         </div>
+        <div id="chat-setup-actions" class="chat-setup-actions" hidden><button id="chat-connect-help" class="text-action" type="button" data-action="connect">위키 연결</button><button id="chat-pi-help" class="text-action" type="button" data-action="pi-guide">Pi 설치 안내</button></div>
       </form>
       <p class="composer-note"><span id="chat-work-notice" role="status" hidden>위키 정리 중에도 대화할 수 있습니다. 답변은 읽은 시점의 문서 기준입니다.</span>질문과 문서 발췌가 선택한 모델에 전달됩니다. 인용은 원문에서 확인하세요.</p>
     </section>
@@ -120,6 +122,18 @@
 <div class="knowledge-backdrop" data-action="toggle-knowledge" hidden></div>
 
 <dialog id="retrieval-status-dialog" class="retrieval-status-dialog" aria-labelledby="retrieval-status-title"><div class="dialog-heading"><div><span class="eyebrow">RETRIEVAL STATUS</span><h2 id="retrieval-status-title">검색 준비 상태</h2></div><button type="button" class="icon-button" data-close aria-label="검색 준비 상태 닫기">×</button></div><p id="retrieval-status-updated" class="retrieval-status-updated" role="status"></p><div id="retrieval-status-body" class="retrieval-status-body"></div><p class="retrieval-status-chat-note">현재 채팅은 문자열+위키링크; FTS/벡터 채팅 미연결</p><div class="dialog-actions"><button type="button" class="button secondary" data-action="refresh-retrieval-status">상태 다시 확인</button></div></dialog>
+
+<dialog id="pi-guide-dialog" class="pi-guide-dialog" aria-labelledby="pi-guide-title">
+  <div class="dialog-heading"><div><span class="eyebrow">PI QUICK START</span><h2 id="pi-guide-title">Pi 사용 준비</h2></div><button type="button" class="icon-button" data-close aria-label="Pi 안내 닫기">×</button></div>
+  <p>이 대시보드는 설치와 설정이 끝난 Pi를 호출합니다. Pi 준비는 터미널에서 한 번만 해 주세요.</p>
+  <ol>
+    <li><strong>설치</strong><p>Node.js LTS를 설치하세요. Windows는 Git for Windows도 필요합니다. PowerShell 또는 터미널에서 실행합니다.</p><pre><code>npm install -g --ignore-scripts @earendil-works/pi-coding-agent</code></pre></li>
+    <li><strong>로그인·모델 설정</strong><p>터미널에서 <code>pi</code>를 실행하고, <code>/login</code>으로 제공자 로그인 또는 API 키 등록을 마친 뒤 <code>/model</code>로 모델을 선택하세요.</p></li>
+    <li><strong>동작 확인</strong><p>같은 터미널에서 Pi에 짧은 질문을 보내 정상 응답을 확인하세요. 그 환경에서 Studio를 실행하거나 재시작한 뒤 위키를 연결하면 됩니다.</p></li>
+  </ol>
+  <p class="field-note">Pi의 인증과 기본 모델을 그대로 사용합니다. 대시보드의 모델 입력칸은 비워 두어도 됩니다. 설치 후에도 Pi를 못 찾으면 Studio를 실행하는 계정과 PATH를 확인하세요.</p>
+  <div class="dialog-actions"><button class="button secondary" type="button" data-close>확인</button></div>
+</dialog>
 
 <dialog id="connect-dialog"><form id="connect-form"><div class="dialog-heading"><div><span class="eyebrow">CONNECT WORKSPACE</span><h2>내 위키 연결</h2></div><button type="button" class="icon-button" data-close aria-label="닫기">×</button></div><p>프로젝트 또는 LLM Wiki 폴더를 연결하세요. 프로젝트도 읽기 전용 대화를 사용할 수 있습니다.</p><div class="folder-picker-action"><button id="choose-folder" class="button secondary" type="button" data-action="choose-folder"><span data-icon="files"></span>기본 폴더 선택 창…</button><button id="browse-folders" class="text-action" type="button" data-action="browse-folders">작업실에서 폴더 찾기</button><span id="folder-picker-status" role="status" hidden>폴더 선택 창에서 선택해 주세요…</span></div><p id="folder-picker-note" class="field-note" hidden></p><label class="field">선택한 폴더 <span class="muted">(직접 입력 가능)</span><input id="connect-root" name="root" required placeholder="예: D:\my-wiki 또는 /Users/me/my-wiki" autocomplete="off"></label><p class="field-note">AGENTS.md와 wiki가 있는 폴더. 원문은 외부로 게시되지 않습니다.</p><div class="form-error" role="alert"></div><button class="button primary wide" type="submit">위키 연결하기</button></form></dialog>
 

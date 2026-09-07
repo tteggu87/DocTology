@@ -212,3 +212,14 @@ and enumerates all assigned drive letters for the in-app fallback, rather than
 offering only the current filesystem root. Drive shortcuts do not probe
 removable or network media until selected. See the
 [Windows folder guide](../dashboard/README.md#windows에서-다른-드라이브-선택).
+
+Studio uses a larger reading scale at viewport widths of 1440px and above:
+14–16px controls, 18px prose, and 12–13px secondary information at the default
+16px root. Desktop sidebars and reading width expand alongside typography;
+compact and mobile layouts retain their existing fallback sizes.
+
+Studio assumes Pi is installed, authenticated, and working in its launch
+environment. The Pi help dialog contains manual preparation instructions only;
+it does not inspect models, launch a login console, or persist account/model
+settings. Existing invocation/model overrides are unchanged. Missing-workspace
+and missing-executable guidance remain distinct.

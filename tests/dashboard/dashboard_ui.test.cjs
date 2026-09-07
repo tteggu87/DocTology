@@ -1298,3 +1298,31 @@ test('search percentages award remainder to fractional share, not largest lane',
   const c=context();
   assert.deepEqual(JSON.parse(c.run("JSON.stringify(retrievalUsageShares({grep:7,fts:2,wikilinks:3,vector:0}))")),{grep:58,fts:17,wikilinks:25,vector:0});
 });
+
+
+test('first-run guidance separates a missing wiki from missing Pi',()=>{
+  const c=context();
+  c.run("state.root=null;state.demo=true;state.piAvailable=true;state.chatAvailable=false;renderChat();");
+  assert.match(c.element('#chat-status').textContent,/위키 폴더를 연결/);
+  assert.equal(c.element('#chat-pi-help').hidden,true);
+  assert.equal(c.element('#chat-connect-help').hidden,false);
+  c.run("state.root='/vault';state.demo=false;state.piAvailable=false;renderChat();");
+  assert.match(c.element('#chat-status').textContent,/Pi 실행 파일/);
+  assert.equal(c.element('#chat-pi-help').hidden,false);
+  assert.equal(c.element('#chat-connect-help').hidden,true);
+});
+
+test('Pi prerequisite help is static and does not manage accounts or models',()=>{
+  const requests=[];
+  const c=context({fetchImpl:async(url)=>{requests.push(url);return {ok:true,json:async()=>({})};}});
+  c.run("openDialog('#pi-guide-dialog')");
+  assert.equal(c.element('#pi-guide-dialog').open,true);
+  assert.equal(requests.length,0);
+  const html=fs.readFileSync(path.join(assets,'index.html'),'utf8');
+  const guide=html.match(/<dialog id="pi-guide-dialog"[\s\S]*?<\/dialog>/)[0];
+  assert.match(guide,/npm install/);
+  assert.match(guide,/\/login/);
+  assert.match(guide,/\/model/);
+  assert.doesNotMatch(guide,/<input|<select|<form/);
+  assert.doesNotMatch(c.source,/api\(['"]pi-(?:status|config|console)/);
+});

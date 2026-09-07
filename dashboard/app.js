@@ -122,6 +122,11 @@ async function api(path, body) {
   return data;
 }
 
+function chatSetupReason() {
+  if(!state?.root||state?.demo)return state?.piAvailable?'위키 폴더를 연결하면 대화할 수 있습니다.':'위키를 연결하고 Pi 설치 안내를 확인해 주세요.';
+  return !state?.piAvailable?'Pi 실행 파일을 찾지 못했습니다. 설치 안내를 확인해 주세요.':'현재 대화를 시작할 수 없습니다. 연결 상태를 확인하세요.';
+}
+
 function currentSource() { return state?.sources?.find(source => source.id === selected); }
 function isRunning() { return ['running','starting','stopping'].includes(state?.job?.status); }
 function isProject() { return state?.mode === 'project'; }
@@ -457,7 +462,10 @@ function renderChat() {
   $('#chat-work-notice').hidden = Boolean(state?.demo) || !(isRunning() || state?.job?.status === 'external');
   $('#chat-submit').disabled = Boolean(activeChatJob) || chatUnavailable;
   $('#chat-stop').hidden = !activeChatJob;
-  $('#chat-status').textContent = activeChatJob ? `${elapsedChatSeconds(activeChatJob)}초 · 응답 생성 중` : chatUnavailable ? '위키 연결과 Pi 설정이 필요합니다' : historyStorageNotice;
+  $('#chat-status').textContent = activeChatJob ? `${elapsedChatSeconds(activeChatJob)}초 · 응답 생성 중` : chatUnavailable ? chatSetupReason() : historyStorageNotice;
+  $('#chat-setup-actions').hidden=!chatUnavailable||Boolean(activeChatJob);
+  $('#chat-connect-help').hidden=Boolean(state?.root)&&!state?.demo;
+  $('#chat-pi-help').hidden=Boolean(state?.piAvailable);
   $('.new-conversation').disabled = Boolean(activeChatJob);
   $('[data-action="clear-history"]').disabled = Boolean(activeChatJob);
   renderHistory();
@@ -493,7 +501,7 @@ const chatHistoryPayload = historyCodec.chatHistoryPayload;
 async function submitChat(message, {reuseLast=false} = {}) {
   const text = String(message || '').trim();
   if (!text || activeChatJob) return;
-  if (state?.chatAvailable === false) { toast('위키를 연결하고 Pi 설정을 확인해 주세요.'); return; }
+  if (state?.chatAvailable === false) { toast(chatSetupReason()); return; }
   if (text.length > 8000) { toast('질문은 8,000자 이하로 입력해 주세요.'); return; }
   const conversation = ensureConversation();
   conversation.error = '';
@@ -679,7 +687,7 @@ function render() {
   $('#example-banner').hidden = !state.demo;
   const defaultModel=boundedText(state.chatDefaultModel,120);
   const modelLabel=defaultModel === 'Pi default' ? '' : defaultModel.split('/').at(-1).replace(/^gpt-/,'GPT-');
-  $('#pi-status').textContent = state.piAvailable ? modelLabel ? `기본 · ${modelLabel}` : '사용 가능 · 전송 시 실행' : '설정 확인 필요';
+  $('#pi-status').textContent = state.piAvailable ? modelLabel ? `기본 · ${modelLabel}` : '실행 경로 확인됨' : 'Pi 설치 필요';
   $('#chat-model').placeholder = modelLabel ? `${modelLabel} · Pi 기본` : 'Pi 기본 모델';
   $('#chat-model').setAttribute('title',defaultModel);
   $('#pi-dot').classList.toggle('ready', Boolean(state.piAvailable));
@@ -996,6 +1004,7 @@ function handleClick(event) {
   if(target.dataset.page){selectedPage=target.dataset.page;renderKnowledgeGraph();openPage(target.dataset.page);return;}
   if(target.dataset.graph){graphMode=target.dataset.graph;$$('[data-graph]').forEach(button=>{button.classList.toggle('active',button===target);button.setAttribute('aria-pressed',String(button===target));});renderGraph();return;}
   Promise.resolve((async()=>{switch(target.dataset.action){
+    case'pi-guide':openDialog('#pi-guide-dialog');break;
     case'chat-top':jumpChat('top');break; case'chat-bottom':jumpChat('bottom');break;
     case'new-chat':newConversation();break; case'clear-history':clearHistory();break; case'toggle-knowledge':toggleKnowledge();break;
     case'save-conversation':openChatSave(latestAssistantIndex(currentConversation()),'conversation');break;

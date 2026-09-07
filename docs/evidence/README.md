@@ -14,3 +14,5 @@ Use this directory for bounded, reproducible performance, compatibility, securit
 - [2026-09-06 DocTology runtime separation](2026-09-06-studio-runtime-separation.md) (application ownership, independent skill installation, preserved gates/UI/history)
 
 - [Windows cross-drive folder selection](2026-09-07-windows-folder-picker.md)
+
+- [Pi manual preparation help](2026-09-07-pi-setup.md)

@@ -9,6 +9,15 @@ superseded_by: N/A
 
 ## Changed
 
+- 2026-09-07: Enlarged Full HD desktop typography and coordinated sidebar,
+  composer, and document widths. Compact layouts retain their defaults.
+- 2026-09-07: Kept Pi onboarding as static manual preparation help. The user
+  rejected the extra management layer, so its unpublished runtime adapter,
+  setup APIs, model preferences, and terminal launcher were removed. Existing
+  backend invocation, authentication, and model-override behavior is unchanged.
+  Missing-wiki and missing-Pi guidance are distinct. See
+  [verification](evidence/2026-09-07-pi-setup.md).
+
 - 2026-09-07: Windows native selection starts at This PC; the in-app fallback
   lists all assigned drive letters without probing unavailable media. UI labels,
   cross-drive regressions, and the Windows usage guide were updated.
@@ -22,6 +31,8 @@ superseded_by: N/A
 - Refreshed this current impact summary rather than retaining obsolete claims that AGENTS and application ownership were unchanged. Earlier feature history remains in Git, the wiki log, and its evidence records.
 
 ### Files
+
+- `docs/evidence/2026-09-07-pi-setup.md`
 
 - `docs/evidence/2026-09-07-windows-folder-picker.md`
 
