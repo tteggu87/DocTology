@@ -178,3 +178,7 @@ updated: 2026-09-07
 - 2026-09-06: Recorded the user-approved Studio ownership migration in [ADR-0004](../../docs/adr/ADR-0004-studio-runtime-separation.md). Current documentation assigns the application backend and launchers to `runtime/`, UI to `dashboard/`, and Studio JavaScript evaluations to `tests/dashboard/`; `llm-wiki-loop` retains only reusable gates through `runtime/wiki_loop_adapter.py`. This record is documentation-only and **not verified yet**. Earlier test counts, fingerprints, commands, and skill-relative paths remain historical observations of the previous layout; verification belongs in the new migration evidence record.
 
 - 2026-09-06: [ADR-0004](../../docs/adr/ADR-0004-studio-runtime-separation.md)의 소유권 분리를 구현·검증했다. 앱은 `runtime/`·`dashboard/`, JS 검사는 `tests/dashboard/`, 게이트는 독립 루프 스킬에 남는다. Python 402·JavaScript 134 검사와 임시 설치본의 독립 loop CLI, 실제 루트 실행기·브라우저를 확인했다. 게이트 구현 4개·사용자 위키 24개 파일과 대화 2개를 보존했다. 핵심 교훈은 “게이트 호출”과 “앱 소유권”을 혼동하지 않는 것이다. 세부 범위는 [검증 기록](../../docs/evidence/2026-09-06-studio-runtime-separation.md)을 따른다.
+
+- 2026-09-07: 위키 연결과 읽기 전용 질문에 실제 단계·파일·건수·최근 활동을 표시했다. 연결은 취소 가능한 백그라운드 준비 후 전환하며, 취소된 요청의 지연 재전송을 차단한다. 화면 계산과 대기열 검증을 앱 잠금 밖으로 옮기고 리포트 색인·공유 해시·변경 감지 캐시로 반복 읽기를 줄였다. 완료 판정은 기존 게이트를 따른다. [사용 안내](../../dashboard/README.md#연결과-응답-진행-확인).
+
+- 2026-09-07: 현재 워크스페이스의 [설정 초기화](../../dashboard/README.md#설정-초기화)를 추가했다. 범위 확인 후 감시·자동 실행·경로와 화면 선택만 기본값으로 되돌린다. 기존 설정 저장·잠금 경계를 재사용하며 위키·대화·작업·Pi 인증은 유지한다. 잘못된 대상과 인증 없는 요청의 거절, 대기열 보존·재로드, 실패 시 화면 선택 유지에 대한 회귀 검사를 추가했다.

@@ -35,6 +35,7 @@ class Automation:
         self.inside = helpers["inside"]
         self.workflow = helpers["workflow"]
         self.snapshot_helper = helpers["snapshot"]
+        self.signature_helper = helpers.get("signature")
         self.process_alive = helpers["process_alive"]
         self.root: Path | None = None
         self.mode = "project"
@@ -137,7 +138,7 @@ class Automation:
             raise ValueError(self._state_error)
         self.workflow.write_json(self._state_path(), self._state_payload())
 
-    def load(self, root, mode) -> dict[str, Any]:
+    def load(self, root, mode, *, recover=True) -> dict[str, Any]:
         """Restore state for a connection without creating or changing target files."""
         with self.app.lock:
             self.root = Path(root).expanduser().resolve() if root else None
@@ -150,10 +151,31 @@ class Automation:
             self._state_error = None
             if self.root and mode != "project":
                 self._reload()
-                self._recover_in_memory()
+                if recover:
+                    self._recover_in_memory()
             elif mode == "project":
                 self.last_error = "Automation is disabled in read-only project mode."
             return self.status()
+
+    def prepare_load(self, root, mode, *, snapshot_state=None, job=None, progress=None, recover=True):
+        """Read/recover a candidate workspace without taking the application's lock."""
+        from types import SimpleNamespace
+        cached = [snapshot_state]
+        def observed(target, target_mode):
+            if cached[0] is None:
+                cached[0] = self.snapshot_helper(target, target_mode)
+            return cached[0]
+        candidate = type(self)(SimpleNamespace(lock=threading.RLock(), job=job, process=None), {
+            "inside":self.inside, "workflow":self.workflow, "snapshot":observed, "process_alive":self.process_alive,
+        })
+        candidate._progress = progress
+        candidate.load(root, mode, recover=recover)
+        return candidate
+
+    def adopt(self, candidate):
+        """Called under app.lock, after the new workspace has been fully prepared."""
+        for name in ("root", "mode", "config", "baseline", "queue", "last_error", "checked_at", "_state_error"):
+            setattr(self, name, getattr(candidate, name))
 
     def _source_path(self) -> Path:
         return Path(self.config["sourcePath"]).expanduser().resolve()
@@ -680,7 +702,9 @@ class Automation:
         return bool(self.process_alive(job.get("runnerPid")))
 
     def _recover_in_memory(self) -> None:
-        for item in self.queue:
+        for index, item in enumerate(self.queue):
+            if getattr(self, "_progress", None):
+                self._progress("queue", path=str(item.get("source", "")), current=index, total=len(self.queue))
             status = item.get("status")
             if status in {"completed", "needs_attention"}:
                 done, targets = self._verified_done(item)
@@ -856,48 +880,60 @@ class Automation:
                     })
 
     def tick(self) -> dict[str, Any]:
+        # Copy the expected memory state under the short lock, then do file and
+        # gate I/O on a candidate. Concurrent edits invalidate publication.
         with self.app.lock:
-            if self.mode == "project" or not self.root:
+            root, mode = self.root, self.mode
+            if mode == "project" or not root:
                 self.last_error = "Automation is disabled in read-only project mode."
                 self.checked_at = time.time()
                 return self.status()
-            state_path = self._state_path()
-            if state_path.is_file():
-                self._reload()  # Observe configuration written by another service without first creating a lock.
-            if not self.config.get("enabled") and not self.queue:
-                self.checked_at = time.time()
-                return self.status()
-            try:
-                claim = self._acquire_automation_claim()
-            except ValueError as exc:
-                self.last_error = self._clean_reason(str(exc))
-                self.checked_at = time.time()
-                return self.status()
-            try:
-                self._reload()
-                if self._state_error:
+            expected = json.dumps(self._state_payload(), sort_keys=True)
+            job = dict(self.app.job) if isinstance(getattr(self.app, "job", None), dict) else None
+        claim = None
+        try:
+            candidate = self.prepare_load(root, mode, job=job, recover=False)
+            # Fast disabled/empty path is read-only; never create queue state.
+            if not candidate.config.get("enabled") and not candidate.queue:
+                with self.app.lock:
+                    if self.root == root and self.mode == mode and json.dumps(self._state_payload(), sort_keys=True) == expected:
+                        self.adopt(candidate)
+                        self.checked_at = time.time()
                     return self.status()
-                self._reconcile()
-                scan_errors: list[str] = []
-                if self.config.get("enabled"):
-                    source = self._validate_source_path(self.config["sourcePath"])
-                    scan, scan_errors, complete = self._scan(source)
-                    if complete:
-                        self._observe(scan, source)
+            claim = candidate._acquire_automation_claim()
+            candidate._reload()
+            if candidate._state_error:
+                raise ValueError(candidate._state_error)
+            before = self.signature_helper(root, mode) if self.signature_helper else None
+            candidate._reconcile()  # prepare_load shares one exact snapshot per candidate.
+            scan, scan_errors, complete, source = {}, [], False, None
+            if candidate.config.get("enabled"):
+                source = candidate._validate_source_path(candidate.config["sourcePath"])
+                scan, scan_errors, complete = candidate._scan(source)
+            after = self.signature_helper(root, mode) if self.signature_helper else None
+            if before != after:
+                raise ValueError("Wiki changed during queue verification; retrying on the next cycle.")
+            with self.app.lock:
+                if (self.root != root or self.mode != mode or self._stop.is_set()
+                        or json.dumps(self._state_payload(), sort_keys=True) != expected):
+                    return self.status()
+                self.adopt(candidate)
+                if complete:
+                    self._observe(scan, source)
                 self.last_error = " ".join(scan_errors) if scan_errors else self.last_error if self.last_error and "writer is busy" in self.last_error else None
                 self._dispatch()
                 self.checked_at = time.time()
                 self._persist()
-            except (OSError, ValueError, TypeError) as exc:
-                self.last_error = self._clean_reason(str(exc)) or "Automation tick failed safely."
-                self.checked_at = time.time()
-                try:
-                    self._persist()
-                except (OSError, ValueError, TypeError):
-                    pass
-            finally:
+                return self.status()
+        except (OSError, ValueError, TypeError) as exc:
+            with self.app.lock:
+                if self.root == root and self.mode == mode:
+                    self.last_error = self._clean_reason(str(exc)) or "Automation tick failed safely."
+                    self.checked_at = time.time()
+                return self.status()
+        finally:
+            if claim is not None:
                 self.workflow.release_refresh_claim(claim)
-            return self.status()
 
     def _worker_loop(self) -> None:
         while not self._stop.is_set():

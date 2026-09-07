@@ -19,8 +19,16 @@ def inside(root: Path, relative: str, prefixes=("raw/", "wiki/", "state/")) -> P
     return path
 
 
-def files(root: Path, pattern: str):
-    return sorted(p for p in root.glob(pattern) if p.is_file() and p.resolve().is_relative_to(root))
+def files(root: Path, pattern: str, progress=None):
+    result = []
+    if progress:
+        progress("inventory", path=pattern)
+    for path in root.glob(pattern):
+        if progress:
+            progress("inventory", path=path.relative_to(root).as_posix(), current=len(result))
+        if path.is_file() and path.resolve().is_relative_to(root):
+            result.append(path)
+    return sorted(result)
 
 
 def read_json(path: Path):
@@ -42,11 +50,11 @@ class DocumentCatalog:
         self.workflow = workflow
         self.batch = batch
 
-    def coverage(self, root: Path, source: str, reports: list[Path]):
+    def coverage(self, root: Path, source: str, reports: list[Path], prepared=None):
         matches = []
         for report in reports:
             try:
-                values = self.workflow.frontmatter_values(report)
+                values, text = prepared[report] if prepared is not None else (self.workflow.frontmatter_values(report), None)
                 if values.get("raw_path") != source:
                     continue
                 counts = {k: int(values[f"source_units_{k}"]) for k in ("total", "projected", "omitted", "deferred")}
@@ -54,7 +62,8 @@ class DocumentCatalog:
                          and counts["total"] == sum(counts[k] for k in ("projected", "omitted", "deferred"))
                          and values.get("status") == "applied" and values.get("coverage_mode") == "full"
                          and values.get("source_sha256") == self.workflow.file_digest(inside(root, source)))
-                text = report.read_text(encoding="utf-8")
+                if text is None:
+                    text = report.read_text(encoding="utf-8")
                 matches.append({**counts, "valid": valid, "path": report.relative_to(root).as_posix(),
                                 "targets": sorted(set(re.findall(r"wiki/[^\s`\]\)>#]+\.md", text)))})
             except (OSError, ValueError, KeyError, self.workflow.WorkflowError):
@@ -63,10 +72,12 @@ class DocumentCatalog:
             return None  # Multiple receipts are ambiguous; never pick a convenient percentage.
         return matches[0]
 
-    def graph(self, root: Path, pages: list[Path], include_meta=False):
+    def graph(self, root: Path, pages: list[Path], include_meta=False, progress=None):
         nodes, contents, lookup = [], {}, {}
-        for path in pages:
+        for index, path in enumerate(pages):
             relative = path.relative_to(root).as_posix()
+            if progress:
+                progress("graph", path=relative, current=index, total=len(pages))
             if relative.startswith("wiki/_meta/") and not include_meta:
                 continue
             body = path.read_text(encoding="utf-8")
@@ -75,20 +86,25 @@ class DocumentCatalog:
                              else "source" if "/sources/" in relative else "concept"),
                     "modified": path.stat().st_mtime}
             nodes.append(node)
-            contents[relative] = re.sub(r"```.*?```", "", body, flags=re.S)
+            body = re.sub(r"```.*?```", "", body, flags=re.S)
+            contents[relative] = (re.findall(r"\[\[([^\]]+)\]\]", body), re.findall(r"\[[^\]]*\]\(([^)]+)\)", body))
             for alias in (path.stem, relative, relative.removesuffix(".md"), relative.removeprefix("wiki/").removesuffix(".md")):
                 lookup.setdefault(alias, set()).add(relative)
+        if progress:
+            progress("graph", current=len(pages), total=len(pages))
         ids = {n["id"] for n in nodes}
         edges = set()
-        for relative, body in contents.items():
-            links = [m.split("|", 1)[0].split("#", 1)[0].strip() for m in re.findall(r"\[\[([^\]]+)\]\]", body)]
+        for relative, (wikilinks, markdown_links) in contents.items():
+            if progress:
+                progress("links", path=relative)
+            links = [m.split("|", 1)[0].split("#", 1)[0].strip() for m in wikilinks]
             for link in links:
                 candidates = lookup.get(link, set())
                 if len(candidates) == 1:
                     target = next(iter(candidates))
                     if target != relative:
                         edges.add((relative, target))
-            for href in re.findall(r"\[[^\]]*\]\(([^)]+)\)", body):
+            for href in markdown_links:
                 parsed = urlparse(href.strip("<>"))
                 if parsed.scheme or not parsed.path:
                     continue
@@ -100,14 +116,29 @@ class DocumentCatalog:
                         edges.add((relative, key))
         return {"nodes": nodes, "edges": [{"source": a, "target": b} for a, b in sorted(edges)]}
 
-    def project_pages(self, root: Path):
+    def project_pages(self, root: Path, progress=None):
         """Explicit documentation surfaces, never arbitrary files or skill fixtures."""
         pages = set()
         for pattern in ("wiki/**/*.md", "docs/**/*.md", "README.md", "AGENTS.md",
                         ".agents/skills/*/SKILL.md", ".agents/skills/*/references/**/*.md",
                         "dashboard/README.md", "runtime/README.md"):
-            pages.update(files(root, pattern))
+            pages.update(files(root, pattern, progress))
         return sorted(pages)
+
+    def signature(self, root: Path, mode="wiki", progress=None):
+        """Cheap freshness signal only. Actual completion still uses content hashes."""
+        root = root.resolve()
+        pages = set(self.project_pages(root, progress)) if mode == "project" else set(
+            files(root, "wiki/**/*.md", progress) + files(root, "raw/**/*.md", progress)
+        )
+        for pattern in ("AGENTS.md", "wiki/_meta/representative_questions.json",
+                        "state/wiki_runs/*.json", "state/wiki_batches/*/*.json"):
+            pages.update(files(root, pattern, progress))
+        result = []
+        for path in sorted(pages):
+            stat = path.stat()
+            result.append((path.relative_to(root).as_posix(), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_ino))
+        return tuple(result)
 
     def document_inventory(self, root: Path, mode: str) -> dict[str, Path]:
         """Return the only Markdown files the dashboard may read for this root."""
@@ -310,14 +341,16 @@ class DocumentCatalog:
                                "rawSources": self.raw_sources_for(root, relative, text, inventory, source_map)})
         return candidates
 
-    def snapshot(self, root: Path, mode="wiki"):
+    def snapshot(self, root: Path, mode="wiki", progress=None):
         root = root.resolve()
         if mode == "project":
             return {"demo": False, "mode": "project", "readOnly": True, "root": str(root), "name": root.name,
-                    "sources": [], "graph": self.graph(root, self.project_pages(root), include_meta=True),
+                    "sources": [], "graph": self.graph(root, self.project_pages(root, progress), include_meta=True, progress=progress),
                     "batches": [], "warnings": [], "checkedAt": time.time()}
         warnings, runs = [], {}
-        for path in files(root, "state/wiki_runs/*.json"):
+        for path in files(root, "state/wiki_runs/*.json", progress):
+            if progress:
+                progress("records", path=path.relative_to(root).as_posix())
             try:
                 run = read_json(path)
                 source = run["source"]
@@ -327,21 +360,48 @@ class DocumentCatalog:
             except (OSError, ValueError, KeyError, TypeError):
                 warnings.append(f"읽을 수 없는 작업 기록: {path.name}")
         batches = []
-        for path in files(root, "state/wiki_batches/*/manifest.json"):
+        batch_paths = files(root, "state/wiki_batches/*/manifest.json", progress)
+        batch_many = getattr(self.batch, "batch_status_many", None)
+        observed_batches = batch_many(root, [p.parent.name for p in batch_paths], progress) if batch_many else {}
+        for path in batch_paths:
             try:
-                batches.append(self.batch.batch_status(root, path.parent.name))
+                observed = observed_batches[path.parent.name] if batch_many else self.batch.batch_status(root, path.parent.name)
+                if "error" in observed:
+                    raise ValueError(observed["error"])
+                batches.append(observed)
             except (OSError, ValueError, KeyError, TypeError, AttributeError, self.batch.BatchError, self.workflow.WorkflowError):
                 warnings.append(f"확인할 수 없는 배치: {path.parent.name}")
-        reports = files(root, "wiki/_meta/ingest_reports/ingest-*.md")
+        reports = files(root, "wiki/_meta/ingest_reports/ingest-*.md", progress)
+        prepared, report_index = {}, {}
+        for index, report in enumerate(reports):
+            if progress:
+                progress("reports", path=report.relative_to(root).as_posix(), current=index, total=len(reports))
+            try:
+                text = report.read_text(encoding="utf-8")
+                parser = getattr(self.workflow, "frontmatter_from_text", None)
+                values = parser(text) if parser else self.workflow.frontmatter_values(report)
+                prepared[report] = (values, text)
+                report_index.setdefault(values.get("raw_path"), []).append(report)
+            except (OSError, ValueError, self.workflow.WorkflowError):
+                warnings.append(f"읽을 수 없는 반영 리포트: {report.name}")
+        if progress:
+            progress("reports", current=len(reports), total=len(reports))
+        status_many = getattr(self.workflow, "project_status_many", None)
+        observed_runs = status_many(root, list(runs.values()), progress) if status_many else {}
         sources = []
-        for path in files(root, "raw/**/*.md"):
+        raw_paths = files(root, "raw/**/*.md", progress)
+        for index, path in enumerate(raw_paths):
             relative = path.relative_to(root).as_posix()
+            if progress:
+                progress("coverage", path=relative, current=index, total=len(raw_paths))
             run = runs.get(relative)
             status, stage, refs = None, "queued", set()
-            cov = self.coverage(root, relative, reports)
+            cov = self.coverage(root, relative, report_index.get(relative, []), prepared)
             if run:
                 try:
-                    status = self.workflow.project_status(root, run)
+                    status = observed_runs[relative] if status_many else self.workflow.project_status(root, run)
+                    if "error" in status:
+                        raise ValueError(status["error"])
                     completed = status["completed_stages"]
                     final_refs = run.get("stages", {}).get("final_review_completed", {}).get("references", [])
                     if status["wiki_complete"]:
@@ -363,9 +423,13 @@ class DocumentCatalog:
                 stage = "review"
             if cov and cov["valid"]:
                 refs.update(cov["targets"])
-            sources.append({"id": relative, "title": title(path.read_text(encoding="utf-8"), path.stem),
+            with path.open(encoding="utf-8", errors="replace") as stream:
+                heading = title(stream.read(65536), path.stem)
+            sources.append({"id": relative, "title": heading,
                             "stage": stage, "coverage": cov, "run": status,
                             "references": sorted(refs), "modified": path.stat().st_mtime})
+        if progress:
+            progress("coverage", current=len(raw_paths), total=len(raw_paths))
         return {"demo": False, "mode": "wiki", "readOnly": False, "root": str(root), "name": root.name, "sources": sources,
-                "graph": self.graph(root, files(root, "wiki/**/*.md")), "batches": batches,
+                "graph": self.graph(root, files(root, "wiki/**/*.md", progress), progress=progress), "batches": batches,
                 "warnings": warnings, "checkedAt": time.time()}

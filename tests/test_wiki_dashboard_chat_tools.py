@@ -124,7 +124,7 @@ class WikiDashboardChatToolsTests(unittest.TestCase):
         self.assertEqual(candidate["readRanges"],
                          [{"offset": 0, "end": len(terminal["document"]["content"])}])
         self.assertEqual(snapshot["exploration"]["readCount"], 2)
-        self.assertTrue(all(set(event) == {"tool", "path", "query", "count", "status"}
+        self.assertTrue(all(set(event) == {"tool", "path", "query", "count", "status", "time"}
                             for event in snapshot["exploration"]["events"]))
         self.assertEqual(before, self.files(self.root))
 

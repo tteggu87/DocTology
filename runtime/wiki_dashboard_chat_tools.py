@@ -16,6 +16,7 @@ from pathlib import Path, PurePosixPath
 import re
 import secrets
 import threading
+import time
 import unicodedata
 from urllib.parse import urlsplit
 
@@ -92,6 +93,8 @@ class WikiChatTools:
         self._returned_characters = 0
         self._read_documents: set[str] = set()
         self._events: list[dict] = []
+        self._active = None
+        self._last_activity_at = time.time()
         # This receipt is durable for the life of the chat. It intentionally is
         # not reconstructed from the bounded activity-event tail.
         self._retrieval_usage = {
@@ -183,6 +186,8 @@ class WikiChatTools:
                     "staleEvidence": self._invalidated_read_count > 0,
                     "retrievalUsage": copy.deepcopy(self._retrieval_usage),
                     "events": [dict(event) for event in self._events],
+                    "active": copy.deepcopy(self._active),
+                    "lastActivityAt": self._last_activity_at,
                     "limits": self._limits(),
                     "exhausted": self._is_exhausted(),
                 },
@@ -257,9 +262,18 @@ class WikiChatTools:
                                         status=429, exhausted=True)
             self._calls += 1
 
+        active = None
         try:
             with self._operation_lock:
                 self._check_cancelled()
+                with self._state_lock:
+                    self._active = {"tool":tool, "stage":"inventory", "startedAt":time.time(),
+                                    "current":None, "total":None}
+                    active = self._active
+                    for key in ("path", "query", "filter"):
+                        if isinstance(arguments.get(key), str):
+                            self._active["query" if key == "filter" else key] = self._activity_text(arguments[key], 1000)
+                    self._last_activity_at = time.time()
                 method = getattr(self, f"_{tool}")
                 result, count, truncated, next_offset = method(arguments)
                 self._check_cancelled()
@@ -273,11 +287,25 @@ class WikiChatTools:
             with self._state_lock:
                 self._event(tool, arguments, 0, "error")
             raise WikiChatToolError("The requested wiki document could not be read.") from None
+        finally:
+            with self._state_lock:
+                if self._active is active:
+                    self._active = None
+                self._last_activity_at = time.time()
         with self._state_lock:
             self._event(tool, arguments, count, "ok")
         return self._result(result, truncated=truncated, next_offset=next_offset)
 
     # ----- tools -----
+
+    def _activity(self, stage, *, path=None, current=None, total=None):
+        self._check_cancelled()
+        with self._state_lock:
+            if self._active is not None:
+                self._active.update(stage=stage, current=current, total=total)
+                if path is not None:
+                    self._active["path"] = self._activity_text(path, 2000)
+                self._last_activity_at = time.time()
 
     def _wiki_list(self, arguments):
         self._strict_keys(arguments, {"offset", "limit", "scope", "filter"})
@@ -293,7 +321,9 @@ class WikiChatTools:
         rows = []
         eligible = 0
         skipped = 0
-        for relative in sorted(inventory):
+        scoped = sorted(relative for relative in inventory if self._in_scope(relative, scope))
+        for index, relative in enumerate(scoped):
+            self._activity("scan", path=relative, current=index, total=len(scoped))
             self._check_cancelled()
             if not self._in_scope(relative, scope):
                 continue
@@ -328,7 +358,9 @@ class WikiChatTools:
         eligible = 0
         scanned = 0
         skipped = 0
-        for relative in sorted(inventory):
+        scoped = sorted(relative for relative in inventory if self._in_scope(relative, scope))
+        for index, relative in enumerate(scoped):
+            self._activity("scan", path=relative, current=index, total=len(scoped))
             self._check_cancelled()
             if not self._in_scope(relative, scope):
                 continue
@@ -373,6 +405,7 @@ class WikiChatTools:
         if relative not in inventory:
             raise WikiChatToolError("Document is not in the current inventory.")
 
+        self._activity("read", path=relative)
         before = self._bytes_for(relative, inventory)
         self._check_cancelled()
         before_hash = hashlib.sha256(before).hexdigest()
@@ -385,6 +418,7 @@ class WikiChatTools:
             raise WikiChatToolError("Document changed since the prior read; prior evidence was invalidated.",
                                     status=409)
 
+        self._activity("sources", path=relative)
         payload = self._payload(relative)
         self._check_cancelled()
         current = self._inventory()
@@ -393,6 +427,7 @@ class WikiChatTools:
             with self._state_lock:
                 self._invalidate_locked(relative)
             raise WikiChatToolError("Document left the current inventory during the read.", status=409)
+        self._activity("verify", path=relative)
         after = self._bytes_for(relative, current)
         self._check_cancelled()
         if before != after:
@@ -538,6 +573,7 @@ class WikiChatTools:
     # ----- helper boundary and validation -----
 
     def _inventory(self) -> dict[str, Path]:
+        self._activity("inventory")
         try:
             supplied = self.document_inventory(self.root, self.mode)
         except Exception:
@@ -750,8 +786,9 @@ class WikiChatTools:
                 "limits": self._limits(), "exhausted": self._is_exhausted()}
 
     def _event(self, tool, arguments, count, status):
+        self._last_activity_at = time.time()
         event = {"tool": tool, "path": None, "query": None,
-                 "count": int(count), "status": status}
+                 "count": int(count), "status": status, "time": time.time()}
         if tool in ("wiki_read", "wiki_links"):
             try:
                 event["path"] = self._relative(arguments.get("path"))

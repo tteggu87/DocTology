@@ -481,7 +481,7 @@ test('loading, cancel, and error controls are explicit before a partial answer a
   const c=context();
   c.run("ensureConversation().messages.push({role:'user',content:'질문'});activeChatJob={id:'j',conversationId:activeConversationId,root:'/example',startedAt:Date.now(),answer:'',references:[],candidates:[]};renderChat();");
   assert.equal(c.element('#chat-stop').hidden,false);
-  assert.match(c.element('#chat-messages').innerHTML,/위키에서 근거를 찾고 있습니다/);
+  assert.match(c.element('#chat-messages').innerHTML,/현재 답변 진행 상황/);
   c.run("activeChatJob=null;currentConversation().error='실패 내용';renderChat();");
   assert.match(c.element('#chat-messages').innerHTML,/실패 내용/);
   assert.match(c.element('#chat-messages').innerHTML,/다시 시도/);
@@ -1325,4 +1325,67 @@ test('Pi prerequisite help is static and does not manage accounts or models',()=
   assert.match(guide,/\/model/);
   assert.doesNotMatch(guide,/<input|<select|<form/);
   assert.doesNotMatch(c.source,/api\(['"]pi-(?:status|config|console)/);
+});
+
+test('connection progress shows real stage, file, count and quiet warning with visible cancel',()=>{
+  const c=context();
+  c.run("showConnectionProgress({stage:'reports',path:'wiki/_meta/ingest-<x>.md',current:12,total:639,elapsedSeconds:18,quietSeconds:16,stalled:true,events:[]});connectionPending(true);");
+  assert.equal(c.element('#connect-progress-title').textContent,'반영 리포트 색인');
+  assert.equal(c.element('#connect-progress-count').textContent,'12 / 639개 확인');
+  assert.match(c.element('#connect-progress-note').textContent,/새 진행 신호가 없습니다/);
+  assert.equal(c.element('#connect-cancel').hidden,false);
+  assert.equal(c.element('#connect-root').disabled,true);
+  const html=fs.readFileSync(path.join(assets,'index.html'),'utf8');
+  assert.match(html,/connect-progress-heading[\s\S]*?id="connect-cancel"[\s\S]*?<\/div>/);
+});
+
+test('live chat presents active search progress without exposing reasoning',()=>{
+  const c=context();
+  const rendered=c.run(`renderLiveProgress({processRunning:true,progress:{phase:'model',lastSignalAt:100,thinking:'PRIVATE_SENTINEL'},exploration:normalizeExploration({calls:2,readCount:0,lastActivityAt:100,active:{tool:'wiki_search',stage:'scan',query:'원문 근거',path:'wiki/page.md',current:42,total:1328,thinking:'PRIVATE_SENTINEL'},events:[]})},102000)`);
+  assert.match(rendered,/원문 근거/);
+  assert.match(rendered,/wiki\/page.md/);
+  assert.match(rendered,/42 \/ 1328개 파일 확인/);
+  assert.match(rendered,/마지막 활동 2초 전/);
+  assert.doesNotMatch(rendered,/PRIVATE_SENTINEL/);
+  const quiet=c.run("renderLiveProgress({processRunning:true,progress:{phase:'waiting',lastSignalAt:100}},130000)");
+  assert.match(quiet,/새 활동 신호가 늦어지고/);
+});
+
+test('lost connection start is retried with the same id instead of trapping the form',async()=>{
+  const requests=[];let gets=0,c;
+  c=context({setTimeoutImpl:(fn)=>{queueMicrotask(fn);return 1;},fetchImpl:async(url,options)=>{
+    requests.push([url,options?.body?JSON.parse(options.body):null]);
+    if(url.startsWith('/api/connection?'))return ++gets===1?{ok:false,status:404,json:async()=>({error:'not found'})}:{ok:true,json:async()=>({status:'ready',stage:'publish',events:[]})};
+    return {ok:true,json:async()=>url==='/api/connect-start'?{id:'same-id',status:'running'}:JSON.parse(c.run('JSON.stringify(state)'))};
+  }});
+  await c.run("connectionAttempt={id:'same-id',root:'/new',pending:true};pollConnection(connectionAttempt)");
+  assert.deepEqual(requests.find(([url])=>url==='/api/connect-start')[1],{id:'same-id',root:'/new'});
+  assert.equal(c.run('connectionAttempt.pending'),false);
+  assert.equal(c.element('#connect-submit').disabled,false);
+});
+
+test('settings reset preserves conversation storage and clears preferences only after success',async()=>{
+  const calls=[];
+  const c=context({fetchImpl:async(url,options)=>{calls.push([url,JSON.parse(options.body)]);return {ok:true,json:async()=>({root:'/example',automation:{enabled:false,autoRun:false}})};}});
+  c.run("state.demo=false;query='old';zoom=2;watchDraft={enabled:true};");
+  setAnswer(c);c.run('saveHistory();openSettings();');
+  const before=JSON.stringify([...c.storage]);
+  c.element('#chat-model').value='custom';
+  await c.run('resetSettings()');
+  assert.equal(calls[0][0],'/api/settings-reset');
+  assert.equal(calls[0][1].expectedRoot,'/example');
+  assert.equal(c.run('zoom'),1);assert.equal(c.run('query'),'');
+  assert.equal(c.element('#chat-model').value,'');
+  assert.equal(JSON.stringify([...c.storage]),before);
+  assert.equal(c.run('conversations[0].messages.length'),2);
+});
+test('settings reset rejects a stale target and keeps preferences on server failure',async()=>{
+  let calls=0;
+  const c=context({fetchImpl:async()=>{calls++;return {ok:false,json:async()=>({error:'reset failed'})};}});
+  c.run("state.demo=false;zoom=2;openSettings();state.root='/other';");
+  await c.run('resetSettings()');assert.equal(calls,0);
+  c.run('openSettings()');await c.run('resetSettings()');
+  assert.equal(calls,1);assert.equal(c.run('zoom'),2);
+  assert.equal(c.element('#settings-error').textContent,'reset failed');
+  assert.equal(c.element('#settings-reset').disabled,false);
 });

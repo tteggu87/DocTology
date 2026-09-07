@@ -1093,6 +1093,33 @@ def list_batches(root: Path, *, active_only: bool, limit: int) -> dict[str, Any]
 def batch_status(root: Path, batch_id: str) -> dict[str, Any]:
     _path, manifest = load_manifest(root, batch_id)
     current = corpus_fingerprint(root, manifest)
+    return _batch_status(manifest, batch_id, current)
+
+
+def batch_status_many(root: Path, batch_ids: list[str], progress=None) -> dict[str, dict[str, Any]]:
+    """Read-only batch observations; shared corpus bytes are hashed once."""
+    root = root.resolve()
+    common = set(corpus_files(root, {"sources": []}))
+    manifests, groups, result = {}, {}, {}
+    for batch_id in batch_ids:
+        try:
+            _, manifest = load_manifest(root, batch_id)
+            paths = set(common)
+            for row in manifest.get("sources", []):
+                if isinstance(row, dict) and row.get("path"):
+                    path = resolve_inside(root, str(row["path"]))
+                    if path.is_file():
+                        paths.add(path)
+            manifests[batch_id], groups[batch_id] = manifest, paths
+        except (OSError, ValueError, KeyError, TypeError, BatchError, workflow.WorkflowError) as exc:
+            result[batch_id] = {"error": str(exc)}
+    digests = workflow.fingerprint_groups(root, groups, progress)
+    for batch_id, manifest in manifests.items():
+        result[batch_id] = _batch_status(manifest, batch_id, digests[batch_id])
+    return result
+
+
+def _batch_status(manifest: dict[str, Any], batch_id: str, current: str) -> dict[str, Any]:
     certification = manifest.get("certification") if isinstance(manifest.get("certification"), dict) else None
     canonical_stale = manifest.get("current_fingerprint") != current
     certification_stale = bool(certification and certification.get("corpus_fingerprint") != current)

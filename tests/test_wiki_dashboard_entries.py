@@ -23,7 +23,7 @@ class SourceEntryHTTPTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name) / "vault"
+        self.root = Path(self.temp.name).resolve() / "vault"
         for folder in ("raw/inbox", "wiki/_meta", "wiki/concepts"):
             (self.root / folder).mkdir(parents=True)
         (self.root / "AGENTS.md").write_text("# Wiki-only test contract\n", encoding="utf-8")
@@ -51,6 +51,27 @@ class SourceEntryHTTPTests(unittest.TestCase):
             self.post(route, body, authorized)
         self.assertEqual(result.exception.code, code)
         result.exception.close()
+
+    def test_settings_reset_preserves_files_queue_and_connection(self):
+        folder = self.root / "raw/inbox"
+        self.post("watch-config", {"expectedRoot": str(self.root), "sourcePath": str(folder),
+                                   "enabled": True, "autoRun": True})
+        self.app.automation.queue = [{"id": "keep", "status": "ignored", "source": "raw/inbox/keep.md"}]
+        self.app.automation._persist()
+        before = (self.root / "AGENTS.md").read_bytes()
+        self.expect_error(403, "settings-reset", {"expectedRoot": str(self.root)}, authorized=False)
+        self.expect_error(400, "settings-reset", {"expectedRoot": "wrong-root"})
+        self.assertTrue(self.app.automation.config["enabled"])
+        result = self.post("settings-reset", {"expectedRoot": str(self.root)})
+        self.assertEqual(result["root"], str(self.root))
+        self.assertFalse(self.app.automation.config["enabled"])
+        self.assertFalse(self.app.automation.config["autoRun"])
+        self.assertEqual(self.app.automation.config["sourcePath"], str(self.root / "raw"))
+        self.assertEqual(self.app.automation.queue[0]["id"], "keep")
+        self.app.automation._reload()
+        self.assertFalse(self.app.automation.config["enabled"])
+        self.assertEqual(self.app.root, self.root)
+        self.assertEqual((self.root / "AGENTS.md").read_bytes(), before)
 
     def test_render_and_status_never_enable_watching_or_write_state(self):
         with urlopen(self.base + "/api/state") as response:

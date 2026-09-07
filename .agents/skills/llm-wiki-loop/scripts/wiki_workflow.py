@@ -147,6 +147,70 @@ def state_fingerprint(root: Path, source: str) -> str:
     return canonical_digest(rows)
 
 
+def fingerprint_groups(root: Path, groups: dict[str, set[Path]], progress=None) -> dict[str, str]:
+    """Exact read-only fingerprints sharing each file read within this invocation.
+
+    No caller-supplied hash is accepted. Never retain this cache between calls.
+    Metadata changes while hashing invalidate the entire observation.
+    """
+    root = root.resolve()
+    paths = sorted(set().union(*groups.values())) if groups else []
+    rows, stamps = {}, {}
+    def stamp(path):
+        stat = path.stat()
+        return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+    for index, path in enumerate(paths):
+        if progress:
+            progress("hashes", path=path.relative_to(root).as_posix(), current=index, total=len(paths))
+        before = stamp(path)
+        rows[path] = {"path": path.relative_to(root).as_posix(), "sha256": file_digest(path), "size": before[2]}
+        if stamp(path) != before:
+            raise WorkflowError("files changed while computing status; retry")
+        stamps[path] = before
+    if progress:
+        progress("hashes", current=len(paths), total=len(paths))
+    result = {}
+    for index, (key, group) in enumerate(groups.items()):
+        if progress:
+            progress("fingerprints", path=key, current=index, total=len(groups))
+        result[key] = canonical_digest([rows[path] for path in sorted(group, key=lambda p: p.relative_to(root).as_posix())])
+    if any(stamp(path) != value for path, value in stamps.items()):
+        raise WorkflowError("files changed while computing status; retry")
+    if progress:
+        progress("fingerprints", current=len(groups), total=len(groups))
+    return result
+
+
+def project_status_many(root: Path, payloads: list[dict[str, Any]], progress=None) -> dict[str, dict[str, Any]]:
+    """Use the same procedure rules as project_status without rehashing shared wiki files."""
+    root = root.resolve()
+    common = {p for pattern in ("wiki/**/*.md", "warehouse/jsonl/*.jsonl") for p in root.glob(pattern) if p.is_file()}
+    if (root / "AGENTS.md").is_file():
+        common.add(resolve_inside(root, "AGENTS.md"))
+    groups, results = {}, {}
+    for payload in payloads:
+        source = str(payload.get("source", ""))
+        try:
+            path = resolve_inside(root, source)
+            groups[source] = common | ({path} if path.is_file() else set())
+        except (OSError, ValueError, WorkflowError) as exc:
+            results[source] = {"error": str(exc)}
+    digests = fingerprint_groups(root, groups, progress)
+    contract = procedure_contract_digest()
+    for index, payload in enumerate(payloads):
+        source = str(payload.get("source", ""))
+        if progress:
+            progress("runs", path=source, current=index, total=len(payloads))
+        if source in digests:
+            try:
+                results[source] = _project_status(root, payload, digests[source], contract)
+            except (OSError, ValueError, KeyError, TypeError, WorkflowError) as exc:
+                results[source] = {"error": str(exc)}
+    if progress:
+        progress("runs", current=len(payloads), total=len(payloads))
+    return results
+
+
 def run_path(root: Path, run_id: str) -> Path:
     root = root.resolve()
     if not run_id or any(character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for character in run_id):
@@ -295,7 +359,10 @@ def start_run(root: Path, source: str, coverage_mode: str = "full") -> dict[str,
 
 
 def frontmatter_values(path: Path) -> dict[str, str]:
-    text = path.read_text(encoding="utf-8")
+    return frontmatter_from_text(path.read_text(encoding="utf-8"))
+
+
+def frontmatter_from_text(text: str) -> dict[str, str]:
     if not text.startswith("---\n"):
         raise WorkflowError("coverage receipt requires YAML frontmatter")
     frontmatter = text.split("---", 2)[1]
@@ -543,13 +610,15 @@ def prepare_batch_completion(
 
 
 def project_status(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
+    return _project_status(root.resolve(), payload, state_fingerprint(root, str(payload["source"])), procedure_contract_digest())
+
+
+def _project_status(root: Path, payload: dict[str, Any], current_fingerprint: str, current_contract: str) -> dict[str, Any]:
     root = root.resolve()
     stages = payload.get("stages") if isinstance(payload.get("stages"), dict) else {}
     missing = [stage for stage in PROCEDURE_ORDER if stage not in stages]
     stale: list[str] = []
     blockers: list[str] = []
-    current_contract = procedure_contract_digest()
-    current_fingerprint = state_fingerprint(root, str(payload["source"]))
     first_mutation = payload.get("first_mutation_sequence")
     latest_mutation = payload.get("latest_mutation_sequence")
 

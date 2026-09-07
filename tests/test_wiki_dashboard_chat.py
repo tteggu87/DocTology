@@ -101,7 +101,7 @@ class WikiDashboardChatTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name) / "vault"
+        self.root = Path(self.temp.name).resolve() / "vault"
         for name in ("raw/inbox", "wiki/concepts", "wiki/sources", "wiki/_meta/ingest_reports"):
             (self.root / name).mkdir(parents=True)
         (self.root / "AGENTS.md").write_text("# Wiki-only contract\n", encoding="utf-8")

@@ -97,7 +97,7 @@ class Batch:
 class DocumentCatalogTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         for relative, text in {
             "raw/source.md": "# Source\nOriginal Korean evidence\n",
             "wiki/page.md": "# Page\nKorean evidence\n[[raw/source]]\n[Also source](../raw/source.md)\n",

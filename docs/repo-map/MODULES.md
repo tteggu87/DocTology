@@ -1,7 +1,7 @@
 ---
 status: Active
 source_of_truth: false
-last_updated: 2026-09-06
+last_updated: 2026-09-07
 superseded_by: N/A
 ---
 
@@ -31,3 +31,12 @@ identifies extension points and test boundaries.
 This map records approved ownership, not completed verification. Earlier
 skill-relative paths and counts in historical plans and evidence remain prior
 layout observations.
+
+Studio read progress lives in `runtime/wiki_dashboard_progress.py`: bounded
+in-memory events, cooperative cancellation and serialized result publication.
+`wiki_dashboard.py` owns connection IDs, root generations and one background
+snapshot; `wiki_dashboard_documents.py` owns report indexing and stat inventory
+freshness. The loop's `project_status_many` and `batch_status_many` reuse exact
+hash observations within a single call, without persisting them as gate truth.
+The automation adapter shares one verification view per reconciliation tick.
+Chat tools report active scans/reads; Pi lifecycle signals join them in the UI.

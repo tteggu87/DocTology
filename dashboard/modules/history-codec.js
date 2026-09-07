@@ -40,12 +40,21 @@
         if (event.query != null) normalized.query = boundedText(event.query, limits.explorationText);
         if (event.status != null) normalized.status = boundedText(event.status, 120);
         if (event.count != null) normalized.count = boundedCount(event.count);
+        if (Number.isFinite(event.time)) normalized.time = event.time;
         return [normalized];
       }) : [];
       const detail = value.limits && typeof value.limits === 'object' && !Array.isArray(value.limits)
         ? {calls:boundedCount(value.limits.calls), reads:boundedCount(value.limits.reads)}
         : null;
-      return {calls:boundedCount(value.calls), readCount:boundedCount(value.readCount), invalidatedReadCount:boundedCount(value.invalidatedReadCount), events, limits:detail, exhausted:value.exhausted === true, retrievalUsage:normalizeRetrievalUsage(value.retrievalUsage)};
+      const normalized={calls:boundedCount(value.calls), readCount:boundedCount(value.readCount), invalidatedReadCount:boundedCount(value.invalidatedReadCount), events, limits:detail, exhausted:value.exhausted === true, retrievalUsage:normalizeRetrievalUsage(value.retrievalUsage)};
+      if(Number.isFinite(value.lastActivityAt))normalized.lastActivityAt=value.lastActivityAt;
+      const active=value.active;
+      if(active&&toolNames.has(active.tool)){
+        normalized.active={tool:active.tool,stage:boundedText(active.stage,40),path:boundedText(active.path,limits.explorationText),query:boundedText(active.query,limits.explorationText)};
+        for(const key of ['current','total'])if(Number.isSafeInteger(active[key])&&active[key]>=0)normalized.active[key]=active[key];
+        if(Number.isFinite(active.startedAt))normalized.active.startedAt=active.startedAt;
+      }
+      return normalized;
     }
 
     function normalizeConversation(value) {
@@ -53,7 +62,7 @@
       const messages = Array.isArray(conversation.messages)
         ? conversation.messages.filter(message => ['user','assistant'].includes(message?.role)).slice(-limits.messages).map(message => ({role:message.role, content:boundedText(message.content, limits.messageText), truncated:Boolean(message.truncated) || String(message.content || '').length > limits.messageText, partial:Boolean(message.partial), references:normalizeReferences(message.references), candidates:normalizeReferences(message.candidates), exploration:normalizeExploration(message.exploration), createdAt:Number(message.createdAt) || now(), save:normalizeSaved(message.save)}))
         : [];
-      return {id:boundedText(conversation.id || `local-${now()}`, 200), title:boundedText(conversation.title || '새 대화', 200), createdAt:Number(conversation.createdAt) || now(), updatedAt:Number(conversation.updatedAt) || now(), messages, historyTruncated:Boolean(conversation.historyTruncated) || (Array.isArray(conversation.messages) && conversation.messages.length > limits.messages), saves:Array.isArray(conversation.saves) ? conversation.saves.map(normalizeSaved).filter(Boolean).slice(-12) : [], job:conversation.job && conversation.job.id ? {id:boundedText(conversation.job.id, 200), status:boundedText(conversation.job.status || 'running', 30), startedAt:Number(conversation.job.startedAt) || 0} : null, error:boundedText(conversation.error, 2000)};
+      return {id:boundedText(conversation.id || `local-${now()}`, 200), title:boundedText(conversation.title || '새 대화', 200), createdAt:Number(conversation.createdAt) || now(), updatedAt:Number(conversation.updatedAt) || now(), messages, historyTruncated:Boolean(conversation.historyTruncated) || (Array.isArray(conversation.messages) && conversation.messages.length > limits.messages), saves:Array.isArray(conversation.saves) ? conversation.saves.map(normalizeSaved).filter(Boolean).slice(-12) : [], job:conversation.job && conversation.job.id ? {id:boundedText(conversation.job.id, 200), status:boundedText(conversation.job.status || 'running', 30), startedAt:Number(conversation.job.startedAt) || 0} : null, error:boundedText(conversation.error, 2000), ...(conversation.diagnostics?{diagnostics:normalizeExploration(conversation.diagnostics)}:{})};
     }
 
     function buildHistoryPayload(conversations, activeConversationId) {

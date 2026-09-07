@@ -89,9 +89,14 @@ def make_handler(*, asset_root, document_payload, chat_not_found_error,
             try:
                 if url.path == '/api/state':
                     queue_offset = int(parse_qs(url.query).get('queueOffset', ['0'])[0])
-                    return self.reply(app.state(queue_offset=queue_offset))
+                    return self.reply(app.state(queue_offset=queue_offset, wait=False))
                 if url.path == '/api/session':
                     return self.reply({'token': app.token})
+                if url.path == '/api/connection':
+                    try:
+                        return self.reply(app.connection_status(parse_qs(url.query).get('id', [''])[0]))
+                    except ValueError as exc:
+                        return self.reply({'error':str(exc),'code':'connection_not_found'},404)
                 if url.path == '/api/chat':
                     job_id = parse_qs(url.query).get('id', [''])[0]
                     return self.reply(app.chat_status(job_id))

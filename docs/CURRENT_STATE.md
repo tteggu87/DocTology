@@ -223,3 +223,24 @@ environment. The Pi help dialog contains manual preparation instructions only;
 it does not inspect models, launch a login console, or persist account/model
 settings. Existing invocation/model overrides are unchanged. Missing-workspace
 and missing-executable guidance remain distinct.
+
+## Connection and read progress
+
+Studio now prepares root connections in a cancellable background read job with
+bounded stage/file/count events. The old root remains active until publication;
+cancelled request IDs prevent delayed retries from restarting cancelled work.
+Snapshot rebuilding runs outside the application lock, shares one in-flight
+calculation, retains the prior view, and reuses unchanged stat inventories.
+Reports are indexed once per snapshot; bulk run and batch status share exact
+file hashes within an observation while retaining scalar gate semantics.
+Queue reconciliation also computes outside the application lock and shares one
+verification view per tick. Chat exposes actual Pi lifecycle and read-tool
+progress, last signal age, search terms and current files; it never exposes
+hidden reasoning. See [usage](../dashboard/README.md#연결과-응답-진행-확인).
+
+Studio offers an explicitly confirmed settings reset for the current workspace.
+It disables folder detection/automatic dispatch and restores the raw watch path
+through the existing persisted configuration boundary, preserving queue records.
+Browser model overrides, parallelism and view filters reset only after success.
+Root identity and request authentication guard the action; wiki files, connection,
+conversation history, Pi credentials and existing work are retained.

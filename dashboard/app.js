@@ -108,18 +108,21 @@ function toast(message) {
   toast.timer = setTimeout(() => { element.hidden = true; }, 4200);
 }
 
-async function api(path, body) {
+async function api(path, body, {timeoutMs=0}={}) {
   const options = {headers:{'X-Dashboard-Token':token}};
-  if (body !== undefined) {
-    options.method = 'POST';
-    options.headers['Content-Type'] = 'application/json';
-    options.body = JSON.stringify(body);
-  }
-  const response = await fetch('/api/' + path, options);
-  let data;
-  try { data = await response.json(); } catch { throw new Error('서버 응답을 읽지 못했습니다.'); }
-  if (!response.ok) { const error=new Error(data.error || '요청을 처리하지 못했습니다.'); error.status=response.status; error.data=data; throw error; }
-  return data;
+  if (body !== undefined) { options.method='POST';options.headers['Content-Type']='application/json';options.body=JSON.stringify(body); }
+  const controller=timeoutMs&&typeof AbortController==='function'?new AbortController():null;
+  if(controller)options.signal=controller.signal;
+  const timer=controller?setTimeout(()=>controller.abort(),timeoutMs):null;
+  try {
+    const response=await fetch('/api/'+path,options);
+    let data;try{data=await response.json();}catch{throw new Error('서버 응답을 읽지 못했습니다.');}
+    if(!response.ok){const error=new Error(data.error||'요청을 처리하지 못했습니다.');error.status=response.status;error.data=data;throw error;}
+    return data;
+  } catch(error) {
+    if(error.name==='AbortError')throw new Error('서버 응답 확인 시간이 지났습니다. 서버 작업이 끝났다는 뜻은 아닙니다.');
+    throw error;
+  } finally {if(timer)clearTimeout(timer);}
 }
 
 function chatSetupReason() {
@@ -242,7 +245,7 @@ function sourceOperationStage(source) { const worker=parallelWorker(source?.id),
 function certifiedSourceLabel(source) { return source?.stage==='done' ? '검증 완료' : (phaseLabels[source?.stage] || source?.stage || ''); }
 function parallelPreparationAvailable() { return state?.parallelPreparationAvailable===true && taskMode==='start' && !state?.demo && !isProject(); }
 function allRequestedSourcesVerified(job=state?.job) { const requested=Array.isArray(job?.sources)?job.sources:[]; return requested.length>0&&requested.every(item=>{const id=typeof item==='string'?item:(item?.id||item?.source);return state?.sources?.find(source=>source.id===id)?.stage==='done';}); }
-function stateSignature(value) { return JSON.stringify({...value,checkedAt:0,automation:value?.automation?{...value.automation,checkedAt:0}:value?.automation}); }
+function stateSignature(value) { return JSON.stringify({...value,checkedAt:0,snapshotStatus:null,snapshotFresh:null,automation:value?.automation?{...value.automation,checkedAt:0}:value?.automation}); }
 function queuePageInfo(page,rowCount=0) {
   const limit=Math.max(1,Number(page?.limit)||100),total=Math.max(0,Number(page?.total)||rowCount),reported=Math.max(0,Number(page?.offset)||0),maxOffset=total?Math.floor((total-1)/limit)*limit:0;
   return {offset:Math.min(reported,maxOffset),limit,total};
@@ -409,11 +412,29 @@ const renderEmptyChat = () => markdownRenderer.renderEmptyChat(state,icon);
 function elapsedChatSeconds(job, now = Date.now()) {
   return Math.max(0,Math.floor((now-(Number(job?.startedAt)||now))/1000));
 }
+const chatPhaseLabels={starting:'Pi 실행 준비',waiting:'모델 응답 대기',model:'모델 처리 신호 수신',tool:'위키 도구 실행',answer:'답변 작성',retry:'모델 요청 재시도',verification:'인용 근거 최종 확인',finished:'응답 완료',failed:'응답 실패',stopped:'응답 중단'};
+const liveToolLabels={wiki_list:'문서 목록 확인',wiki_search:'문서 검색',wiki_read:'문서 읽기',wiki_links:'연결 문서 탐색'};
+function normalizeChatProgress(value){
+  if(!value||typeof value!=='object')return null;
+  const phase=Object.hasOwn(chatPhaseLabels,value.phase)?value.phase:'waiting';
+  return {phase,lastSignalAt:Number.isFinite(value.lastSignalAt)?value.lastSignalAt:null,
+    events:Array.isArray(value.events)?value.events.slice(-12).filter(event=>event&&Object.hasOwn(chatPhaseLabels,event.phase)).map(event=>({phase:event.phase,time:Number.isFinite(event.time)?event.time:null,tool:Object.hasOwn(liveToolLabels,event.tool)?event.tool:null})):[]};
+}
+function renderLiveProgress(job,now=Date.now()){
+  const exploration=job?.exploration,active=exploration?.active,progress=normalizeChatProgress(job?.progress);
+  const stageLabels={inventory:'문서 목록 확인 중',scan:'파일 내용 확인 중',read:'문서 본문 읽는 중',sources:'원문과 출처 연결 확인 중',verify:'읽은 문서 변경 여부 확인 중'};
+  const label=active?(stageLabels[active.stage]||liveToolLabels[active.tool]||'위키 읽기'):chatPhaseLabels[progress?.phase]||'Pi 응답을 기다리고 있습니다';
+  const last=Math.max(Number(exploration?.lastActivityAt)||0,Number(progress?.lastSignalAt)||0);
+  const quiet=last?Math.max(0,Math.floor(now/1000-last)):null;
+  const finiteCount=Number.isInteger(active?.current)&&active.current>=0&&Number.isInteger(active?.total)&&active.total>0&&active.current<=active.total;
+  const recent=(exploration?.events||[]).slice(-3);
+  return `<section class="live-progress" aria-label="현재 답변 진행 상황"><div class="live-progress-heading"><strong>${escapeHTML(label)}</strong><span>${job.processRunning===true?'Pi 실행 중':'응답 상태 확인'}</span></div>${active?.query?`<p class="live-query">검색어: ${escapeHTML(active.query)}</p>`:''}${active?.path?`<p class="live-path">${escapeHTML(active.path)}</p>`:''}${finiteCount?`<div class="live-count">${active.current} / ${active.total}개 파일 확인</div><progress value="${active.current}" max="${active.total}" aria-label="현재 도구의 파일 확인량"></progress>`:''}<div class="live-progress-meta"><span>도구 ${exploration?.calls||0}회 · 본문 읽기 ${exploration?.readCount||0}개</span><span>${quiet===null?'첫 활동 신호 대기':`마지막 활동 ${quiet}초 전`}</span></div>${quiet!==null&&quiet>=15?'<p class="live-quiet">새 활동 신호가 늦어지고 있습니다. 마지막 작업을 확인하거나 응답 중단을 선택할 수 있습니다.</p>':''}${recent.length?`<ol class="live-recent">${recent.map(event=>`<li><strong>${escapeHTML(liveToolLabels[event.tool]||event.tool)}</strong><span>${escapeHTML(event.path||event.query||'')}${event.count!=null?' · '+event.count+(event.tool==='wiki_read'?'자':'개'):''} · ${event.status==='ok'?'완료':escapeHTML(event.status||'')}</span></li>`).join('')}</ol>`:''}${progress?.phase==='retry'?'<p class="live-quiet">모델 제공자 응답을 다시 요청하고 있습니다. 위키 검증 완료를 뜻하지 않습니다.</p>':''}</section>`;
+}
 function renderPendingAnswer() {
   if (!activeChatJob) return '';
   const references=activeChatJob.references||[],answer=String(activeChatJob.answer||''),exploration=activeChatJob.exploration,elapsed=elapsedChatSeconds(activeChatJob);
   const readLabel=exploration?'읽은 문서':'검색 후보';
-  return `<article class="message assistant-message pending"><div class="assistant-avatar">D</div><div class="assistant-content"><div class="message-label">DocTology · ${elapsed}초</div>${answer?`<div class="answer-body partial-answer">${renderAnswerMarkdown(answer,references)}</div><div class="provisional-note">생성 중인 초안입니다. 인용과 문장은 완료 전 바뀔 수 있습니다.</div>`:`<div class="thinking"><i></i><span>위키에서 근거를 찾고 있습니다</span></div>`}${renderRetrievalUsage(exploration?.retrievalUsage)}${renderExploration(exploration)}${activeChatJob.candidates?.length?`<div class="pending-candidates">${readLabel} ${activeChatJob.candidates.length}개 · 아직 답변의 인용이 아닙니다</div>`:''}</div></article>`;
+  return `<article class="message assistant-message pending"><div class="assistant-avatar">D</div><div class="assistant-content"><div class="message-label">DocTology · ${elapsed}초</div>${answer?`<div class="answer-body partial-answer">${renderAnswerMarkdown(answer,references)}</div><div class="provisional-note">생성 중인 초안입니다. 인용과 문장은 완료 전 바뀔 수 있습니다.</div>`:''}${renderLiveProgress(activeChatJob)}${renderRetrievalUsage(exploration?.retrievalUsage)}${renderExploration(exploration)}${activeChatJob.candidates?.length?`<div class="pending-candidates">${readLabel} ${activeChatJob.candidates.length}개 · 아직 답변의 인용이 아닙니다</div>`:''}</div></article>`;
 }
 function updateChatScrollControls() {
   const area=$('#chat-messages'),maximum=Math.max(0,(Number(area.scrollHeight)||0)-(Number(area.clientHeight)||0));
@@ -454,7 +475,7 @@ function renderChat() {
     const conversationSaves=(conversation.saves||[]).map(savedSummary).join('');
     container.innerHTML = `<div class="message-stack"><div class="conversation-save-bar"><div><strong>현재 대화를 원문으로 보존</strong><span>검증된 사실이 아니며 저장 뒤 기존 게이트를 통과해야 합니다.</span></div><button data-action="save-conversation" ${wholeReason?'disabled':''} title="${escapeHTML(wholeReason||'현재 대화 전체를 미리보고 저장')}">대화 전체 저장</button></div>${conversationSaves}${conversation.messages.map((message,index) => message.role === 'user'
       ? `<article class="message user-message"><div class="message-label">나</div><div class="user-bubble">${escapeHTML(message.content)}</div></article>`
-      : (()=>{const saveReason=chatSaveReason(index,'answer');return `<article class="message assistant-message ${selectedAnswerIndex===index?'focused':''}" data-answer-index="${index}" tabindex="0"><div class="assistant-avatar">D</div><div class="assistant-content"><div class="message-label">DocTology</div><div class="answer-body">${renderAnswerMarkdown(message.content,message.references)}</div>${renderRetrievalUsage(message.exploration?.retrievalUsage)}${message.truncated?'<div class="provisional-note">로컬 저장 한도 때문에 이 메시지의 뒷부분은 저장되지 않았습니다. 불완전한 원문으로 내보내지 않습니다.</div>':''}${message.partial?'<div class="provisional-note">응답 연결이 종료되어 마지막으로 받은 초안입니다. 완료된 답변이 아닙니다.</div>':''}${renderExploration(message.exploration)}${renderCandidates(message.candidates,message.exploration)}<div class="answer-actions">${message.references?.length ? `<button class="answer-reference-summary" data-answer-index="${index}">참고문헌 ${message.references.length}개 보기</button>` : '<span class="no-citations">이 답변에는 명시된 인용이 없습니다.</span>'}<button class="answer-save-button" data-save-answer="${index}" ${saveReason?'disabled':''} title="${escapeHTML(saveReason||'이 질문과 답변을 원문으로 미리보기')}">위키에 저장</button></div><p class="unverified-chat-note">대화 저장은 사실 검증이나 위키 완료를 뜻하지 않습니다.</p>${savedSummary(message.save)}</div></article>`;})()).join('')}${renderPendingAnswer()}${conversation.error ? `<div class="chat-error" role="alert"><span>${escapeHTML(conversation.error)}</span><button data-action="${activeChatJob?'reconnect-chat':'retry-chat'}">${activeChatJob?'연결 다시 확인':'다시 시도'}</button></div>` : ''}</div>`;
+      : (()=>{const saveReason=chatSaveReason(index,'answer');return `<article class="message assistant-message ${selectedAnswerIndex===index?'focused':''}" data-answer-index="${index}" tabindex="0"><div class="assistant-avatar">D</div><div class="assistant-content"><div class="message-label">DocTology</div><div class="answer-body">${renderAnswerMarkdown(message.content,message.references)}</div>${renderRetrievalUsage(message.exploration?.retrievalUsage)}${message.truncated?'<div class="provisional-note">로컬 저장 한도 때문에 이 메시지의 뒷부분은 저장되지 않았습니다. 불완전한 원문으로 내보내지 않습니다.</div>':''}${message.partial?'<div class="provisional-note">응답 연결이 종료되어 마지막으로 받은 초안입니다. 완료된 답변이 아닙니다.</div>':''}${renderExploration(message.exploration)}${renderCandidates(message.candidates,message.exploration)}<div class="answer-actions">${message.references?.length ? `<button class="answer-reference-summary" data-answer-index="${index}">참고문헌 ${message.references.length}개 보기</button>` : '<span class="no-citations">이 답변에는 명시된 인용이 없습니다.</span>'}<button class="answer-save-button" data-save-answer="${index}" ${saveReason?'disabled':''} title="${escapeHTML(saveReason||'이 질문과 답변을 원문으로 미리보기')}">위키에 저장</button></div><p class="unverified-chat-note">대화 저장은 사실 검증이나 위키 완료를 뜻하지 않습니다.</p>${savedSummary(message.save)}</div></article>`;})()).join('')}${renderPendingAnswer()}${conversation.error ? `<div class="chat-error" role="alert"><span>${escapeHTML(conversation.error)}</span><button data-action="${activeChatJob?'reconnect-chat':'retry-chat'}">${activeChatJob?'연결 다시 확인':'다시 시도'}</button></div>${renderExploration(conversation.diagnostics)}` : ''}</div>`;
   }
   for (const detail of container.querySelectorAll('details')) {
     if (openDisclosures.has(chatDisclosureKey(detail))) detail.open=true;
@@ -505,6 +526,7 @@ async function submitChat(message, {reuseLast=false} = {}) {
   if (text.length > 8000) { toast('질문은 8,000자 이하로 입력해 주세요.'); return; }
   const conversation = ensureConversation();
   conversation.error = '';
+  conversation.diagnostics=null;
   let historyMessages = conversation.messages;
   if (reuseLast) {
     const last = conversation.messages.at(-1);
@@ -556,7 +578,7 @@ async function pollChat(id, rootAtStart, conversationId) {
   if (initialConversation && !initialConversation.job && activeChatJob?.id === id) initialConversation.job={id,status:activeChatJob.status||'running',startedAt:activeChatJob.startedAt||Date.now()};
   while (generation === chatPollGeneration && activeChatJob?.id === id) {
     try {
-      const result = await api('chat?id=' + encodeURIComponent(id));
+      const result = await api('chat?id=' + encodeURIComponent(id),undefined,{timeoutMs:10000});
       if (generation !== chatPollGeneration || String(state?.root || historyRoot) !== rootAtStart) return;
       const conversation = conversations.find(item => item.id === conversationId);
       if (!conversation) return;
@@ -569,6 +591,8 @@ async function pollChat(id, rootAtStart, conversationId) {
         activeChatJob.references=normalizeReferences(result.references);
         activeChatJob.candidates=normalizeReferences(result.candidates);
         activeChatJob.exploration=normalizeExploration(result.exploration);
+        activeChatJob.progress=normalizeChatProgress(result.progress);
+        activeChatJob.processRunning=result.processRunning===true;
         activeChatJob.pollFailures=0;
         conversation.error='';
         saveHistory(); renderChat(); await new Promise(resolve => setTimeout(resolve,CHAT_POLL_BACKOFF_MS)); continue;
@@ -582,6 +606,7 @@ async function pollChat(id, rootAtStart, conversationId) {
         selectedAnswerIndex = conversation.messages.length - 1;
       } else if (status === 'stopped') conversation.error = '응답 생성을 중단했습니다. 질문은 대화에 남아 있습니다.';
       else conversation.error = String(result.error || '답변을 만들지 못했습니다.');
+      if(status!=='finished')conversation.diagnostics=normalizeExploration(result.exploration);
       saveHistory(); renderChat(); renderReferences(); renderKnowledgeGraph(); return;
     } catch (error) {
       if (generation !== chatPollGeneration || activeChatJob?.id !== id) return;
@@ -650,7 +675,7 @@ async function refresh(force = false) {
   loading = true;
   try {
     const requestedOffset=watchQueueOffset;
-    let next = await api(requestedOffset?`state?queueOffset=${encodeURIComponent(requestedOffset)}`:'state');
+    let next = await api(requestedOffset?`state?queueOffset=${encodeURIComponent(requestedOffset)}`:'state',undefined,{timeoutMs:10000});
     let rootChanged = String(next.root || '__example__') !== historyRoot;
     if(rootChanged&&requestedOffset){watchQueueOffset=0;next=await api('state');rootChanged=String(next.root || '__example__') !== historyRoot;}
     if(rootChanged)watchQueueOffset=0;else watchQueueOffset=clampedQueueOffset(next.automation?.queuePage);
@@ -659,6 +684,7 @@ async function refresh(force = false) {
     $('#connection').classList.toggle('live', !next.demo);
     const signature = stateSignature(next);
     state = next;
+    renderSnapshotStatus();
     if (rootChanged) {
       resetDocumentReader();
       resetRetrievalStatus(next.root);
@@ -932,7 +958,92 @@ async function chooseFolder() {
     if (request===folderPickerGeneration) setFolderPickerPending(false);
   }
 }
-function openDialog(id) { const element=$(id); if(id==='#connect-dialog')invalidateFolderPicker(); const error=$('.form-error',element); if(error)error.textContent=''; element.showModal(); }
+const connectionStageLabels={queued:'연결 요청 접수',resolve:'폴더 경로 확인',contract:'위키 구조 확인',folders:'폴더 접근 확인',inventory:'파일 목록 확인',history:'이전 실행 기록 확인',records:'원문별 실행 기록 읽기',reports:'반영 리포트 색인',hashes:'파일 해시 확인',fingerprints:'검증 지문 계산',runs:'절차 검증',coverage:'원문 반영량 확인',graph:'위키 페이지 읽기',links:'문서 링크 연결',freshness:'읽는 동안 변경 여부 확인',queue:'작업 기록 복구',publish:'위키 전환',unchanged:'파일 변경 없음'};
+let connectionAttempt=null;
+function connectionPending(value){
+  $('#connect-form').classList.toggle('is-connecting',Boolean(value));
+  $('#connect-submit').disabled=value;$('#connect-root').disabled=value;$('#choose-folder').disabled=value||folderPickerPending;$('#browse-folders').disabled=value;
+  $('#connect-submit').textContent=value?'위키 준비 중…':'위키 연결하기';
+  $('#connect-cancel').hidden=!value;
+}
+function showConnectionProgress(value){
+  $('#connect-progress').hidden=false;
+  $('#connect-progress-title').textContent=connectionStageLabels[value.stage]||'연결 상태 확인';
+  $('#connect-progress-time').textContent=`${Math.floor(Number(value.elapsedSeconds)||0)}초 경과`;
+  $('#connect-progress-path').textContent=value.path||value.root||'';
+  const count=Number.isFinite(value.current)?`${value.current}${Number.isFinite(value.total)?' / '+value.total:''}개 확인`:'';
+  $('#connect-progress-count').textContent=count;
+  const lines=(value.events||[]).slice(-15).map(event=>`${new Date(event.time*1000).toLocaleTimeString('ko-KR')}  ${connectionStageLabels[event.stage]||event.stage}${Number.isFinite(event.current)?' · '+event.current+(Number.isFinite(event.total)?'/'+event.total:''):''}${event.path?' · '+event.path:''}`);
+  $('#connect-progress-log').textContent=lines.join('\n');
+  $('#connect-progress-note').textContent=value.error|| (value.status==='ready'?'위키 연결 준비와 화면 반영이 끝났습니다.':value.status==='cancelling'?'취소 요청을 보냈습니다. 현재 파일 읽기가 반환되면 종료됩니다.':value.stalled?`${Math.floor(value.quietSeconds)}초 동안 새 진행 신호가 없습니다. 마지막 파일·드라이브 접근을 확인하세요.`:'폴더 읽기와 검증 중입니다. 준비가 끝나야 연결이 전환됩니다.');
+}
+async function beginConnection(){
+  if(connectionAttempt?.pending||folderPickerPending)return;
+  const form=$('#connect-form'),root=String($('#connect-root').value||'').trim();
+  $('.form-error',form).textContent='';
+  if(!root){$('.form-error',form).textContent='위키 폴더를 선택하세요.';return;}
+  if(!state?.connectionProgressAvailable){$('.form-error',form).textContent='진행 표시를 지원하는 서버로 Studio를 재시작해 주세요.';return;}
+  const attempt={id:`connect-${Date.now()}-${Math.random().toString(36).slice(2)}`,root,pending:true,cancelWanted:false,startedAt:Date.now(),latest:null};
+  connectionAttempt=attempt;connectionPending(true);
+  showConnectionProgress({stage:'queued',root,elapsedSeconds:0,events:[]});
+  try {
+    const accepted=await api('connect-start',{root,id:attempt.id},{timeoutMs:10000});
+    if(accepted.status==='cancelled'){attempt.pending=false;connectionPending(false);showConnectionProgress(accepted);return;}
+  }catch(error){
+    if(error.status){attempt.pending=false;connectionPending(false);$('.form-error',form).textContent=error.message;return;}
+    $('#connect-progress-note').textContent='요청 응답이 지연되어 연결 기록을 확인합니다.';
+  }
+  if(attempt.cancelWanted)await cancelConnection();
+  await pollConnection(attempt);
+}
+async function pollConnection(attempt){
+  if(attempt.polling)return;attempt.polling=true;
+  try {
+  let failures=0;
+  while(connectionAttempt===attempt&&attempt.pending){
+    try {
+      const result=await api('connection?id='+encodeURIComponent(attempt.id),undefined,{timeoutMs:5000});
+      if(connectionAttempt!==attempt)return;
+      failures=0;attempt.latest=result;showConnectionProgress(result);
+      if(['ready','failed','cancelled'].includes(result.status)){
+        attempt.pending=false;connectionPending(false);
+        if(result.status==='ready'){selected=null;lastRender='';$('#connect-dialog').close();await refresh(true);toast('위키 준비가 끝났습니다. 연결을 전환했습니다.');}
+        else $('.form-error',$('#connect-form')).textContent=result.error||'연결을 완료하지 못했습니다. 이전 위키는 유지됩니다.';
+        return;
+      }
+    }catch(error){
+      failures+=1;
+      if(error.status===404&&failures<3){
+        try{const recovered=await api(attempt.cancelWanted?'connect-cancel':'connect-start',attempt.cancelWanted?{id:attempt.id}:{id:attempt.id,root:attempt.root},{timeoutMs:10000});if(recovered.status==='cancelled'){attempt.pending=false;connectionPending(false);showConnectionProgress(recovered);return;}}catch{}
+      }
+      $('#connect-progress-note').textContent=`진행 기록 응답을 다시 확인합니다 (${failures}). ${error.message}`;
+      if(failures>=3){$('.form-error',$('#connect-form')).textContent='진행 기록 연결이 끊겼습니다. 서버 작업은 계속 실행 중일 수 있습니다. 다시 확인하거나 취소 요청을 보내세요.';return;}
+    }
+    await new Promise(resolve=>setTimeout(resolve,750));
+  }
+  }finally{attempt.polling=false;}
+}
+async function cancelConnection(){
+  const attempt=connectionAttempt;if(!attempt?.pending)return;
+  attempt.cancelWanted=true;$('#connect-progress-note').textContent='연결 취소를 요청하고 있습니다…';
+  try{const result=await api('connect-cancel',{id:attempt.id},{timeoutMs:5000});attempt.latest=result;showConnectionProgress(result);if(['cancelled','ready','failed'].includes(result.status)){attempt.pending=false;connectionPending(false);}else if(!attempt.polling)pollConnection(attempt);}
+  catch(error){$('#connect-progress-note').textContent=`취소 응답을 확인하지 못했습니다. ${error.message}`;}
+}
+async function copyConnectionLog(){
+  const value=connectionAttempt?.latest;
+  const text=JSON.stringify(value||{root:connectionAttempt?.root,id:connectionAttempt?.id},null,2);
+  try{await navigator.clipboard.writeText(text);toast('연결 진단 기록을 복사했습니다.');}
+  catch{const log=$('#connect-progress-log');log.textContent=text;toast('기록을 선택해 직접 복사해 주세요.');}
+}
+function renderSnapshotStatus(){
+  const value=state?.snapshotStatus;
+  const show=state&&!state.demo&&(state.snapshotReady===false||(state.snapshotFresh===false&&(!value||value.status==='failed'||value.elapsedSeconds>=1)));
+  document.body.classList.toggle('snapshot-loading',Boolean(show));
+  $('#snapshot-notice').hidden=!show;
+  if(show)$('#snapshot-notice').textContent=`${state.snapshotReady===false?'위키 화면 준비 중':'이전 확인 결과 표시 중'} · ${connectionStageLabels[value?.stage]||'갱신 대기'}${Number.isFinite(value?.current)?' · '+value.current+(Number.isFinite(value.total)?'/'+value.total:''):''}${value?.path?' · '+value.path:''}${value?.error?' · '+value.error:''}`;
+}
+
+function openDialog(id) { const element=$(id); if(id==='#connect-dialog'){invalidateFolderPicker();connectionPending(Boolean(connectionAttempt?.pending));if(connectionAttempt?.pending)pollConnection(connectionAttempt);} const error=$('.form-error',element); if(error)error.textContent=''; element.showModal(); }
 function openTask(mode='start') {
   if(!state)return; if(state.demo){openDialog('#connect-dialog');return;} if(isProject()){toast('프로젝트 문서는 읽기 전용입니다. 대화는 그대로 사용할 수 있습니다.');return;} if(mode==='start'&&isRunning()){toast('작업 중입니다. 추가 지시를 이용하세요.');return;} if(!state.piAvailable){toast('Pi 설정을 확인한 뒤 다시 시도하세요.');return;}
   taskMode=mode; $('#task-title').textContent=mode==='steer'?'추가 지시 보내기':'위키 만들기'; $('#task-source-field').hidden=mode==='steer'; $('#parallelism-field').hidden=!parallelPreparationAvailable(); $('#task-submit').textContent=mode==='steer'?'추가 지시 보내기':'선택한 자료로 시작'; $('#task-form textarea').value=mode==='steer'?'':'선택한 원문을 빠짐없이 반영해 위키를 만들고, 근거와 검증 결과를 남겨줘. 기존 작업이 있으면 상태를 확인하고 이어서 진행해줘.'; $('#task-sources').innerHTML=state.sources.map(source=>`<label class="task-source"><input type="checkbox" name="source" value="${escapeHTML(source.id)}" ${source.id===selected?'checked':''}><span>${escapeHTML(source.title)} <span class="muted">· ${phaseLabels[source.stage]}</span></span></label>`).join('')||'<p class="field-note">먼저 Markdown 자료를 추가해 주세요.</p>'; openDialog('#task-dialog');
@@ -982,6 +1093,37 @@ function toggleKnowledge() {
   const open=!document.body.classList.contains('knowledge-open'); document.body.classList.toggle('knowledge-open',open); $('.knowledge-backdrop').hidden=!open; $('.mobile-knowledge-button').setAttribute('aria-expanded',String(open));
 }
 
+let settingsRoot = null;
+let settingsResetting = false;
+function openSettings() {
+  if(!state || settingsResetting)return;
+  settingsRoot=state.demo?'':String(state.root||'');
+  $('#settings-root').textContent=state.demo?'예시 작업실':`대상: ${state.name} · ${settingsRoot}`;
+  $('#settings-error').textContent='';
+  openDialog('#settings-dialog');
+}
+async function resetSettings() {
+  if(settingsResetting)return;
+  if(connectionAttempt?.pending || watchSubmitting){$('#settings-error').textContent='연결 또는 설정 적용이 끝난 뒤 다시 시도하세요.';return;}
+  const root=state?.demo?'':String(state?.root||'');
+  if(settingsRoot!==root){$('#settings-error').textContent='워크스페이스가 바뀌었습니다. 창을 닫고 다시 열어 주세요.';return;}
+  settingsResetting=true;$('#settings-reset').disabled=true;$('#settings-error').textContent='';
+  try {
+    const result=await api('settings-reset',{expectedRoot:root});
+    if((state?.demo?'':String(state?.root||''))!==root || result.root!==root)throw new Error('워크스페이스가 바뀌어 화면 설정은 초기화하지 않았습니다.');
+    state.automation=result.automation;
+    watchDraft=null;watchQueueOffset=0;
+    query='';blockedOnly=false;graphMode='all';zoom=1;
+    $('#search').value='';$('#blocked-filter').setAttribute('aria-pressed','false');
+    $$('[data-graph]').forEach(button=>{const active=button.dataset.graph==='all';button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
+    $('#chat-model').value='';
+    $('#task-form [name="model"]').value='';
+    $('#task-form [name="parallelism"]').value='3';
+    render();$('#settings-dialog').close();toast('설정을 초기화했습니다. 위키와 기록은 유지됩니다.');
+  } catch(error){$('#settings-error').textContent=error.message;}
+  finally{settingsResetting=false;$('#settings-reset').disabled=false;}
+}
+
 async function controlParallelWorker(source, action) { const rootAtStart=currentRoot(),jobId=state?.job?.id; if(!jobId)throw new Error('현재 작업을 찾지 못했습니다.'); const body={expectedRoot:rootAtStart,jobId,source}; await api(action==='stop'?'batch-worker-stop':'batch-worker-retry',body); if(currentRoot()!==rootAtStart||state?.job?.id!==jobId)return; await refresh(true); }
 async function resumeParallelIntegration() { const rootAtStart=currentRoot(),jobId=state?.job?.id; if(!jobId)throw new Error('현재 작업을 찾지 못했습니다.'); await api('batch-resume',{expectedRoot:rootAtStart,jobId}); if(currentRoot()!==rootAtStart||state?.job?.id!==jobId)return; await refresh(true); }
 function handleClick(event) {
@@ -1004,6 +1146,8 @@ function handleClick(event) {
   if(target.dataset.page){selectedPage=target.dataset.page;renderKnowledgeGraph();openPage(target.dataset.page);return;}
   if(target.dataset.graph){graphMode=target.dataset.graph;$$('[data-graph]').forEach(button=>{button.classList.toggle('active',button===target);button.setAttribute('aria-pressed',String(button===target));});renderGraph();return;}
   Promise.resolve((async()=>{switch(target.dataset.action){
+    case'connect-recheck':if(connectionAttempt?.pending)pollConnection(connectionAttempt);break;case'connect-cancel':await cancelConnection();break;case'connect-copy-log':await copyConnectionLog();break;
+    case'settings':openSettings();break;case'settings-reset':await resetSettings();break;
     case'pi-guide':openDialog('#pi-guide-dialog');break;
     case'chat-top':jumpChat('top');break; case'chat-bottom':jumpChat('bottom');break;
     case'new-chat':newConversation();break; case'clear-history':clearHistory();break; case'toggle-knowledge':toggleKnowledge();break;
@@ -1035,10 +1179,10 @@ document.addEventListener('submit',event=>{if(event.target.id==='watch-config-fo
 $('#chat-form').addEventListener('submit',event=>{event.preventDefault();const input=$('#chat-input'),message=input.value;input.value='';submitChat(message);});
 $('#chat-input').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('#chat-form').requestSubmit?.();}});
 $('#search').addEventListener('input',event=>{query=event.target.value;renderBoard();renderGraph();renderLibrary();});
-$('#connect-dialog').addEventListener('close',()=>{invalidateFolderPicker();invalidateFolderBrowser({close:true});});
+$('#connect-dialog').addEventListener('close',()=>{invalidateFolderPicker();invalidateFolderBrowser({close:true});if(connectionAttempt?.pending)cancelConnection();});
 $('#folder-browser-dialog').addEventListener('close',()=>{invalidateFolderBrowser();if($('#connect-dialog').open)$('#connect-root').focus?.();});
 $('#connect-root').addEventListener('input',()=>{if(folderPickerPending)invalidateFolderPicker();if($('#folder-browser-dialog').open)invalidateFolderBrowser({close:true});});
-$('#connect-form').addEventListener('submit',async event=>{event.preventDefault();if(folderPickerPending){$('.form-error',event.target).textContent='폴더 선택이 끝난 뒤 연결해 주세요.';return;}const button=$('[type=submit]',event.target);button.disabled=true;try{await api('connect',{root:new FormData(event.target).get('root')});selected=null;lastRender='';$('#connect-dialog').close();await refresh(true);toast('내 위키를 연결했습니다.');}catch(error){$('.form-error',event.target).textContent=error.message;}finally{button.disabled=false;}});
+$('#connect-form').addEventListener('submit',event=>{event.preventDefault();beginConnection();});
 $('#task-form').addEventListener('submit',async event=>{event.preventDefault();const button=$('[type=submit]',event.target);button.disabled=true;const form=new FormData(event.target);try{const sources=form.getAll('source');await api(taskMode,{message:form.get('message'),sources,model:form.get('model'),...(parallelPreparationAvailable()&&sources.length>1?{parallelism:Number(form.get('parallelism'))||3}:{})});$('#task-dialog').close();await refresh(true);toast(taskMode==='steer'?'추가 지시를 전달했습니다.':'Pi에 작업을 맡겼습니다.');}catch(error){$('.form-error',event.target).textContent=error.message;}finally{button.disabled=false;}});
 $('#chat-save-form').addEventListener('input',event=>{if(event.target.matches?.('[name="title"]'))markSavePreviewStale();});
 $('#chat-save-form').addEventListener('change',event=>{if(event.target.matches?.('[name="scope"]'))markSavePreviewStale();});

@@ -47,6 +47,7 @@ parallel_module = load_dashboard_module("wiki_dashboard_batch")
 retrieval_status_module = load_dashboard_module("wiki_dashboard_retrieval_status")
 documents_module = load_dashboard_module("wiki_dashboard_documents")
 folders_module = load_dashboard_module("wiki_dashboard_folders")
+progress_module = load_dashboard_module("wiki_dashboard_progress")
 http_module = load_dashboard_module("wiki_dashboard_http")
 
 # Compatibility facade: implementations and internal dependencies belong to the catalog.
@@ -127,11 +128,21 @@ class Dashboard:
         self.chat_error_classes = {}
         self.chat_stderr_threads = {}
         self.chat_tools = {}
+        self._view_revision = 0
+        self._last_view = None
         self.cache = None
         self.cached_at = 0
+        self._view_signature = None
+        self._view_retry_at = 0
+        self._snapshot_guard = threading.Lock()
+        self._snapshot_work = None
+        self._connection_guard = threading.Lock()
+        self._connection_work = None
+        self._cancelled_connections = {}
+        self._connect_ticket = 0
         self.automation = automation_module.Automation(self, {
             "inside": inside, "workflow": workflow, "snapshot": snapshot,
-            "process_alive": process_alive,
+            "signature": document_catalog.signature, "process_alive": process_alive,
         })
         self.conversation_saver = save_module.ConversationSaver(self, {
             "inside": inside, "workflow": workflow,
@@ -159,54 +170,208 @@ class Dashboard:
                     return True
         return bool(parallel_module.BatchPreparation.live_runners(self.root, process_alive))
 
-    def connect(self, raw):
-        with self.lock:
-            parallel_cleanup = self.preparation is not None and any(
-                row.get("cleanupPending") or row.get("status") in ("reading", "drafting")
-                for row in self.preparation.snapshot().get("workers", [])
-            )
-            if self.claim is not None or (self.process and self.process.poll() is None) or self.live_chat() or parallel_cleanup:
-                raise ValueError("현재 작업 또는 채팅의 종료를 확인한 뒤 다른 위키를 연결하세요.")
-            root = Path(raw).expanduser().resolve()
-            result = loop.preflight(root)
-            mode = "wiki" if result["state"] == "ready" else "project"
-            if mode == "project" and not ((root / "wiki").is_dir() and (root / "AGENTS.md").is_file()):
-                raise ValueError("AGENTS.md와 wiki/가 있는 프로젝트 또는 LLM Wiki 폴더를 선택하세요.")
-            for name in ("raw", "wiki", "state", "docs", ".agents"):
-                if not (root / name).resolve().is_relative_to(root):
-                    raise ValueError("위키 데이터 폴더가 외부 경로를 가리킵니다.")
-            self.root, self.cache, self.job = root, None, None
-            self.preparation = None
-            self.mode = mode
-            history = files(root, "state/dashboard_jobs/*.json") if mode == "wiki" else []
-            if history:
-                self.job = read_json(max(history, key=lambda p: p.stat().st_mtime_ns))
-                if self.job.get("status") in ("running", "starting", "stopping"):
-                    self.job["status"] = "external" if (process_alive(self.job.get("ownerPid")) or process_alive(self.job.get("runnerPid"))) else "interrupted"
-                    self.job["message"] = "다른 실행 서비스에서 시작한 작업입니다. 해당 서비스에서 제어하세요."
-            self.automation.load(root, mode)
-            self.conversation_saver.clear()
-            return {"name": root.name, "root": str(root), "mode": mode}
+    @property
+    def cache(self):
+        return self._cache
 
-    def state(self, queue_offset=0):
+    @cache.setter
+    def cache(self, value):
+        if value is None and getattr(self, "_cache", None) is not None:
+            self._last_view = self._cache
+        self._view_revision = getattr(self, "_view_revision", 0) + 1
+        self._cache = value
+
+    def _connect_allowed(self):
+        parallel_cleanup = self.preparation is not None and any(
+            row.get("cleanupPending") or row.get("status") in ("reading", "drafting")
+            for row in self.preparation.snapshot().get("workers", [])
+        )
+        if self.claim is not None or (self.process and self.process.poll() is None) or self.live_chat() or parallel_cleanup:
+            raise ValueError("현재 작업 또는 채팅의 종료를 확인한 뒤 다른 위키를 연결하세요.")
+
+    def _latest_job(self, root, mode, report=None):
+        if mode != "wiki":
+            return None
+        history = files(root, "state/dashboard_jobs/*.json")
+        if not history:
+            return None
+        path = max(history, key=lambda p: p.stat().st_mtime_ns)
+        if report:
+            report("history", path=path.relative_to(root).as_posix())
+        job = read_json(path)
+        if job.get("status") in ("running", "starting", "stopping"):
+            job["status"] = "external" if (process_alive(job.get("ownerPid")) or process_alive(job.get("runnerPid"))) else "interrupted"
+            job["message"] = "다른 실행 서비스에서 시작한 작업입니다. 해당 서비스에서 제어하세요."
+        return job
+
+    def _build_view(self, root, mode, progress):
+        before = document_catalog.signature(root, mode, progress.update)
+        observed = snapshot(root, mode, progress=progress.update)
+        progress.update("freshness", path=str(root))
+        after = document_catalog.signature(root, mode)
+        if before != after:
+            raise ValueError("읽는 동안 위키 파일이 변경되었습니다. 이전 화면은 유지되며 다시 확인해야 합니다.")
+        return observed, after
+
+    def connect(self, raw, *, progress=None, warm=False):
+        if not isinstance(raw, str) or not raw.strip() or len(raw) > 4096 or "\x00" in raw:
+            raise ValueError("연결할 위키 폴더 경로를 입력하세요.")
+        progress = progress or progress_module.ReadProgress(raw)
+        with self.lock:
+            self._connect_allowed()
+            self._connect_ticket += 1
+            ticket = self._connect_ticket
+        progress.update("resolve", path=raw)
+        root = Path(raw).expanduser().resolve()
+        progress.update("contract", path=str(root / "AGENTS.md"))
+        result = loop.preflight(root)
+        mode = "wiki" if result["state"] == "ready" else "project"
+        if mode == "project" and not ((root / "wiki").is_dir() and (root / "AGENTS.md").is_file()):
+            raise ValueError("AGENTS.md와 wiki/가 있는 프로젝트 또는 LLM Wiki 폴더를 선택하세요.")
+        for name in ("raw", "wiki", "state", "docs", ".agents"):
+            progress.update("folders", path=str(root / name))
+            if not (root / name).resolve().is_relative_to(root):
+                raise ValueError("위키 데이터 폴더가 외부 경로를 가리킵니다.")
+        progress.update("history", path="state/dashboard_jobs/")
+        job = self._latest_job(root, mode, progress.update)
+        observed, signature = self._build_view(root, mode, progress) if warm else (None, None)
+        progress.update("queue", path="state/dashboard_automation/")
+        automation = self.automation.prepare_load(root, mode, snapshot_state=observed, job=job, progress=progress.update)
+        if warm and document_catalog.signature(root, mode) != signature:
+            raise ValueError("연결 준비 중 위키가 변경되었습니다. 다시 연결해 주세요.")
+        progress.update("publish", path=str(root))
+        with self.lock:
+            self._connect_allowed()
+            if ticket != self._connect_ticket:
+                raise ValueError("다른 연결 요청이 시작되어 이전 결과를 적용하지 않았습니다.")
+            def publish():
+                if self._snapshot_work:
+                    self._snapshot_work.cancel()
+                self._snapshot_work = None
+                self.root, self.mode, self.job = root, mode, job
+                self.cache = observed
+                self._last_view = observed
+                self._view_signature = signature
+                self.cached_at = time.monotonic() if warm else 0
+                self._view_retry_at = 0
+                self.preparation = None
+                self.automation.adopt(automation)
+                self.conversation_saver.clear()
+                return {"name":root.name, "root":str(root), "mode":mode}
+            return progress.commit(publish)
+
+    def start_connection(self, raw, request_id=None):
+        if not isinstance(raw, str) or not raw.strip() or len(raw) > 4096 or "\x00" in raw:
+            raise ValueError("연결할 위키 폴더 경로를 입력하세요.")
+        with self._connection_guard:
+            previous = self._connection_work
+            if request_id is not None and (not isinstance(request_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", request_id)):
+                raise ValueError("연결 요청 식별자가 올바르지 않습니다.")
+            if request_id and previous and previous.record["id"] == request_id:
+                if previous.record["root"] != raw:
+                    raise ValueError("같은 연결 요청에 다른 폴더를 사용할 수 없습니다.")
+                return {"id":request_id, "status":previous.record["status"]}
+            if request_id in self._cancelled_connections:
+                return {"id":request_id, "status":"cancelled"}
+            if previous and previous.thread and previous.thread.is_alive():
+                raise ValueError("이전 연결의 파일 읽기가 아직 끝나지 않았습니다. 진행 기록을 확인하세요.")
+            progress = progress_module.ReadProgress(raw, job_id=request_id)
+            self._connection_work = progress
+            progress.run(lambda item: self.connect(raw, progress=item, warm=True))
+            return {"id":progress.record["id"], "status":"running"}
+
+    def connection_status(self, job_id):
+        progress = self._connection_work
+        if not progress or job_id != progress.record["id"]:
+            raise ValueError("연결 요청을 찾을 수 없습니다. 다시 연결해 주세요.")
+        return progress.snapshot()
+
+    def cancel_connection(self, job_id):
+        if not isinstance(job_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", job_id):
+            raise ValueError("연결 요청 식별자가 올바르지 않습니다.")
+        with self._connection_guard:
+            progress = self._connection_work
+            if progress and progress.record["id"] == job_id:
+                result = progress.cancel()
+                if result["status"] not in {"cancelling", "cancelled"}:
+                    return result
+            else:
+                result = {"id":job_id, "status":"cancelled", "stage":"queued",
+                          "error":"연결 취소 요청을 기록했습니다.", "events":[]}
+            # A cancel can arrive before a delayed start request. Keep a bounded
+            # tombstone so that retrying the same request cannot connect later.
+            self._cancelled_connections[job_id] = time.monotonic()
+            while len(self._cancelled_connections) > 64:
+                self._cancelled_connections.pop(next(iter(self._cancelled_connections)))
+            return result
+
+    def _refresh_view(self, *, wait):
+        with self.lock:
+            root, mode, revision, cached = self.root, self.mode, self._view_revision, self.cache
+            signature = self._view_signature
+            if not wait and time.monotonic() < self._view_retry_at:
+                return
+            if not root or (cached is not None and time.monotonic()-self.cached_at <= 4):
+                return
+        if not self._snapshot_guard.acquire(blocking=wait):
+            return
+        progress = progress_module.ReadProgress(root)
+        self._snapshot_work = progress
+        def calculate(item):
+            try:
+                before = document_catalog.signature(root, mode, item.update)
+                if cached is not None and before == signature:
+                    observed, after = cached, before
+                    item.update("unchanged", path=str(root))
+                else:
+                    observed = snapshot(root, mode, progress=item.update)
+                    item.update("freshness", path=str(root))
+                    after = document_catalog.signature(root, mode)
+                    if before != after:
+                        raise ValueError("읽는 동안 위키가 변경되어 이전 결과를 유지합니다. 다음 갱신에서 다시 확인합니다.")
+                try:
+                    job = self._latest_job(root, mode)
+                except (OSError, ValueError):
+                    job = None
+                with self.lock:
+                    if self.root != root or self.mode != mode or self._view_revision != revision:
+                        raise progress_module.ReadCancelled("워크스페이스 또는 파일 변경으로 이전 화면 계산을 버렸습니다.")
+                    def publish():
+                        self.cache = observed
+                        self._view_signature = after
+                        self.cached_at = time.monotonic()
+                        if self.claim is None and job is not None:
+                            self.job = job
+                        return {"reused":observed is cached}
+                    return item.commit(publish)
+            except Exception:
+                with self.lock:
+                    if self.root == root and self._view_revision == revision:
+                        self._view_retry_at = time.monotonic()+10
+                raise
+            finally:
+                self._snapshot_guard.release()
+        if wait:
+            try:
+                calculate(progress)
+            except Exception as exc:
+                progress.finish("failed", error=str(exc))
+                raise
+        else:
+            progress.run(calculate)
+
+    def state(self, queue_offset=0, *, wait=True):
         if isinstance(queue_offset, bool) or not isinstance(queue_offset, int) or not 0 <= queue_offset <= 1_000_000:
             raise ValueError("대기열 페이지 위치가 잘못되었습니다.")
+        self._refresh_view(wait=wait)
         with self.lock:
+            view = self.cache
+            if view is None and self.root and self._last_view and self._last_view.get("root") == str(self.root):
+                view = self._last_view
             if self.root:
-                if self.claim is None and self.mode == "wiki":
-                    history = files(self.root, "state/dashboard_jobs/*.json")
-                    if history:
-                        try:
-                            recorded = read_json(max(history, key=lambda p: p.stat().st_mtime_ns))
-                            if recorded.get("status") in ("running", "starting", "stopping"):
-                                recorded["status"] = "external" if (process_alive(recorded.get("ownerPid")) or process_alive(recorded.get("runnerPid"))) else "interrupted"
-                            self.job = recorded
-                        except (OSError, ValueError):
-                            pass
-                if self.cache is None or time.monotonic() - self.cached_at > 4:
-                    self.cache = snapshot(self.root, self.mode)
-                    self.cached_at = time.monotonic()
-                data = dict(self.cache)
+                data = dict(view) if view else {"demo":False, "root":str(self.root), "name":self.root.name,
+                    "mode":self.mode, "readOnly":self.mode=="project", "sources":[], "graph":{"nodes":[],"edges":[]},
+                    "batches":[], "warnings":[], "checkedAt":None}
             else:
                 data = read_json(ASSETS / "example.json")
             public_job = dict(self.job) if self.job else None
@@ -214,10 +379,13 @@ class Dashboard:
                 parallel = self._parallel_public()
                 if parallel is not None:
                     public_job["parallel"] = parallel
-            data.update({"piAvailable": bool(self.pi_command), "chatAvailable": bool(self.root and self.pi_command),
-                         "parallelPreparationAvailable": bool(self.root and self.mode == "wiki" and self.pi_command),
-                         "chatDefaultModel": self.chat_model or "Pi default", "job": public_job,
-                         "automation": self.automation.status(offset=queue_offset)})
+            data.update({"piAvailable":bool(self.pi_command), "chatAvailable":bool(self.root and self.pi_command),
+                "parallelPreparationAvailable":bool(self.root and self.mode=="wiki" and self.pi_command),
+                "connectionProgressAvailable":True, "snapshotReady":bool(view) or self.root is None,
+                "snapshotFresh":(self.cache is not None and (not self._snapshot_work or self._snapshot_work.record["status"]=="ready")) or self.root is None,
+                "snapshotStatus":self._snapshot_work.snapshot() if self._snapshot_work and self._snapshot_work.record["root"]==str(self.root) else None,
+                "chatDefaultModel":self.chat_model or "Pi default", "job":public_job,
+                "automation":self.automation.status(offset=queue_offset)})
             return json.loads(json.dumps(data))
 
     def _validate_chat(self, message, history, model):
@@ -277,6 +445,17 @@ class Dashboard:
         job["exploration"] = {**observed["exploration"], "ready": observed["ready"]}
         job["references"] = self._cited_references(job["answer"], job["candidates"])
 
+    def _chat_activity(self, job_id, phase, tool=None):
+        """Expose lifecycle metadata only, never thinking text or raw terminal output."""
+        job = self.chat_jobs.get(job_id)
+        if not job:
+            return
+        now = time.time()
+        value = job.setdefault("progress", {"events":[], "signals":0})
+        if phase != value.get("phase") or tool != value.get("tool"):
+            value["events"] = (value["events"] + [{"time":now, "phase":phase, "tool":tool}])[-40:]
+        value.update(phase=phase, tool=tool, lastSignalAt=now, signals=value["signals"]+1)
+
     def _send_chat_when_ready(self, job_id, process, bridge, prompt):
         """Never send a model prompt until the scoped extension has initialized."""
         deadline = time.monotonic() + 15
@@ -289,6 +468,7 @@ class Dashboard:
                     if job_id in self.chat_stopping or self.chat_processes.get(job_id) is not process:
                         return
                     try:
+                        self._chat_activity(job_id, "waiting")
                         process.stdin.write(json.dumps({"id": "initial", "type": "prompt", "message": prompt}, ensure_ascii=False) + "\n")
                         process.stdin.flush()
                     except (OSError, ValueError):
@@ -318,6 +498,7 @@ class Dashboard:
             job = {"id": job_id, "root": str(root), "status": "running", "answer": "",
                    "references": [], "candidates": candidates, "startedAt": time.time()}
             self.chat_jobs[job_id] = job
+            self._chat_activity(job_id, "starting")
             self.chat_tools[job_id] = bridge
             self._sync_chat_exploration(job_id)
             system_prompt = (
@@ -447,15 +628,23 @@ class Dashboard:
                     if not job or self.chat_processes.get(job_id) is not process:
                         break
                     kind = event.get("type")
+                    if kind in {"agent_start", "turn_start"}:
+                        self._chat_activity(job_id, "model")
+                    elif kind == "tool_execution_start" and event.get("toolName") in {"wiki_list", "wiki_search", "wiki_read", "wiki_links"}:
+                        self._chat_activity(job_id, "tool", event["toolName"])
                     if kind == "tool_execution_end":
                         self._sync_chat_exploration(job_id)
+                        self._chat_activity(job_id, "waiting")
                     elif kind == "message_start" and event.get("message", {}).get("role") == "assistant":
                         # A tool loop produces several assistant turns; do not concatenate their prose.
                         job["answer"] = ""
                         job["references"] = []
                     elif kind == "message_update":
                         update = event.get("assistantMessageEvent") or event.get("event") or {}
+                        if update.get("type") in {"thinking_delta", "thinking_start", "thinking_end"}:
+                            self._chat_activity(job_id, "model")
                         if update.get("type") in ("text_delta", "text") and isinstance(update.get("delta"), str):
+                            self._chat_activity(job_id, "answer")
                             delta = update["delta"]
                             remaining = self.MAX_CHAT_ANSWER_CHARS - len(job["answer"])
                             if len(delta) > remaining:
@@ -483,6 +672,9 @@ class Dashboard:
                             job["references"] = self._cited_references(answer, job["candidates"])
                     elif kind == "auto_retry_end":
                         last_error = not event.get("success", False)
+                        self._chat_activity(job_id, "waiting")
+                    elif kind == "auto_retry_start":
+                        self._chat_activity(job_id, "retry")
                     elif kind == "response" and event.get("success") is False and event.get("id") == "initial":
                         self._note_chat_error(job_id, json.dumps(event, ensure_ascii=False))
                         job["rejected"] = True
@@ -509,6 +701,8 @@ class Dashboard:
                 stderr_thread.join(timeout=.5)
             # File checks must not hold the dashboard lock or block its stop endpoint.
             bridge = self.chat_tools.get(job_id)
+            with self.lock:
+                self._chat_activity(job_id, "verification")
             final_observed = bridge.snapshot(validate=True) if bridge else None
             with self.lock:
                 job = self.chat_jobs.get(job_id)
@@ -531,6 +725,7 @@ class Dashboard:
                             answer_limit_exceeded=job.get("answerLimitExceeded", False))
                     if job["status"] in ("finished", "failed", "stopped"):
                         job.setdefault("endedAt", time.time())
+                        self._chat_activity(job_id, job["status"])
                     job["references"] = self._cited_references(job["answer"], job["candidates"])
                 self.chat_processes.pop(job_id, None)
                 self.chat_stopping.discard(job_id)
@@ -547,11 +742,14 @@ class Dashboard:
     def chat_status(self, job_id):
         with self.lock:
             job = self.chat_jobs.get(job_id)
-            if not job or not self.root or job["root"] != str(self.root.resolve()):
+            if not job or not self.root or job["root"] != str(self.root):
                 raise ChatNotFoundError("이 작업 공간의 채팅을 찾을 수 없습니다.")
             self._sync_chat_exploration(job_id)
-            keys = ("id", "root", "status", "answer", "error", "references", "candidates", "exploration", "startedAt", "endedAt")
-            return json.loads(json.dumps({key: job[key] for key in keys if key in job}, ensure_ascii=False))
+            keys = ("id", "root", "status", "answer", "error", "references", "candidates", "exploration", "startedAt", "endedAt", "progress")
+            result = {key: job[key] for key in keys if key in job}
+            process = self.chat_processes.get(job_id)
+            result["processRunning"] = bool(process and process.poll() is None)
+            return json.loads(json.dumps(result, ensure_ascii=False))
 
     def stop_chat(self, job_id):
         with self.lock:
@@ -964,6 +1162,10 @@ class Dashboard:
         self._terminate(self.process)
 
     def stop_all(self):
+        if self._connection_work:
+            self._connection_work.cancel()
+        if self._snapshot_work:
+            self._snapshot_work.cancel()
         self.automation.stop_worker()
         if self.preparation is not None:
             try:
@@ -1007,6 +1209,10 @@ class Dashboard:
             return result
 
     def action(self, name, body):
+        if name == "connect-start":
+            return self.start_connection(body.get("root"), body.get("id"))
+        if name == "connect-cancel":
+            return self.cancel_connection(body.get("id"))
         if name == "retrieval-status":
             return self.retrieval_status(body)
         # Browsing is read-only and deliberately happens before app.lock: directory I/O
@@ -1021,6 +1227,14 @@ class Dashboard:
             finally:
                 self.folder_picker_lock.release()
         with self.lock:
+            if name == "settings-reset":
+                expected = str(self.root.resolve()) if self.root else ""
+                if body.get("expectedRoot") != expected:
+                    raise ValueError("연결된 작업 공간이 변경되었습니다. 새로고침 후 다시 시도하세요.")
+                if self.root and self.mode == "wiki":
+                    self.automation.configure({"enabled": False, "autoRun": False,
+                                               "sourcePath": str(self.root / "raw"), "includeExisting": False})
+                return {"root": expected, "automation": self.automation.status()}
             if name == "connect":
                 return self.connect(body.get("root", ""))
             if name == "chat":
