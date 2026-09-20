@@ -148,6 +148,10 @@ python3 -m unittest discover -s tests
 
 Wiki Studio는 필요할 때만 로컬에서 실행하는 보조 애플리케이션입니다. Python 3.11 이상이 설치되어 있으면 저장소 맨 위의 실행 파일을 더블클릭하세요.
 
+![DocTology 프로젝트 문서를 읽기 전용으로 연결한 Wiki Studio 화면](branding/wiki-studio-project-mode.png)
+
+*프로젝트 문서를 읽기 전용으로 연결해 대화, 추천 질문과 전체 지식 그래프를 함께 보여 주는 화면입니다.*
+
 - **macOS:** [Wiki-Studio.command](Wiki-Studio.command)
 - **Windows:** [Wiki-Studio.bat](Wiki-Studio.bat)
 
