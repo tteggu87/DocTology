@@ -152,6 +152,10 @@ Wiki Studio는 필요할 때만 로컬에서 실행하는 보조 애플리케이
 
 *프로젝트 문서를 읽기 전용으로 연결해 대화, 추천 질문과 전체 지식 그래프를 함께 보여 주는 화면입니다.*
 
+![원문 처리 단계와 검증 상태를 보여 주는 Wiki Studio 작업 칸반 예시](branding/wiki-studio-kanban-preview.png)
+
+*원문별 대기·읽기/계획·작성·검증 상태와 처리량을 보여 주는 작업 칸반의 예시 미리보기입니다. 실제 실행 기록은 아닙니다.*
+
 - **macOS:** [Wiki-Studio.command](Wiki-Studio.command)
 - **Windows:** [Wiki-Studio.bat](Wiki-Studio.bat)
 
