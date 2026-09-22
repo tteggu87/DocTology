@@ -50,27 +50,25 @@ python3 scripts/manage_skills.py install
 
 ### 사람이 읽는 위키 만들기
 
-에이전트에게 다음처럼 요청합니다.
+새 위키는 만들 위치만 말하면 됩니다.
 
 ```text
-llm-wiki-bootstrap 스킬로 ./my-wiki를 만들어줘.
-SQLite 사용 여부도 물어봐줘.
+llm-wiki-bootstrap으로 ./my-wiki 만들어줘.
 ```
 
-그다음 생성된 저장소의 `raw/inbox/`에 Markdown 원문을 넣고 요청합니다.
+스킬이 `raw/`, `wiki/`, `AGENTS.md`와 필요한 도구를 만들고 SQLite 사용 여부를 묻습니다. 이후 생성된 `./my-wiki/raw/`에 Markdown 원문을 넣고, 그 위키 폴더에서 필요한 범위만 요청하세요.
 
 ```text
-llm-wiki-loop로 raw/inbox의 새 문서를 full coverage로 위키화해줘.
-기존 source·concept·entity를 먼저 확인하고 중복 없이 연결한 뒤,
-모든 게이트와 finish까지 완료해줘.
+llm-wiki-loop로 raw 폴더 전체를 위키화해줘.
 ```
 
-에이전트는 기존 위키를 먼저 탐색하고, 원문의 heading 또는 bounded chunk를
-누락 없이 처리하며, 필요한 기존 페이지를 갱신하거나 재사용 가치가 있는
-페이지만 새로 만듭니다. 결과는 Obsidian에서 폴더를 열어 wikilink와 그래프를
-바로 탐색할 수 있습니다. Obsidian은 선택 사항이며 모든 결과는 일반
-Markdown으로도 읽을 수 있습니다. 게이트 실행 파일은 위키 저장소에 복사되지
-않고 `llm-wiki-loop` 스킬 내부에서 `--repo-root`로 실행됩니다.
+파일 하나만 처리할 수도 있습니다.
+
+```text
+llm-wiki-loop로 raw/inbox/xxx.md 위키화해줘.
+```
+
+일반 위키화 요청은 자동으로 원문 전체를 확인하고 검증 절차를 거칩니다. 결과는 `wiki/`에 쌓이며 Obsidian이나 일반 Markdown 도구에서 바로 읽을 수 있습니다.
 
 ### 에이전트가 읽는 저장소 문서 만들기
 
