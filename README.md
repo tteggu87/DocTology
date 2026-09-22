@@ -50,13 +50,13 @@ python3 scripts/manage_skills.py install
 
 ### 사람이 읽는 위키 만들기
 
-새 위키는 만들 위치만 말하면 됩니다.
+새 위키는 스킬만 실행하면 됩니다.
 
 ```text
-llm-wiki-bootstrap으로 ./my-wiki 만들어줘.
+llm-wiki-bootstrap
 ```
 
-스킬이 `raw/`, `wiki/`, `AGENTS.md`와 필요한 도구를 만들고 SQLite 사용 여부를 묻습니다. 이후 생성된 `./my-wiki/raw/`에 Markdown 원문을 넣고, 그 위키 폴더에서 필요한 범위만 요청하세요.
+실행하면 만들 위치와 SQLite 사용 여부를 묻고 위키 작업공간을 만듭니다. 이후 생성된 위키의 `raw/`에 Markdown 원문을 넣고, 그 위키 폴더에서 필요한 범위만 요청하세요.
 
 ```text
 llm-wiki-loop로 raw 폴더 전체를 위키화해줘.
