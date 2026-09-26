@@ -220,7 +220,11 @@ Repo memory connects wiki pages to canonical docs, manifests, schemas, code,
 and tests. Relative Markdown paths keep those targets precise and clickable in
 GitHub, IDEs, and ordinary Markdown tools. Use descriptive anchor text that
 states why the target matters; do not leave navigational paths as inline code
-when they should be clickable.
+when they should be clickable. Place supporting links beside the relevant claim
+or paragraph. Distinguish what a decision authorizes, what implementation does,
+and what evidence actually verifies; state scope or limits when they affect the
+conclusion. Preserve readable prose without citation quotas, repeated links, or
+mandatory evidence sections. Link resolution alone does not verify meaning.
 
 Treat existing Obsidian `[[wikilinks]]` as a supported legacy input. Do not
 mass-convert a working vault merely to change syntax, and do not reject a repo

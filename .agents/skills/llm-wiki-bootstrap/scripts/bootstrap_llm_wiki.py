@@ -416,7 +416,7 @@ There are three layers:
 3. Prefer many small linked pages over one giant dumping-ground page.
 4. Use Obsidian wikilinks like `[[concept-name]]` whenever a stable concept, entity, person, project, or source page exists.
 5. Preserve uncertainty. If a claim is weak, disputed, inferred, or contradicted, say so explicitly.
-6. Cite the underlying source page from any claim-heavy wiki page.
+6. Cite the underlying source page beside the relevant claim or paragraph, using an existing section anchor when useful. Explain meaningful connections and preserve relevant source conditions and limits. Keep prose readable; do not require a citation per sentence or extra evidence sections.
 7. When answering substantial questions, save the answer into `wiki/analyses/` unless the user asks for chat-only output.
 8. Keep `wiki/_meta/index.md` and `wiki/_meta/log.md` current after meaningful work.
 

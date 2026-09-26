@@ -202,6 +202,11 @@ existing heading/bounded-chunk inventory or applied coverage receipt.
 Update the source page and every clearly affected durable page. Prefer extending
 existing scope over creating duplicates for weak or passing mentions. Preserve
 uncertainty and contradictions and cite the source page from claim-heavy pages.
+Place supporting links beside the relevant claim or paragraph, using an existing
+section anchor when useful. Explain meaningful connections in prose and preserve
+source conditions and limits; do not infer a relation from co-mention alone.
+Preserve the explanation's flow; do not require a citation per sentence, repeated
+links, or extra evidence sections.
 
 For full coverage, work through the frozen source-unit inventory in bounded
 batches and update the ingest receipt as units are projected or intentionally
@@ -224,6 +229,10 @@ For the active wiki-only contract, its `ontology_integrity` field must be
 `not_applicable`; this explicit result proves the gate did not silently
 introduce or depend on ontology truth. An ontology-required result signals an
 incompatible legacy contract and keeps this loop `not_ready`.
+
+During final review, check that material claims and connections stay within
+the cited evidence's scope. Link resolution and passing gates alone do not
+verify meaning; this check belongs to the existing semantic review.
 
 Complete the procedure run only after structural validation and final review
 both bind to the latest state. Any later relevant mutation makes those receipts

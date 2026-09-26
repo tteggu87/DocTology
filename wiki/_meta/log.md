@@ -7,6 +7,8 @@ updated: 2026-09-07
 
 # Maintenance log
 
+- 2026-09-26: Clarified nearby evidence links and claim scope in the three skills, the generated wiki AGENTS guidance, and the Repo Docs AGENTS template. Existing semantic review owns meaning checks; no runtime gate, schema, or mandatory page section was added.
+
 - 2026-09-07: Simplified Pi onboarding after user feedback: Pi is assumed to
   be manually installed, authenticated, and callable. Removed the unpublished
   setup adapter, model discovery/configuration APIs, preference persistence, and

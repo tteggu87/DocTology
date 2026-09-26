@@ -36,7 +36,7 @@
 - Keep `wiki/_meta/index.md` and `wiki/_meta/log.md` current after meaningful repo-docs maintenance.
 - Use descriptive relative Markdown links in new or materially rewritten Repo Docs wiki pages so links to docs, intelligence, code, and tests remain precise and portable. Continue to read existing Obsidian `[[wikilinks]]`, but do not introduce them as the Repo Docs default or mass-convert legacy pages solely for syntax consistency.
 - Save reusable plan reviews, drift analyses, source comparisons, and decision memos under `wiki/analyses/`.
-- Include source, assumption, conflict, and evidence-confidence notes when preserving claim-heavy analysis.
+- Include source, assumption, conflict, and evidence-confidence notes when preserving claim-heavy analysis. Place supporting links near the relevant claim or paragraph; distinguish decisions, implementation, and verified evidence, stating limits when they affect the conclusion. Avoid citation quotas, repeated links, or mandatory evidence sections.
 - Keep the complete Repo Docs scaffold present: `docs/adr/`, `docs/plans/`, `docs/evidence/`, `docs/reviews/`, `docs/repo-map/`, `docs/archive/`, and `wiki/decisions/`, each with its index README. Do not create placeholder ADRs, plans, evidence, reviews, or decisions merely to populate those folders.
 - Use an ADR for durable structural or compatibility decisions, a plan for multi-stage work, evidence for verification claims, a review for scoped findings, and `wiki/analyses/` for reusable analysis.
 - Preserve an existing repository's flat or custom ADR and plan locations without migration or key renaming; new repositories use the standard scaffold.

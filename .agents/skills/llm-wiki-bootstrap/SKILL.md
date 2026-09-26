@@ -106,6 +106,7 @@ The active bootstrap does not generate canonical ontology JSONL, DuckDB, helper-
 
 - The scaffold should teach future agents to read `AGENTS.md`, `wiki/_meta/index.md`, and recent `wiki/_meta/log.md` before substantial work.
 - The scaffold should teach future agents to treat relevant wikilinks as evidence paths, follow them recursively for 2–3 hops when needed, and report the pages read in traversal order.
+- The generated writing guidance should place supporting links near material claims, preserve relevant conditions and limits, and avoid citation quotas or mandatory evidence sections.
 - The scaffold should teach page-threshold discipline so passing mentions do not immediately become standalone pages.
 - The scaffold should teach source registration before semantic promotion, overlapping-scope checks before page creation, and `wiki/_meta/index.md` plus `wiki/_meta/log.md` refresh after meaningful work.
 - The generated wiki workflow must stay inside the `LLM_WIKI_CONTRACT` managed markers so later repository-guidance tools can preserve it.
